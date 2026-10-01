@@ -1,0 +1,82 @@
+{
+  "purpose": "What we can say about the identity of the three Forever beta builds, and how each claim is supported. No claim here is 'verified' in the M1 sense (Blizzard-confirmed by this pipeline).",
+  "product": "wow_classic_beta",
+  "retrieved": "2026-09-21",
+  "sources": {
+    "ribbit_archive": {
+      "repo": "https://github.com/mdX7/ribbit_data",
+      "commit_read": "ef6f19f (HEAD, 2026-09-21T21:17:40Z)",
+      "path": "v2/products/wow_classic_beta/version-wow_classic_beta-<seqn>.bmime",
+      "what_it_is": "Third-party archive of raw responses from Blizzard's version service. I read the file contents myself; that Blizzard's service produced them is [2nd].",
+      "license": "not checked"
+    },
+    "foreverdiff": {
+      "urls": [
+        "https://foreverdiff.com/builds/1.60.1.69876/",
+        "https://foreverdiff.com/builds/1.60.1.69893/",
+        "https://foreverdiff.com/builds/1.60.1.69913/"
+      ],
+      "what_it_is": "Site claiming to read data from Blizzard's CDN. Displays 16-hex-character prefixes of BuildConfig/CDNConfig. [2nd]"
+    }
+  },
+  "builds": [
+    {
+      "version": "1.60.1.69876",
+      "build_id": 69876,
+      "build_config_full": "e7fab7248766e9e7daddb3b6083c9c3c",
+      "ribbit_history": [
+        {"seqn": 4019663, "cdn_config": "272d201d5b2d6fec8fdb4aa59b2a9eea"},
+        {"seqn": 4020674, "cdn_config": "c39a363b4a67449d8f16736dba987a43"}
+      ],
+      "foreverdiff_shows": {"build_config_prefix": "e7fab7248766e9e7", "cdn_config_prefix": "c39a363b4a67449d"},
+      "prefixes_match_archive": true,
+      "evidence": "[2nd] two third-party sources agree; not confirmed against Blizzard by this pipeline",
+      "verified": false
+    },
+    {
+      "version": "1.60.1.69893",
+      "build_id": 69893,
+      "build_config_full": "70dc75547c16ac2a381fde65945a0e85",
+      "ribbit_history": [
+        {"seqn": 4020815, "cdn_config": "504e831a9ec9facbee1e04fc474b3db0"},
+        {"seqn": 4021186, "cdn_config": "ae86d19f4ff37f2239363425d9289417"}
+      ],
+      "foreverdiff_shows": {"build_config_prefix": "70dc75547c16ac2a", "cdn_config_prefix": "ae86d19f4ff37f22"},
+      "prefixes_match_archive": true,
+      "evidence": "[2nd]",
+      "verified": false
+    },
+    {
+      "version": "1.60.1.69913",
+      "build_id": 69913,
+      "build_config_full": "6c0df97e8e481a9a41600e373367c200",
+      "ribbit_history": [
+        {"seqn": 4025039, "cdn_config": "1f946798ccc0e9281f9ac94e3539ada9"},
+        {"seqn": 4026306, "cdn_config": "5525ea1ce6668e895569c89c2d6a154c"}
+      ],
+      "foreverdiff_shows": {"build_config_prefix": "6c0df97e8e481a9a", "cdn_config_prefix": "5525ea1ce6668e89"},
+      "prefixes_match_archive": true,
+      "evidence": "[2nd]",
+      "verified": false
+    }
+  ],
+  "shared_fields": {
+    "product_config": "fcfd1bc39031f5921d00aee2d869adb5",
+    "regions_seen_in_latest_snapshot": ["us", "eu", "kr", "tw"]
+  },
+  "observations": [
+    "CDNConfig changed twice for each build while BuildConfig stayed fixed, so BuildConfig (not CDNConfig) is the stable build identity.",
+    "Earlier wow_classic_beta snapshots (seqn 4012168: 5.5.0.62071; seqn 4017103/4017986: '1.0', BuildId 1) show the product name was used for other things before Forever. Do not assume the product name alone identifies a Forever build.",
+    "Executable name for the beta is reported as WowB.exe by a third-party bug report (2nd)."
+  ],
+  "table_content_across_builds": {
+    "foreverdiff_claim": "All three builds have 83 tables and 63,825 entities; 69893 vs 69876 and 69913 vs 69893 are identical at entity level. [2nd]",
+    "att_mirror_observation": "M1 [V]: 33 CSV files (23 tables) labelled 69893 and 69913 are byte-identical in the ATT repository history.",
+    "interpretation": "The two observations are consistent with genuinely unchanged table data. This weakens (but does not disprove) the M1 hypothesis that ATT merely relabelled files. ATT's updater script re-downloads when the BUILD label changes, so identical bytes after a re-download would also be consistent with unchanged data. [?]"
+  },
+  "not_available_to_me": [
+    "Blizzard's version service and CDN (not reachable from this environment)",
+    "The full-length ForeverDiff hashes (site shows 16 hex characters only)",
+    "Any Forever client or .build.info"
+  ]
+}

@@ -1,0 +1,222 @@
+{
+ "what": "Column names/order in Forever-mapped WoWDBDefs blocks vs headers of CSVs that M1 read from the ATT mirror. Metadata only; no row data.",
+ "definitions": {
+  "repo": "wowdev/WoWDBDefs",
+  "commit": "02b1fa9a4714fa41adbbd600304f0449d0b58146",
+  "license": "definitions CC BY-SA 4.0; code BSD-3-Clause"
+ },
+ "csv_source": "ATTWoWAddon/AllTheThings@8e25511677df4ea5c3d0322009eafc18f203ffd3 .contrib/.db/forever/.config/.wago (mirror; build label 1.60.1.69913 is a claim)",
+ "evidence": "[V] reproducible consistency check; does NOT verify which client produced the CSVs",
+ "note": "ATT downloads 'Holiday' as 'Holidays' (its .update.bat: downloadrenamed Holiday Holidays); compared against Holidays.dbd.",
+ "tables_compared": 23,
+ "exact_match_set_and_order": 23,
+ "results": [
+  {
+   "table": "Achievement",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "6FC5281B"
+   ],
+   "columns": 19
+  },
+  {
+   "table": "AreaTable",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "9995B797"
+   ],
+   "columns": 29
+  },
+  {
+   "table": "BattlePetSpecies",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "589BE282"
+   ],
+   "columns": 12
+  },
+  {
+   "table": "ContentTuning",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "A3E13004"
+   ],
+   "columns": 19
+  },
+  {
+   "table": "Criteria",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "53D03513"
+   ],
+   "columns": 12
+  },
+  {
+   "table": "CriteriaTree",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "FF97AE12"
+   ],
+   "columns": 8
+  },
+  {
+   "table": "Holiday",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "432931C0"
+   ],
+   "columns": 57
+  },
+  {
+   "table": "HolidayNames",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "D76CBBD2"
+   ],
+   "columns": 2
+  },
+  {
+   "table": "Item",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "9A2A4834"
+   ],
+   "columns": 17
+  },
+  {
+   "table": "ItemBonus",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "79CD4525"
+   ],
+   "columns": 8
+  },
+  {
+   "table": "ItemEffect",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "4CA77678"
+   ],
+   "columns": 10
+  },
+  {
+   "table": "ItemModifiedAppearance",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "03A6C979"
+   ],
+   "columns": 7
+  },
+  {
+   "table": "ItemSearchName",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "4516C8B0"
+   ],
+   "columns": 19
+  },
+  {
+   "table": "ItemXItemEffect",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "96F083AD"
+   ],
+   "columns": 3
+  },
+  {
+   "table": "ModifierTree",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "F13BB1D8"
+   ],
+   "columns": 8
+  },
+  {
+   "table": "SkillLineAbility",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "224F7EA0"
+   ],
+   "columns": 20
+  },
+  {
+   "table": "SpellEffect",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "5362E3D4"
+   ],
+   "columns": 37
+  },
+  {
+   "table": "TaxiNodes",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "E7B597F0"
+   ],
+   "columns": 20
+  },
+  {
+   "table": "TransmogSet",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "C6875C71"
+   ],
+   "columns": 13
+  },
+  {
+   "table": "TransmogSetItem",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "E6EFF061"
+   ],
+   "columns": 4
+  },
+  {
+   "table": "UiMap",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "DB51D55F"
+   ],
+   "columns": 15
+  },
+  {
+   "table": "UiMapAssignment",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "C9CC8DFB"
+   ],
+   "columns": 18
+  },
+  {
+   "table": "WorldMapOverlay",
+   "status": "SET_EQUAL",
+   "order_equal": true,
+   "layout_hash": [
+    "9A196494"
+   ],
+   "columns": 16
+  }
+ ]
+}
