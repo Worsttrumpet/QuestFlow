@@ -236,24 +236,20 @@ local function better(x, y)
 	return x.key < y.key
 end
 
---- plan = Planner.Compute(ctx, c, opts)
---   c    the result of Engine.Candidates(ctx): { env, candidates, inProgress, hints }
---   opts { prevNowId = string }  the previous plan's NOW, so a near-tie does not flip it
---        { trace = true }        also record, in plan.diag, the per-action facts, the stops and every scored sequence
---                                (for the evaluation harness; changes nothing about the decision, costs nothing when off)
-function Pl.Compute(ctx, c, opts)
-	opts = opts or {}
-	local env = c.env
-	local par = Pl.Params(env.strategy and env.strategy.key)
-	local lam = par.timeValue
-	local player = env.player and { map = env.player.map, x = env.player.x, y = env.player.y, world = env.player.world } or nil
+-- Compute is a short orchestration over the stage functions below. Each stage is a plain local function that reads and
+-- extends one shared state table `S` (ctx, player, params, stops, legs, diag, ...): this keeps every function well under
+-- Lua's local-variable and upvalue limits and makes each stage readable on its own. The decisions are unchanged.
 
-	local diag = { strategy = env.strategy and env.strategy.key, filtered = {}, warnings = {}, reasons = {}, rejected = {}, basis =
-		"value: policy points (not XP); walking: distance/RUN_SPEED (estimated); doing: policy seconds" }
-	local plan = { reminders = {}, diag = diag }
-	if not player then diag.warnings[#diag.warnings + 1] = "no player position: the first leg is free" end
+local function copyTable(v)
+	if type(v) ~= "table" then return v end
+	local out = {}
+	for k, x in pairs(v) do out[k] = copyTable(x) end
+	return out
+end
 
-	-- 1. what can be sequenced
+--- Stage 1: which actions can be sequenced. Fills S.items (route actions), S.extras (optional hints), S.reminders.
+local function gather(S, c)
+	local ctx, env, par, diag = S.ctx, S.env, S.par, S.diag
 	local items, extras, reminders = {}, {}, {}
 	local function take(a)
 		local ok, why = usable(a)
@@ -282,15 +278,17 @@ function Pl.Compute(ctx, c, opts)
 	table.sort(items, byId)
 	table.sort(extras, byId)
 	table.sort(reminders, byId)
-	plan.reminders = reminders
+	S.items, S.extras, S.reminders = items, extras, reminders
 	diag.candidates, diag.optional, diag.unlocated = #items, #extras, #reminders
+end
 
-	-- 2. stops: one place, several actions, one trip
+--- Stage 2: stops: one place, several actions, one trip.
+local function makeStops(S)
 	local stops = {}
-	for _, it in ipairs(items) do
+	for _, it in ipairs(S.items) do
 		local home
 		for _, s in ipairs(stops) do
-			local d = E.Distance(ctx, s.pos, it.pos)
+			local d = E.Distance(S.ctx, s.pos, it.pos)
 			if d and d <= Pl.STOP_RADIUS then home = s break end
 		end
 		if not home then
@@ -302,37 +300,34 @@ function Pl.Compute(ctx, c, opts)
 		if it.a.pinned then home.pinned = true end
 		it.stop = home
 	end
-	diag.stops = #stops
-	local trace = opts.trace
-	local allSeqs = {}
-	if trace then
-		local function copy(v)
-			if type(v) ~= "table" then return v end
-			local out = {}
-			for k, x in pairs(v) do out[k] = copy(x) end
-			return out
-		end
-		diag.params = copy(par)
-		diag.items, diag.unlocatedIds = {}, {}
-		for _, list in ipairs({ items, extras }) do
-			for _, it in ipairs(list) do
-				diag.items[it.id] = { kind = it.a.kind, stop = it.stop and it.stop.id or nil, optional = it.stop == nil, map = it.pos.map, x = it.pos.x, y = it.pos.y,
-					status = it.status, assumed = it.assumed or false, conf = it.conf, value = it.val, dwell = it.dwell, comps = copy(it.comps) }
-			end
-		end
-		for _, a in ipairs(reminders) do diag.unlocatedIds[#diag.unlocatedIds + 1] = a.id end
-		diag.stopList = {}
-		for i, st in ipairs(stops) do
-			local ids = {}
-			for _, it in ipairs(st.items) do ids[#ids + 1] = it.id end
-			diag.stopList[i] = { id = st.id, items = ids, map = st.pos.map, x = st.pos.x, y = st.pos.y, value = st.val, dwell = st.dwell }
-		end
-	end
-	if #stops == 0 then
-		diag.reason = #reminders > 0 and "NO_LOCATED_ACTION" or "NO_CANDIDATES"
-		return plan
-	end
+	S.stops = stops
+	S.diag.stops = #stops
+end
 
+--- Optional trace (evaluation harness only): per-action facts, the stops, the unlocated ids.
+local function recordTrace(S)
+	local diag = S.diag
+	diag.params = copyTable(S.par)
+	diag.items, diag.unlocatedIds = {}, {}
+	for _, list in ipairs({ S.items, S.extras }) do
+		for _, it in ipairs(list) do
+			diag.items[it.id] = { kind = it.a.kind, stop = it.stop and it.stop.id or nil, optional = it.stop == nil, map = it.pos.map, x = it.pos.x, y = it.pos.y,
+				status = it.status, assumed = it.assumed or false, conf = it.conf, value = it.val, dwell = it.dwell, comps = copyTable(it.comps) }
+		end
+	end
+	for _, a in ipairs(S.reminders) do diag.unlocatedIds[#diag.unlocatedIds + 1] = a.id end
+	diag.stopList = {}
+	for i, st in ipairs(S.stops) do
+		local ids = {}
+		for _, it in ipairs(st.items) do ids[#ids + 1] = it.id end
+		diag.stopList[i] = { id = st.id, items = ids, map = st.pos.map, x = st.pos.x, y = st.pos.y, value = st.val, dwell = st.dwell }
+	end
+end
+
+--- Stage 3: the stops worth sequencing: the route zone's (the player's choice) when it has any, ranked by solo net value
+-- (unknown first legs last), the best BEAM_K. Also builds S.leg(i, j): walking seconds stop i -> stop j (i = 0 is the player).
+local function rankStops(S)
+	local ctx, env, stops, diag, lam = S.ctx, S.env, S.stops, S.diag, S.lam
 	-- the player's ROUTE ZONE is a choice, and wins over convenience: when it has anything to do, only its stops are
 	-- sequenced (actions elsewhere can still be an ALSO DO if they fit in cheaply). If it has nothing, everything is.
 	local candidatesStops = stops
@@ -344,14 +339,12 @@ function Pl.Compute(ctx, c, opts)
 			diag.routeZoneOnly = true
 		end
 	end
-
-	-- 3. the most promising stops (by solo net value; unknown first legs last)
 	local legCache = {}
-	local function leg(i, j)       -- stop i -> stop j; i = 0 is the player
+	S.leg = function(i, j)
 		local key = i .. ">" .. j
 		local v = legCache[key]
 		if v == nil then
-			local from = player              -- (nil when the player's position is unavailable)
+			local from = S.player              -- (nil when the player's position is unavailable)
 			if i ~= 0 then from = stops[i].pos end
 			v = seconds(ctx, from, stops[j].pos)
 			legCache[key] = v == nil and false or v
@@ -359,12 +352,11 @@ function Pl.Compute(ctx, c, opts)
 		if v == false then return nil end
 		return v
 	end
-	local ranked = {}
-	local allowed = {}
+	local ranked, allowed = {}, {}
 	for _, s in ipairs(candidatesStops) do allowed[s] = true end
 	for i, s in ipairs(stops) do
 		if allowed[s] then
-			local t = leg(0, i)
+			local t = S.leg(0, i)
 			s.solo = s.val - lam * ((t or 0) + s.dwell)
 			s.soloUnknown = (t == nil and not s.pinned) and 1 or 0     -- a place the player ADDED is theirs to travel to: not penalised
 			ranked[#ranked + 1] = i
@@ -378,17 +370,21 @@ function Pl.Compute(ctx, c, opts)
 	end)
 	local top = {}
 	for i = 1, math.min(Pl.BEAM_K, #ranked) do top[i] = ranked[i] end
+	S.top = top
 	diag.considered = #top
+end
 
-	-- 4. bounded, deterministic search over ordered sequences of up to DEPTH stops
+--- Stage 4: bounded, deterministic search over ordered sequences of up to DEPTH stops. Returns the chosen sequence
+-- (stability applied) and, for the trace, every scored sequence and the best one starting at each stop.
+local function searchSequences(S, prevId)
+	local stops, top, lam, leg, trace = S.stops, S.top, S.lam, S.leg, S.trace
 	local best, bestPrev, evaluated = nil, nil, 0
-	local bestByFirst = {}
-	local prevId = opts.prevNowId
+	local bestByFirst, allSeqs = {}, {}
 	local chosen, used = {}, {}
 	-- a quest the player ADDED is the player's call: when one is in reach, the sequence starts at it
 	local pinnedFirst = false
 	for _, i in ipairs(top) do if stops[i].pinned then pinnedFirst = true end end
-	diag.pinnedFirst = pinnedFirst or nil
+	S.diag.pinnedFirst = pinnedFirst or nil
 	local function search(prev, net, secs, unknown, key)
 		for _, i in ipairs(top) do
 			if not used[i] and not (pinnedFirst and #chosen == 0 and not stops[i].pinned) then
@@ -419,43 +415,35 @@ function Pl.Compute(ctx, c, opts)
 		end
 	end
 	search(0, 0, 0, 0, "")
-	diag.sequences = evaluated
+	S.diag.sequences = evaluated
+	S.bestByFirst, S.allSeqs = bestByFirst, allSeqs
 
 	-- stability: keep the previous NOW unless something else is better by more than `stickiness`
 	local pick = best
-	if bestPrev and bestPrev ~= best and bestPrev.unknown <= best.unknown and bestPrev.net >= best.net - par.stickiness then
+	if bestPrev and bestPrev ~= best and bestPrev.unknown <= best.unknown and bestPrev.net >= best.net - S.par.stickiness then
 		pick = bestPrev
-		diag.stuck = true
+		S.diag.stuck = true
 	end
-	diag.net, diag.seconds, diag.unknownLegs = pick.net, pick.secs, pick.unknown
-	local seqStops = {}
-	local seqIds = {}
-	local inSeq = {}
-	for n, i in ipairs(pick.stops) do
-		seqStops[n] = stops[i]
-		seqIds[n] = stops[i].id
-		for _, it in ipairs(stops[i].items) do inSeq[it.id] = n end
-	end
-	diag.sequence = seqIds
+	return pick
+end
 
-	-- 5. NOW (first stop) and THEN (second stop)
-	local function bestOf(stop, preferId)
-		local list = {}
-		for _, it in ipairs(stop.items) do list[#list + 1] = it end
-		table.sort(list, itemOrder)
-		if preferId then
-			for _, it in ipairs(list) do if it.id == preferId then return it, list end end
-		end
-		return list[1], list
+--- The best-valued item of a stop (the preferred one first, for stability), and the stop's items in order.
+local function bestOf(stop, preferId)
+	local list = {}
+	for _, it in ipairs(stop.items) do list[#list + 1] = it end
+	table.sort(list, itemOrder)
+	if preferId then
+		for _, it in ipairs(list) do if it.id == preferId then return it, list end end
 	end
-	local nowIt, firstList = bestOf(seqStops[1], prevId)
-	plan.now = nowIt.a
-	local thenIt = seqStops[2] and bestOf(seqStops[2]) or nil
-	plan.thenAction = thenIt and thenIt.a or nil
+	return list[1], list
+end
 
-	-- 6. ALSO DO: interruption cost = extra time to fit the action into the sequence (0 within the first stop)
+--- Stage 6: ALSO DO. Interruption cost = extra time to fit the action into the sequence (0 within the first stop).
+-- Returns the chosen item and its cost (nil, nil when nothing qualifies).
+local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
+	local ctx, diag, par, lam = S.ctx, S.diag, S.par, S.lam
 	local nodes = {}
-	if player then nodes[#nodes + 1] = player end
+	if S.player then nodes[#nodes + 1] = S.player end
 	for _, s in ipairs(seqStops) do nodes[#nodes + 1] = s.pos end
 	local function interruption(it)
 		local best
@@ -489,8 +477,7 @@ function Pl.Compute(ctx, c, opts)
 	for _, it in ipairs(firstList) do
 		if it ~= nowIt then offer(it, 0) end
 	end
-	local pools = { items, extras }
-	for _, pool in ipairs(pools) do
+	for _, pool in ipairs({ S.items, S.extras }) do
 		for _, it in ipairs(pool) do
 			if not inSeq[it.id] then
 				local cost = interruption(it)
@@ -502,15 +489,12 @@ function Pl.Compute(ctx, c, opts)
 			end
 		end
 	end
-	plan.alsoDo = also and also.a or nil
-	diag.interruption = alsoCost and math.floor(alsoCost * 10 + 0.5) / 10 or nil
-	table.sort(diag.rejected, function(x, y)
-		if x.code ~= y.code then return x.code < y.code end
-		return x.id < y.id
-	end)
-	while #diag.rejected > 6 do diag.rejected[#diag.rejected] = nil end
+	return also, alsoCost
+end
 
-	-- 7. reason codes (data, not sentences) and the runners-up
+--- Stage 7: reason codes (data, not sentences).
+local function addReasons(S, seqStops, firstList, nowIt, thenIt, also, alsoCost)
+	local diag, par, ctx = S.diag, S.par, S.ctx
 	local why = diag.reasons
 	local function add(id, code, args)
 		why[id] = why[id] or {}
@@ -525,7 +509,7 @@ function Pl.Compute(ctx, c, opts)
 	if nowIt.comps.pinned then add(nowIt.id, "PLAYER_ADDED", {}) end
 	if nowIt.comps.levelFit and nowIt.comps.levelFit >= 4 then add(nowIt.id, "LEVEL_FIT", {}) end
 	if nowIt.a.kind ~= "TURN_IN" then
-		for _, it in ipairs(items) do
+		for _, it in ipairs(S.items) do
 			if it.a.kind == "TURN_IN" and it.id ~= nowIt.id then add(nowIt.id, "TURN_IN_WAITS", {}) break end
 		end
 	end
@@ -538,17 +522,20 @@ function Pl.Compute(ctx, c, opts)
 	end
 	if thenIt then add(thenIt.id, "FOLLOWS", {}) end
 	-- travel that contains work: the first stop lies (nearly) on the way to the second
-	if player and seqStops[2] then
-		local a, b2, direct = seconds(ctx, player, seqStops[1].pos), seconds(ctx, seqStops[1].pos, seqStops[2].pos), seconds(ctx, player, seqStops[2].pos)
+	if S.player and seqStops[2] then
+		local a, b2, direct = seconds(ctx, S.player, seqStops[1].pos), seconds(ctx, seqStops[1].pos, seqStops[2].pos), seconds(ctx, S.player, seqStops[2].pos)
 		if a and b2 and direct then
 			local extra = math.max(0, a + b2 - direct)
 			if extra <= par.detour then add(nowIt.id, "ON_THE_WAY", { seconds = math.floor(extra + 0.5) }) end
 		end
 	end
+end
 
-	-- 8. the alternatives that lost (a few, for /codex diag)
+--- Stage 8: the alternatives that lost (a few, for /codex diag), the nearest action for comparison, and the trace tail.
+local function summarize(S, pick)
+	local diag, stops, ctx = S.diag, S.stops, S.ctx
 	local firsts = {}
-	for f, seq in pairs(bestByFirst) do firsts[#firsts + 1] = { f = f, seq = seq } end
+	for f, seq in pairs(S.bestByFirst) do firsts[#firsts + 1] = { f = f, seq = seq } end
 	table.sort(firsts, function(x, y) return better(x.seq, y.seq) end)
 	diag.alternatives = {}
 	for _, e in ipairs(firsts) do
@@ -559,23 +546,77 @@ function Pl.Compute(ctx, c, opts)
 	end
 	-- the nearest located action, for comparison: the Planner is not "nearest first"
 	local nearest, nd
-	for _, it in ipairs(items) do
-		local d = player and E.Distance(ctx, player, it.pos) or nil
+	for _, it in ipairs(S.items) do
+		local d = S.player and E.Distance(ctx, S.player, it.pos) or nil
 		if d and (not nd or d < nd or (d == nd and it.id < nearest.id)) then nearest, nd = it, d end
 	end
 	diag.nearestId = nearest and nearest.id or nil
-	if trace then
-		table.sort(allSeqs, better)
+	if S.trace then
+		table.sort(S.allSeqs, better)
 		diag.sequenceList = {}
-		for n = 1, math.min(#allSeqs, 40) do
-			local q, ids = allSeqs[n], {}
+		for n = 1, math.min(#S.allSeqs, 40) do
+			local q, ids = S.allSeqs[n], {}
 			for k, i in ipairs(q.stops) do ids[k] = stops[i].id end
 			diag.sequenceList[n] = { stops = ids, net = q.net, secs = q.secs, unknown = q.unknown }
 		end
 		-- the best sequence that STARTS with each stop (so a reviewer can see what the alternatives were worth)
 		diag.bestByFirst = {}
-		for f, q in pairs(bestByFirst) do diag.bestByFirst[stops[f].id] = { net = q.net, secs = q.secs, unknown = q.unknown } end
+		for f, q in pairs(S.bestByFirst) do diag.bestByFirst[stops[f].id] = { net = q.net, secs = q.secs, unknown = q.unknown } end
 	end
+end
+
+--- plan = Planner.Compute(ctx, c, opts)
+--   c    the result of Engine.Candidates(ctx): { env, candidates, inProgress, hints }
+--   opts { prevNowId = string }  the previous plan's NOW, so a near-tie does not flip it
+--        { trace = true }        also record, in plan.diag, the per-action facts, the stops and every scored sequence
+--                                (for the evaluation harness; changes nothing about the decision, costs nothing when off)
+function Pl.Compute(ctx, c, opts)
+	opts = opts or {}
+	local env = c.env
+	local par = Pl.Params(env.strategy and env.strategy.key)
+	local diag = { strategy = env.strategy and env.strategy.key, filtered = {}, warnings = {}, reasons = {}, rejected = {}, basis =
+		"value: policy points (not XP); walking: distance/RUN_SPEED (estimated); doing: policy seconds" }
+	local plan = { reminders = {}, diag = diag }
+	local S = { ctx = ctx, env = env, par = par, lam = par.timeValue, diag = diag, trace = opts.trace }
+	S.player = env.player and { map = env.player.map, x = env.player.x, y = env.player.y, world = env.player.world } or nil
+	if not S.player then diag.warnings[#diag.warnings + 1] = "no player position: the first leg is free" end
+
+	gather(S, c)
+	plan.reminders = S.reminders
+	makeStops(S)
+	if S.trace then recordTrace(S) end
+	if #S.stops == 0 then
+		diag.reason = #S.reminders > 0 and "NO_LOCATED_ACTION" or "NO_CANDIDATES"
+		return plan
+	end
+	rankStops(S)
+	local pick = searchSequences(S, opts.prevNowId)
+	diag.net, diag.seconds, diag.unknownLegs = pick.net, pick.secs, pick.unknown
+	local seqStops, seqIds, inSeq = {}, {}, {}
+	for n, i in ipairs(pick.stops) do
+		seqStops[n] = S.stops[i]
+		seqIds[n] = S.stops[i].id
+		for _, it in ipairs(S.stops[i].items) do inSeq[it.id] = n end
+	end
+	diag.sequence = seqIds
+
+	-- 5. NOW (first stop) and THEN (second stop)
+	local nowIt, firstList = bestOf(seqStops[1], opts.prevNowId)
+	plan.now = nowIt.a
+	local thenIt = seqStops[2] and bestOf(seqStops[2]) or nil
+	plan.thenAction = thenIt and thenIt.a or nil
+
+	local also, alsoCost = chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
+	plan.alsoDo = also and also.a or nil
+	diag.interruption = alsoCost and math.floor(alsoCost * 10 + 0.5) / 10 or nil
+	table.sort(diag.rejected, function(x, y)
+		if x.code ~= y.code then return x.code < y.code end
+		return x.id < y.id
+	end)
+	while #diag.rejected > 6 do diag.rejected[#diag.rejected] = nil end
+
+	addReasons(S, seqStops, firstList, nowIt, thenIt, also, alsoCost)
+	summarize(S, pick)
 	diag.nowId, diag.alsoDoId, diag.thenId = plan.now.id, plan.alsoDo and plan.alsoDo.id or nil, plan.thenAction and plan.thenAction.id or nil
 	return plan
 end
