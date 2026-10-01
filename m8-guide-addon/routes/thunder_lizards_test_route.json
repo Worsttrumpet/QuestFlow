@@ -1,0 +1,71 @@
+{
+  "id": "thunder-lizards-test-route",
+  "title": "Barrens Level 18 (M8.3 test route)",
+  "provenance": "route-authored",
+  "first_step": "s1",
+  "steps": {
+    "s1": {
+      "id": "s1",
+      "provenance": "route-authored",
+      "kind": "ACCEPT",
+      "quest_id": 907,
+      "npc": { "name": "Jorn Skyseer", "npc_id": 3387 },
+      "destination": null,
+      "display_text": "Talk to Jorn Skyseer and accept the quest. (No offer-screen position was ever captured for this quest -- see M6 evidence; only its turn-in screen was observed.)",
+      "required": true,
+      "next_step_id": "s2"
+    },
+    "s2": {
+      "id": "s2",
+      "provenance": "route-authored",
+      "kind": "TRAVEL",
+      "quest_id": 907,
+      "npc": null,
+      "destination": null,
+      "display_text": "Head out to find Thunder Lizards. No objective-area coordinate exists anywhere in this project for this quest -- follow the objective text below.",
+      "required": true,
+      "next_step_id": "s3"
+    },
+    "s3": {
+      "id": "s3",
+      "provenance": "route-authored",
+      "kind": "OBJECTIVE",
+      "quest_id": 907,
+      "objective_index": 1,
+      "npc": null,
+      "destination": null,
+      "display_text": "Complete the objective shown below.",
+      "required": true,
+      "next_step_id": "s4"
+    },
+    "s4": {
+      "id": "s4",
+      "provenance": "route-authored",
+      "kind": "TURN_IN",
+      "quest_id": 907,
+      "npc": { "name": "Jorn Skyseer", "npc_id": 3387 },
+      "destination": {
+        "kind": "OBSERVED_PLAYER_POSITION",
+        "ui_map_id": 1413,
+        "x": 0.448696494102478,
+        "y": 0.5909364223480225
+      },
+      "display_text": "Return to Jorn Skyseer and turn in the quest. This position was M6-observed at this quest's own quest_complete_delayed checkpoint -- it is where a player was standing at turn-in, not a surveyed NPC location.",
+      "required": true,
+      "why": "Turn in Enraged Thunder Lizards here before moving on to the next quest.",
+      "next_step_id": "s5"
+    },
+    "s5": {
+      "id": "s5",
+      "provenance": "route-authored",
+      "kind": "ACCEPT",
+      "quest_id": 959,
+      "npc": { "name": "Crane Operator Bigglefuzz", "npc_id": 3665 },
+      "destination": null,
+      "display_text": "This route-author chose to continue with a different level-18 Barrens quest next. Nothing in M6 or ATT establishes that these two quests are related -- this transition is entirely route-authored. (No offer-screen position was captured for this quest either.)",
+      "required": false,
+      "why": "Optional: a second level-18 Barrens quest to fill out the route once 907 is done. Skip it if you'd rather move on.",
+      "next_step_id": null
+    }
+  }
+}
