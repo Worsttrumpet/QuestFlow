@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: ForeverProbeM4Retry (tiny follow-up: guaranteed-reward empty-string retry)
+## Notes: Tests one question only -- can a guaranteed quest reward whose item name initially reads as an empty string resolve later? Read-only. Never accepts/completes/turns in quests. Never calls GetQuestReward(). Distinct from M3's ForeverProbe and the M4 pre-experiment's ForeverProbeM4 -- can be installed alongside both without conflict. Uninstall after this follow-up.
+## Author: WoW Forever open database project
+## Version: m4-item-retry-followup-0.1
+## SavedVariables: ForeverProbeM4RetryDB
+
+ForeverProbeM4Retry.lua

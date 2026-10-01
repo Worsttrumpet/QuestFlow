@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: ForeverProbe (M3 disposable research probe)
+## Notes: Read-only quest/API observation tool for the WoW Forever M3 experiment. Does not accept, complete, or turn in quests, and does not move the player. Uninstall after use.
+## Author: WoW Forever open database project
+## Version: 0.1-m3-probe
+## SavedVariables: ForeverProbeDB
+
+ForeverProbe.lua

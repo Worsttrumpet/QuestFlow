@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: ForeverProbeM4Rep (tiny follow-up: quest reputation rewards)
+## Notes: Tests one question only -- can our normal read-only addon observation capture quest reputation rewards on WoW Forever? Read-only. Never accepts/completes/turns in quests. Never calls GetQuestReward(). Distinct from M3's ForeverProbe and both prior M4 probes -- can be installed alongside all of them without conflict. Uninstall after this follow-up.
+## Author: WoW Forever open database project
+## Version: m4-reputation-followup-0.1
+## SavedVariables: ForeverProbeM4RepDB
+
+ForeverProbeM4Rep.lua

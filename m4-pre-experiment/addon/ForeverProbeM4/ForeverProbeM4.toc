@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: ForeverProbeM4 (M4 pre-experiment: item rewards + gossip API)
+## Notes: Read-only pre-M4 compatibility check. Tests item-reward capture at three lifecycle checkpoints and reconfirms gossip quest-list APIs. Never accepts, completes, or turns in quests; never calls GetQuestReward(); does not move the player. Distinct from M3's ForeverProbe -- can be installed alongside it without conflict. Uninstall after this experiment.
+## Author: WoW Forever open database project
+## Version: m4-pre-experiment-0.1
+## SavedVariables: ForeverProbeM4DB
+
+ForeverProbeM4.lua

@@ -1,0 +1,28 @@
+## Interface: 16001
+## Title: Forever Observation Lab (M4 unified client-observation lab)
+## Notes: Consolidated, modular successor to the one-off M3/M4 probes (ForeverProbe, ForeverProbeM4, ForeverProbeM4Retry, ForeverProbeM4Rep), which remain frozen historical evidence and are untouched by this addon. Read-only. Never accepts/completes/turns in quests. Never calls GetQuestReward(). Proven modules (quest ID/title/level/objectives, XP, money, item rewards, reputation, giver identity, gossip) run automatically. Experimental modules (currency, spell, title, honor rewards, faction-name resolution) are disabled by default -- enable per-session with /flab enable <Module>.
+## Author: WoW Forever open database project
+## Version: m4-observation-lab-0.1
+## SavedVariables: ForeverObservationLabDB
+
+core\SafeCall.lua
+core\Describe.lua
+core\GuidUtil.lua
+core\PositionUtil.lua
+core\Bootstrap.lua
+core\Registry.lua
+core\Dispatcher.lua
+core\Export.lua
+core\Slash.lua
+modules\proven\QuestMeta.lua
+modules\proven\RewardsXPMoney.lua
+modules\proven\RewardsItems.lua
+modules\proven\RewardsReputation.lua
+modules\proven\GiverIdentity.lua
+modules\proven\Gossip.lua
+modules\experimental\RewardsCurrency.lua
+modules\experimental\RewardsSpell.lua
+modules\experimental\RewardsTitle.lua
+modules\experimental\RewardsHonor.lua
+modules\experimental\FactionNameResolution.lua
+ForeverObservationLab.lua

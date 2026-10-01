@@ -1,0 +1,130 @@
+﻿{
+    "label":  "before",
+    "forever_root":  "E:\\World of Warcraft\\_classic_beta_",
+    "cache_root":  "E:\\World of Warcraft\\_classic_beta_\\Cache",
+    "cache_root_exists":  true,
+    "scanned_at":  "2026-09-21T21:05:43.5003673-05:00",
+    "wdb_files":  [
+                      {
+                          "path":  "E:\\World of Warcraft\\_classic_beta_\\Cache\\WDB\\enUS\\creaturecache.wdb",
+                          "exists":  true,
+                          "size_bytes":  202591,
+                          "last_write_time":  "2026-09-21T20:05:54.1962577-05:00",
+                          "sha256":  "AFA18A7EDB335180917ED4287C89D47A7B9E4BC4F2543E78F640D0D1EC427ADA",
+                          "wdb_header":  {
+                                             "readable":  true,
+                                             "magic":  "BOMW",
+                                             "client_version_raw":  69913,
+                                             "locale_raw_bytes":  "SUne",
+                                             "locale_reversed_guess":  "enUS",
+                                             "record_size":  688,
+                                             "record_version":  4,
+                                             "cache_version":  0,
+                                             "note":  "[2nd]-documented layout, read here for the first time on this client -- not yet independently confirmed"
+                                         }
+                      },
+                      {
+                          "path":  "E:\\World of Warcraft\\_classic_beta_\\Cache\\WDB\\enUS\\gameobjectcache.wdb",
+                          "exists":  true,
+                          "size_bytes":  10157,
+                          "last_write_time":  "2026-09-21T20:05:54.1972581-05:00",
+                          "sha256":  "8839D44D24811FD56A201172C29937AB45483999BBE8311AC1902B35C7C73A92",
+                          "wdb_header":  {
+                                             "readable":  true,
+                                             "magic":  "BOGW",
+                                             "client_version_raw":  69913,
+                                             "locale_raw_bytes":  "SUne",
+                                             "locale_reversed_guess":  "enUS",
+                                             "record_size":  256,
+                                             "record_version":  4,
+                                             "cache_version":  0,
+                                             "note":  "[2nd]-documented layout, read here for the first time on this client -- not yet independently confirmed"
+                                         }
+                      },
+                      {
+                          "path":  "E:\\World of Warcraft\\_classic_beta_\\Cache\\WDB\\enUS\\npccache.wdb",
+                          "exists":  true,
+                          "size_bytes":  32,
+                          "last_write_time":  "2026-09-21T20:05:54.1972581-05:00",
+                          "sha256":  "9DB533338B5480F9F726A29A2D973C0D2280AD7EE4BCDF5FF0A36EECEEF84EEF",
+                          "wdb_header":  {
+                                             "readable":  true,
+                                             "magic":  "CPNW",
+                                             "client_version_raw":  69913,
+                                             "locale_raw_bytes":  "SUne",
+                                             "locale_reversed_guess":  "enUS",
+                                             "record_size":  64,
+                                             "record_version":  2,
+                                             "cache_version":  0,
+                                             "note":  "[2nd]-documented layout, read here for the first time on this client -- not yet independently confirmed"
+                                         }
+                      },
+                      {
+                          "path":  "E:\\World of Warcraft\\_classic_beta_\\Cache\\WDB\\enUS\\pagetextcache.wdb",
+                          "exists":  true,
+                          "size_bytes":  7252,
+                          "last_write_time":  "2026-09-21T20:05:54.2007686-05:00",
+                          "sha256":  "7C6ED6C75E3551F24C6437C79E4F1958A4C57026FF0379526C067551DE27A1FE",
+                          "wdb_header":  {
+                                             "readable":  true,
+                                             "magic":  "XTPW",
+                                             "client_version_raw":  69913,
+                                             "locale_raw_bytes":  "SUne",
+                                             "locale_reversed_guess":  "enUS",
+                                             "record_size":  4016,
+                                             "record_version":  2,
+                                             "cache_version":  0,
+                                             "note":  "[2nd]-documented layout, read here for the first time on this client -- not yet independently confirmed"
+                                         }
+                      },
+                      {
+                          "path":  "E:\\World of Warcraft\\_classic_beta_\\Cache\\WDB\\enUS\\petitioncache.wdb",
+                          "exists":  true,
+                          "size_bytes":  298,
+                          "last_write_time":  "2026-09-21T20:05:54.2007686-05:00",
+                          "sha256":  "834914842D465EACA7F29D00E9FCA7E6B419AEF759654DD2C0B1E4DD433CB70B",
+                          "wdb_header":  {
+                                             "readable":  true,
+                                             "magic":  "NTPW",
+                                             "client_version_raw":  69913,
+                                             "locale_raw_bytes":  "SUne",
+                                             "locale_reversed_guess":  "enUS",
+                                             "record_size":  2912,
+                                             "record_version":  2,
+                                             "cache_version":  0,
+                                             "note":  "[2nd]-documented layout, read here for the first time on this client -- not yet independently confirmed"
+                                         }
+                      },
+                      {
+                          "path":  "E:\\World of Warcraft\\_classic_beta_\\Cache\\WDB\\enUS\\questcache.wdb",
+                          "exists":  true,
+                          "size_bytes":  61265,
+                          "last_write_time":  "2026-09-21T20:05:54.1987623-05:00",
+                          "sha256":  "35EE7FB8511DA3B676F8A549698B0B2A153B6AB21B7379B512CEF3697DBEBBAA",
+                          "wdb_header":  {
+                                             "readable":  true,
+                                             "magic":  "TSQW",
+                                             "client_version_raw":  69913,
+                                             "locale_raw_bytes":  "SUne",
+                                             "locale_reversed_guess":  "enUS",
+                                             "record_size":  12296,
+                                             "record_version":  12,
+                                             "cache_version":  0,
+                                             "note":  "[2nd]-documented layout, read here for the first time on this client -- not yet independently confirmed"
+                                         }
+                      }
+                  ],
+    "dbcache_files":  [
+                          {
+                              "path":  "E:\\World of Warcraft\\_classic_beta_\\Cache\\ADB\\enUS\\DBCache.bin",
+                              "exists":  true,
+                              "size_bytes":  3524934,
+                              "last_write_time":  "2026-09-21T20:06:02.7693250-05:00",
+                              "sha256":  "658E7C68D27657F6CCCE31462E47A6CD27D442504F7B5E177CD16FCDE079FB55",
+                              "dbcache_check":  {
+                                                    "first_4_bytes_ascii":  "XFTH",
+                                                    "matches_known_hotfix_magic_XFTH":  true
+                                                }
+                          }
+                      ]
+}
