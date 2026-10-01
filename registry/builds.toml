@@ -1,0 +1,59 @@
+# Build registry. Every build is UNVERIFIED unless Blizzard's version service says otherwise.
+# The version service reports only the CURRENT build, so it can never verify a historical one.
+[meta]
+schema = 1
+product = "wow_classic_beta"
+last_reviewed = "2026-09-21"
+
+[blizzard_version_service]
+url = "https://us.version.battle.net/v2/products/wow_classic_beta/versions"
+status = "unreachable"          # not_checked | unreachable | checked
+last_attempt = "2026-09-21"
+detail = "Host not in the sandbox egress allowlist (HTTP 403 from the egress proxy). Re-run: python -m foreverdb registry verify"
+
+[[build]]
+id = "1.60.1.69876"
+verification = "unverified"
+notes = "Lowest-numbered of the three builds; seen in third-party sources only."
+  [[build.evidence]]
+  kind = "third_party_tracker"
+  source = "wowforeverbuilds.com/wow-forever-beta"
+  note = "Listed as the latest tracked client on its Sept 17 2026 update."
+  [[build.evidence]]
+  kind = "repo_file"
+  source = "ATTWoWAddon/AllTheThings@8e25511677df4ea5c3d0322009eafc18f203ffd3:.contrib/Harvesters/Database Harvester/Builds.txt"
+  note = "Build number listed (line 291)."
+
+[[build]]
+id = "1.60.1.69893"
+verification = "unverified"
+notes = "Declared by ATT's forever.config. Whether it was the first beta build is not established here."
+  [[build.evidence]]
+  kind = "repo_file"
+  source = "ATTWoWAddon/AllTheThings@8e25511677df4ea5c3d0322009eafc18f203ffd3:.contrib/.db/forever/.config/forever.config"
+  note = "DataPatch = [1, 60, 1, 69893]."
+  [[build.evidence]]
+  kind = "repo_file"
+  source = "ATTWoWAddon/AllTheThings@8e25511677df4ea5c3d0322009eafc18f203ffd3:.contrib/Harvesters/Database Harvester/Builds.txt"
+  note = "Build number listed (line 292), directly after 69876."
+  [[build.evidence]]
+  kind = "mirror_label"
+  source = "ATTWoWAddon/AllTheThings@a054efd473f0b9b13c0695dc1e81a16af4918f9d:.contrib/.db/forever/.config/.wago/*.1.60.1.69893.csv"
+  note = "Label only. Content is byte-identical to the 69913-labelled files (see manifests/db2_manifest_diff.json)."
+
+[[build]]
+id = "1.60.1.69913"
+verification = "unverified"
+notes = "Latest build found in third-party sources as of 2026-09-21."
+  [[build.evidence]]
+  kind = "third_party_news"
+  source = "wowforeverbuilds.com/news"
+  note = "Described as the first client update, a day after the beta opened."
+  [[build.evidence]]
+  kind = "mirror_label"
+  source = "ATTWoWAddon/AllTheThings@6ff7c03 and @8e25511:.contrib/.db/forever/.config/.wago/*.1.60.1.69913.csv"
+  note = "Label only. See build 69893 evidence: these files are byte-identical renames."
+  [[build.evidence]]
+  kind = "repo_doc"
+  source = "danielcosta42/lodestar@8964d0c:docs/forever.md"
+  note = "States 69913 is the current build and QuestV2 has 6,600 rows at that build (not re-probed in M1)."

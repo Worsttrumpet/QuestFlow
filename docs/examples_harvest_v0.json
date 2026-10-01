@@ -1,0 +1,14 @@
+{
+  "contract_version": "harvest.v0",
+  "recorder": {"name": "example-recorder", "version": "0.0.0"},
+  "client": {"product": "wow_classic_beta", "game_build": "1.60.1.69913", "build_source": "client_api", "interface_version": 16001},
+  "session": {"session_id": "EXAMPLE-not-a-real-session", "started_at": "2026-01-01T00:00:00Z", "locale": "enUS"},
+  "observations": [
+    {"kind": "quest_record", "observed_at": "2026-01-01T00:01:00Z", "channel": "api_call",
+     "data": {"quest_id": 999999001, "values": [{"api": "EXAMPLE.GetTitleForQuestID", "args": [999999001], "returns": ["EXAMPLE TITLE"]}]}},
+    {"kind": "quest_giver_seen", "observed_at": "2026-01-01T00:02:00Z", "channel": "event",
+     "data": {"npc_id": 999999002, "quest_id": 999999001, "position": {"ui_map_id": 1429, "map_x": 0.5, "map_y": 0.5, "source_api": "EXAMPLE.GetPlayerMapPosition"}}},
+    {"kind": "wdb_record", "observed_at": "2026-01-01T00:03:00Z", "channel": "wdb_cache",
+     "data": {"cache_file": "EXAMPLE.wdb", "record_type": "quest", "record_id": 999999001, "payload_sha256": "0000000000000000000000000000000000000000000000000000000000000000", "parser_version": "0"}}
+  ]
+}

@@ -1,0 +1,110 @@
+# DB2 tables the project cares about. "why" links each to a project need.
+# priority: 1 = needed for M1/M2, 2 = needed later, 3 = low relevance (probed if available)
+[[table]]
+name = "QuestV2"
+why = "Client quest ID list (existence only)"
+priority = 1
+[[table]]
+name = "QuestPOIBlob"
+why = "Quest POI regions (tiny in Forever)"
+priority = 1
+[[table]]
+name = "QuestPOIPoint"
+why = "Quest POI world coordinates"
+priority = 1
+[[table]]
+name = "QuestInfo"
+why = "Quest type labels"
+priority = 2
+[[table]]
+name = "QuestLabel"
+why = "Quest labels"
+priority = 2
+[[table]]
+name = "QuestObjective"
+why = "Objective definitions (reported absent at 69913)"
+priority = 1
+[[table]]
+name = "QuestV2CliTask"
+why = "Client quest tasks (reported absent at 69913)"
+priority = 2
+[[table]]
+name = "QuestXP"
+why = "Quest XP by level"
+priority = 2
+[[table]]
+name = "Map"
+why = "Map (continent/instance) ids and names"
+priority = 1
+[[table]]
+name = "AreaTable"
+why = "Zones and subzones, hierarchy"
+priority = 1
+[[table]]
+name = "UiMap"
+why = "UI map hierarchy and names"
+priority = 1
+[[table]]
+name = "UiMapAssignment"
+why = "World-region to UI-map transform"
+priority = 1
+[[table]]
+name = "TaxiNodes"
+why = "Flight nodes with world positions"
+priority = 1
+[[table]]
+name = "TaxiPath"
+why = "Flight path edges (unverified)"
+priority = 1
+[[table]]
+name = "TaxiPathNode"
+why = "Flight path waypoints (unverified)"
+priority = 1
+[[table]]
+name = "WorldMapOverlay"
+why = "Map art overlays"
+priority = 3
+[[table]]
+name = "FactionTemplate"
+why = "Faction relations"
+priority = 2
+[[table]]
+name = "Faction"
+why = "Reputation factions (unverified)"
+priority = 2
+[[table]]
+name = "SkillLine"
+why = "Professions and skills"
+priority = 2
+[[table]]
+name = "ChrRaces"
+why = "Races (including Skyborne)"
+priority = 2
+[[table]]
+name = "ContentTuning"
+why = "Level scaling"
+priority = 3
+[[table]]
+name = "Item"
+why = "Item ids and classes"
+priority = 3
+[[table]]
+name = "ItemSearchName"
+why = "Item names and requirements"
+priority = 3
+[[table]]
+name = "ItemSparse"
+why = "Item stats (unverified)"
+priority = 3
+[[table]]
+name = "Creature"
+why = "Creature names (unverified)"
+priority = 2
+[[table]]
+name = "Spell"
+why = "Spells (unverified)"
+priority = 3
+[[table]]
+name = "SpellName"
+why = "Spell names (unverified)"
+priority = 3

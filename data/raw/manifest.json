@@ -1,0 +1,985 @@
+{
+  "manifest_version": 1,
+  "acquired_at": "2026-09-26T03:05:36Z",
+  "acquisition_method": "git init + remote add + fetch --depth 1 origin <sha> + checkout FETCH_HEAD (the same shallow-fetch pattern already established by m0/scripts/setup_sources.sh)",
+  "snapshots": [
+    {
+      "key": "att-head",
+      "repo": "https://github.com/ATTWoWAddon/AllTheThings.git",
+      "sha": "8e25511677df4ea5c3d0322009eafc18f203ffd3",
+      "verified_head": "8e25511677df4ea5c3d0322009eafc18f203ffd3",
+      "license_id": "MIT",
+      "license_status": "verified",
+      "upstream_provenance": "unresolved",
+      "mirrors_blizzard_csv": true,
+      "forever_root": ".contrib/.db/forever",
+      "wago_dir": ".contrib/.db/forever/.config/.wago",
+      "constants": ".contrib/.db/forever/.config/constants/maps.lua",
+      "config": ".contrib/.db/forever/.config/forever.config",
+      "snapshot_path": "data/raw/att-head",
+      "role": "primary Forever quest/NPC/coord/flight-path import source; produced the historical parsed_quest_ids=1537 count",
+      "file_count": 184,
+      "total_size_bytes": 15021364,
+      "files": [
+        {
+          "relative_path": ".contrib/.db/forever/.config/.main.lua",
+          "size_bytes": 1664,
+          "sha256": "3c634a3efe7f8b278a433965e84362e56ba9951172cf853278585f007f13d188"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/.update.bat",
+          "size_bytes": 2185,
+          "sha256": "1ec49f91cd906982ef2effba21d9f87d313d2e35767996c00e14a27cbec30bc3"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/Achievement.1.60.1.69913.csv",
+          "size_bytes": 34108,
+          "sha256": "8fd13cceb629d34f51d47c49598741c361581137ddffc5c929f46113ed9059da"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/AreaTable.1.60.1.69913.csv",
+          "size_bytes": 148739,
+          "sha256": "2105e90ca060dc9cd7b9246e91454a08d2ffcee3497f75cd8396f055704bb310"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/BattlePetSpecies.1.60.1.69913.csv",
+          "size_bytes": 4975,
+          "sha256": "d45ccaad2b881972dfe7885265a7ceb819aac0e1dd44ff98af732115e8c1d738"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/ContentTuning.1.60.1.69913.csv",
+          "size_bytes": 4618,
+          "sha256": "11d9559b3ea4aa8ddb7e5b70416e107fcb7035afee1206b97d4c66435b59e045"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/Criteria.1.60.1.69913.csv",
+          "size_bytes": 44695,
+          "sha256": "696114446c9c9de70caf51bf22758e1f1668ce5f706c49e9a23da523d055069f"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/CriteriaTree.1.60.1.69913.csv",
+          "size_bytes": 89927,
+          "sha256": "097eee172c5ab4e32522e042e6485f8331153a62fa1684ea0a2e1c530b996a9f"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/Holiday.1.60.1.69913.csv",
+          "size_bytes": 4274,
+          "sha256": "0beb6993a6f34ffec5b7aa6900a9404e5092a9b28680922c5b5020e587ebfb7d"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.1.60.1.69913.csv",
+          "size_bytes": 435,
+          "sha256": "d471c5608fad173a1865d75206ea659e875b367e1facc3689817c01b86365915"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.deDE.1.60.1.69913.csv",
+          "size_bytes": 412,
+          "sha256": "c6ce7d887baeec6ea5c8a9a78533bcb9d64870b41334949d97ca0b46f7324bc6"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.esES.1.60.1.69913.csv",
+          "size_bytes": 579,
+          "sha256": "beb0b61d53e5c9b9db113201f1ebd24b555eed1d60654f05bb0564570ff78201"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.esMX.1.60.1.69913.csv",
+          "size_bytes": 579,
+          "sha256": "beb0b61d53e5c9b9db113201f1ebd24b555eed1d60654f05bb0564570ff78201"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.frFR.1.60.1.69913.csv",
+          "size_bytes": 496,
+          "sha256": "3b7c84e59670e87291a8369afe7bd9ec014456055625430f68c58516a9ca3d38"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.itIT.1.60.1.69913.csv",
+          "size_bytes": 107,
+          "sha256": "d715faa0ac65adfdc4262b5baf4cee49c7ae6455a017dc9312a60713d1a99b73"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.koKR.1.60.1.69913.csv",
+          "size_bytes": 462,
+          "sha256": "06ec8f119cae79451ef848ba4636d073408246f6e9aef3d1ce09d5ac1d575dda"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.ptBR.1.60.1.69913.csv",
+          "size_bytes": 516,
+          "sha256": "d905095cdb7ad30a8c447cdf50a5e91d1f94b4d5090ad8b027ee825370302b4b"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.ruRU.1.60.1.69913.csv",
+          "size_bytes": 701,
+          "sha256": "694c17b20704e0317b19d386ed1dacb55796389a73ec00fd5e3eaaa46b837cfb"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.zhCN.1.60.1.69913.csv",
+          "size_bytes": 338,
+          "sha256": "9189104e168da238fe986e20ef88b242526e180e34efd9451900e0810d8d606b"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/HolidayNames.zhTW.1.60.1.69913.csv",
+          "size_bytes": 359,
+          "sha256": "c908cae27dbb1e6fdfaaae26f5ad15db1066dccd33b2d11ffc227e96a4785ef8"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/Item.1.60.1.69913.csv",
+          "size_bytes": 1428867,
+          "sha256": "569fba47e2a8b088e30781007ce48012e3aa7e63969827f4e812d5a74e4e435a"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/ItemBonus.1.60.1.69913.csv",
+          "size_bytes": 31133,
+          "sha256": "04cf022d83e7eac835fde2c1ce59dce337cf962cc942d8c3e4579230ca387df4"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/ItemEffect.1.60.1.69913.csv",
+          "size_bytes": 408282,
+          "sha256": "dcdab5b94a5ea93b2ece9694bb84804cac17fac81d7de7856e0fd2fea653b601"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/ItemModifiedAppearance.1.60.1.69913.csv",
+          "size_bytes": 455506,
+          "sha256": "7163349fda678e0b4d6fe5f2f2f22dfecbe8735eb812fed4d7886a66413e2f59"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/ItemSearchName.1.60.1.69913.csv",
+          "size_bytes": 495156,
+          "sha256": "abd3480577a5b031ab30bc54e7e78f8482d9270a0ab93ef17287089361191555"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/ItemXItemEffect.1.60.1.69913.csv",
+          "size_bytes": 251913,
+          "sha256": "8ee4febb520aea61b4e8c2fa113c1a91beecc92bb6fc8ff1de5d194c686606f0"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/ModifierTree.1.60.1.69913.csv",
+          "size_bytes": 74963,
+          "sha256": "594ab501da4bfefcd2fc149800936e78629262c2351228d719c5cb2c357d2563"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/SkillLineAbility.1.60.1.69913.csv",
+          "size_bytes": 406007,
+          "sha256": "d2619ca3a30648f77d614beda1e4b43a272544e4d299b6c964c4164f58f3f3cc"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/SpellEffect.1.60.1.69913.csv",
+          "size_bytes": 3828322,
+          "sha256": "f08c0780f920f41f84b6d6d13ada78db59a4c5ae8ca369c8bee3ab7642af41c1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/TaxiNodes.1.60.1.69913.csv",
+          "size_bytes": 12386,
+          "sha256": "52e64daf109697c63b837bf51e735f61132e8c7399a4b41996ae814601d9482c"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/TransmogSet.1.60.1.69913.csv",
+          "size_bytes": 706,
+          "sha256": "1dca887220320a8920f56d5199ff01f1ce18be548eb987cba4ceecbc9dd94f00"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/TransmogSetItem.1.60.1.69913.csv",
+          "size_bytes": 1353,
+          "sha256": "621659828ac017ed93527bba633042eccc585ddf181ef13aceb0f991ffd6515c"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/UiMap.1.60.1.69913.csv",
+          "size_bytes": 3093,
+          "sha256": "4c5ede52826ef48808aa7c0cd9d63fb3d028df88de1b2041148b164bb42328b2"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/UiMapAssignment.1.60.1.69913.csv",
+          "size_bytes": 6778,
+          "sha256": "79267e8be8034e47daab14350411b3acc0b1f64e86efc9d821a217497254ca0a"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/WorldMapOverlay.1.60.1.69913.csv",
+          "size_bytes": 60056,
+          "sha256": "14aa45a29db99ddbcad6d148a7c57486b4c8788a71a2d624d4b04e9b4220bad9"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/constants/maps.lua",
+          "size_bytes": 2673,
+          "sha256": "a51ca6d510f2442cc859fa4131d85e59eabe125f6812d919b048106dcc946b8f"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/constants/timelines.lua",
+          "size_bytes": 323,
+          "sha256": "ec17ca80535fa69d3821cc10ff5d53de9dd5eea9fa0f749f650979d93a7664d0"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/exports/item db.lua",
+          "size_bytes": 2950669,
+          "sha256": "218a4234e13eb56593ae365235f5d032eec6be1ba92f478d39089917afc4067d"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/forever.config",
+          "size_bytes": 423,
+          "sha256": "5c11cffa8804dd38c2189c62fe4100b39a74abef1feb9825c6a5e08877e6ec54"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/build.bat",
+          "size_bytes": 123,
+          "sha256": "ce5aa236a4255ae9166f5e8e878d112381ecbd59eda28828dbffc774693e7a69"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/character/.metadata.lua",
+          "size_bytes": 290,
+          "sha256": "296ff339c9f7311294b056e259629a56e22ccd96c351f5320bf2ecd17e492288"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/character/achievements.lua",
+          "size_bytes": 3837,
+          "sha256": "db0b8c642ffc4a3e2badbf8235b660abb93a4a978b45c7443c7c838f942b0039"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/character/factions.lua",
+          "size_bytes": 761,
+          "sha256": "e5b0b9834c6e3b8eabdf80884e07de727e13f736a650395667d332d453bc87b0"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/character/mounts.lua",
+          "size_bytes": 495,
+          "sha256": "c92386356071c58fd004dee06103fce2c5cd027ea8aa26526195b69fb3cdd654"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/character/starter gear.lua",
+          "size_bytes": 19413,
+          "sha256": "a251fe36831031f0ca3a686fc586cac536422595594acc23b16e1eb7541b1608"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/character/toys.lua",
+          "size_bytes": 215,
+          "sha256": "2b001ac598ea890de071ad2e11e2893e416fd91ac8700dac15d3396add80a1f1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/dungeons & raids/0.5 - dungeon sets.lua",
+          "size_bytes": 68119,
+          "sha256": "9c861ff3f53f0cbee13dd23840836ed7f0ba782d03496e998c08cc4a1294d43d"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/dungeons & raids/0.6 - world bosses.lua",
+          "size_bytes": 4470,
+          "sha256": "3cfed9fcde88a9b728c427a80465ba3d6ac429a1979490537e91ee890cbe0b07"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/dungeons & raids/1.0 - molten core.lua",
+          "size_bytes": 22303,
+          "sha256": "d6f8739658a3e621a409d29ea1b8f64256079cec00105728ee1224f601730984"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/dungeons & raids/hall of thanes.lua",
+          "size_bytes": 653,
+          "sha256": "3fa817d843d371f79b9d9fd3ef3b16c7af66ed381192fd09a3a39952fc5670a8"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/dungeons & raids/ragefire chasm.lua",
+          "size_bytes": 5786,
+          "sha256": "8f941ebd8768c2bfa8ef1b700f7224fa33a2a4ef462896b2999dc8c66c082f3a"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/dungeons & raids/ruins of lordaeron.lua",
+          "size_bytes": 807,
+          "sha256": "5a3e7b838a84071e4d4000c607b44759451e643265a89a15824038fa98a2b310"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/dungeons & raids/shadowfang keep.lua",
+          "size_bytes": 6542,
+          "sha256": "e8448926c4b949951b530f57c489542b7449d30005c3af72aee338567ebf2542"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/dungeons & raids/the stockade.lua",
+          "size_bytes": 4547,
+          "sha256": "0b6a582daffdeb043b87103bd090dfe94afd38e7d79aac5ff655c6253bbf9959"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/children's week.lua",
+          "size_bytes": 9604,
+          "sha256": "8d4ff659cb072de9c69c65490d87ecb51a7294b53535422a14cceb66a1d863e8"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/darkmoon faire.lua",
+          "size_bytes": 27382,
+          "sha256": "680656e8744a7aeb24f0bc6d22adf23bccb80bf3b518132aaac31991b08788c2"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/feast of the winter veil.lua",
+          "size_bytes": 20256,
+          "sha256": "d0f8303bdc0009536be26c673591dca93653a2ea2c5e6289834724a2e99740a1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/hallow's end.lua",
+          "size_bytes": 8711,
+          "sha256": "e4616363f8829afef3445988ebdef4a4b2f40bb2715acc32b6188375f0b38f9c"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/harvest festival.lua",
+          "size_bytes": 2629,
+          "sha256": "a26a9dbb107053f9870f03a01f7dc320cc8fc7dc9b82b59afc58030c64ce9979"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/love is in the air.lua",
+          "size_bytes": 24375,
+          "sha256": "4a9ddeaeef3b06e41c235d43e9b284b565fab3077c923602328388f8eb6c9d75"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/lunar festival.lua",
+          "size_bytes": 21817,
+          "sha256": "e508b1991ec3c312a2af3f532c144b719658a52ebd6046c4368e8fad70fa0b0d"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/midsummer fire festival.lua",
+          "size_bytes": 12629,
+          "sha256": "45809c2c1352e957c0a636701deba3a663e409ccac76807539d1ac967206b9fb"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/noblegarden.lua",
+          "size_bytes": 1452,
+          "sha256": "b3a8936fae0fafa870b5d7ac34afe9bb1295fa4999340761520dc4dfb228c1b6"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/seasonal fish.lua",
+          "size_bytes": 2576,
+          "sha256": "638848929794ffb3b5d4e497b82de5b38e91a803132167a17718662685cbb79d"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/holidays/stranglethorn fishing extravaganza.lua",
+          "size_bytes": 4017,
+          "sha256": "3cb53ca4b0cf2b4133e428918825ea742aad45fa14bf82112d1cc6a02eb52015"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/.metadata.lua",
+          "size_bytes": 711,
+          "sha256": "9010a025a76dbe458146d3ca59e71806d033e032b3c646dab4d4f6e3f7a6dd18"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/achievements.lua",
+          "size_bytes": 804,
+          "sha256": "a30d4952670d15c7096f60660e5bed54902d71c340178aa182157efee292fedb"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/battlegrounds/alterac valley.lua",
+          "size_bytes": 28271,
+          "sha256": "cee7a870d3334873872f88bc47b9934c82d44e38554761d5df119d4f1e808603"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/battlegrounds/arathi basin.lua",
+          "size_bytes": 33028,
+          "sha256": "d458868852ab5c718075866da9ba26b4d072f9f3081f911f35a1998dc25051c1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/battlegrounds/darkspear islands.lua",
+          "size_bytes": 695,
+          "sha256": "22bb7e1b39b87e760e35c2306bc3c4010c92e72b58982f70fbdbd0fc3b1320ef"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/battlegrounds/warsong gulch.lua",
+          "size_bytes": 19358,
+          "sha256": "4c047a82b5c3b9149a4bd3c763a2e992a44996c6771b23fd001260285f2a4c0e"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/honor titles.lua",
+          "size_bytes": 966,
+          "sha256": "9950ce1aa7ed0e2ca1cb01e8d526c0f6452354a78039e67e32ad741993ad7503"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/pvp gear.lua",
+          "size_bytes": 18240,
+          "sha256": "3498428cba2df7142a10096052dc73344a34c0c82c2f75cf18ac2b7e8e1de9e6"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/pvp/quests.lua",
+          "size_bytes": 1801,
+          "sha256": "15e990093c9b5d2952be41932b9212780130457f4ff1735d5c5cf45f1c5510d6"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/.metadata.lua",
+          "size_bytes": 739,
+          "sha256": "30b92758196b7406cab8f155a58a30690ea83ccb300fe6998d2a32ee2da01815"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/1 - ironforge.lua",
+          "size_bytes": 47245,
+          "sha256": "55cf46f87f00ca8cef598402fc5725389f48043ba5390a3cfdd31814071467f7"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/1 - stormwind city.lua",
+          "size_bytes": 83696,
+          "sha256": "8f37bb699660e38726d856a1a5a110a5a17a1e038289c6b940cbad6028ccffd7"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/alterac mountains.lua",
+          "size_bytes": 25778,
+          "sha256": "34cd21a50241aeef4ef1d9aac7c1b37d29efbb3d2308697066e5a789c8d737f1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/arathi highlands.lua",
+          "size_bytes": 37735,
+          "sha256": "960eda8e1f6110780585e44920364d87679b4196c316eba79bc61ba70d77940b"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/dun morogh.lua",
+          "size_bytes": 46820,
+          "sha256": "6f3a61fa83e8a8cb197c8ccd1c0ce228f78bb7e82c882c832a3518a7d84df88b"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/elwynn forest.lua",
+          "size_bytes": 39297,
+          "sha256": "3f659487d72f0cd5468efddf28e1e3af89f8fa7b572a65e6b3723de7c01f2a07"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/loch modan.lua",
+          "size_bytes": 32424,
+          "sha256": "ca79fd174dd9bed722a949f2e84419f519aca91e1b69e63fd1518bbf3e228318"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/riverglades.lua",
+          "size_bytes": 696,
+          "sha256": "4059e8674c824c7af522dc1446fc6f59ef69a0c1f1ca05527960a178544d9575"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/stranglethorn vale.lua",
+          "size_bytes": 79247,
+          "sha256": "5c22d751a58a2167acbc07bd7af4d01022b66cafa469848bb570cdc27fac1356"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/eastern kingdoms/wetlands.lua",
+          "size_bytes": 31784,
+          "sha256": "d06d560bf9f03c7e5838840052cde46bc2cb9cff28924e7d55841bf13a4b3655"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/kalimdor/.metadata.lua",
+          "size_bytes": 417,
+          "sha256": "7632d783ecc2e81fb7f2c689b730fb8df034ef59d090307538d820a03d83430e"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/kalimdor/durotar.lua",
+          "size_bytes": 38342,
+          "sha256": "329f34644b3e77634378d10351967216e65a1c8da53a4fa5d649f6d6ebf7c4fc"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/kalimdor/mount hyjal.lua",
+          "size_bytes": 500,
+          "sha256": "cec8d83868fd0540b3de9c866a2cc785bc9efaf007be62aaacf315b553b64b66"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/kalimdor/mulgore.lua",
+          "size_bytes": 29781,
+          "sha256": "01ae6c177acb0721bb66c9258ecff59bf736058a5ce3a1121f01697bb083050e"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/kalimdor/shendralas.lua",
+          "size_bytes": 360,
+          "sha256": "9de31e858edde5483ab38f3a5f2076098bc9cdf8bd151a806d189221e6f2d2be"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/kalimdor/teldrassil.lua",
+          "size_bytes": 38168,
+          "sha256": "e0c06e13acfdcc7a84a1eaf0c889ceb8fa36adcfd11714c7d755f6be25d07fa7"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/kalimdor/the barrens.lua",
+          "size_bytes": 103708,
+          "sha256": "8bedb058944874fc6d2b9e2a5b9da266dba76064361038bd47e5bf51b8d0c954"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zones/zephras isle.lua",
+          "size_bytes": 2296,
+          "sha256": "981cc48d7c1b3c30141bf77cb840c4ea19b987a8fee001c91aed24fd6edb979a"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/1.5 Onyxia's Lair.lua",
+          "size_bytes": 41098,
+          "sha256": "5de15d464314a4c8d45b7a75f21bd60040e56c4bddaa3a9461b59969b5f86f9a"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/1.6 Blackwing Lair.lua",
+          "size_bytes": 48421,
+          "sha256": "f49a66203f31947469b2a196c0b83ef0b89f6707d2eb7504e7ad361d3cc59814"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/1.7 Zul'Gurub.lua",
+          "size_bytes": 113064,
+          "sha256": "ca99cf1d41775ab28d39ab3a8ede8eafe4eb4b4b71b0dd0549aa54e88c600cc4"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/2.5 Ruins of Ahn'Qiraj.lua",
+          "size_bytes": 57712,
+          "sha256": "ea6e4bf347a22c8958f547cde6e951838a06a547d71ac94a75fe3eefc2aa9959"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/2.6 Temple of Ahn'Qiraj.lua",
+          "size_bytes": 91765,
+          "sha256": "dc88a844562e05de2b2318e0e4e892f09e906e0708a905b3ab78269aae22fed6"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/3.0 Naxxramas.lua",
+          "size_bytes": 173260,
+          "sha256": "76498a88f7674c56f5c6e9c0288a44b5129b7f1d86346490be321136f91c6fc7"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Blackfathom Deeps.lua",
+          "size_bytes": 42098,
+          "sha256": "e27977556fe1834ec937bf0305bb82db6b726719a5b73469eb1aa51d1916de27"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Blackrock Depths.lua",
+          "size_bytes": 87316,
+          "sha256": "70d1b6126160163fa4ec8b717848f322bcc1373c6d624db56b9ab9a5b7ec7b41"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Blackrock Spire.lua",
+          "size_bytes": 104720,
+          "sha256": "c43fda0a3892e336608c67707c248015087d96df8658bc5fa4381630ab7fc68e"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Deadmines.lua",
+          "size_bytes": 28069,
+          "sha256": "f0da304cda5a4e68fcc8d3e3be651188a76cfe247d43e922fda8dbde7a60b8e3"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Dire Maul.lua",
+          "size_bytes": 82928,
+          "sha256": "86bc655da04caebadc0ca32fdb883d5c6814607eee9e0d467adef146604c7eea"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Gnomeregan.lua",
+          "size_bytes": 71240,
+          "sha256": "8a2c731ffa7f2a69b9c180e54a887d6b1244679a2c11da376a4e491c79cda047"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Lower Blackrock Spire.lua",
+          "size_bytes": 438,
+          "sha256": "455eec3091df0b6e79fbf81325b6754dbaf983400b8062a3bd4b9b7c09d25cbf"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Maraudon.lua",
+          "size_bytes": 19422,
+          "sha256": "0e2b8b9455625d9641cfec8b7fc1479f30e5c65accadde2e5ffc892e5c26ef33"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Razorfen Downs.lua",
+          "size_bytes": 17713,
+          "sha256": "504346b8fc3e16cefc5cb60113a89b40b243f66fbc7da242176e49bf1767b0d1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Razorfen Kraul.lua",
+          "size_bytes": 17149,
+          "sha256": "74d5d713429562219ab7f45b1aa5809db60e2ee7674b88a4713cafa89abe1ee8"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Scarlet Monastery.lua",
+          "size_bytes": 48376,
+          "sha256": "d57e73c86dfd327e8680a817ac91c6efbde1967843e1cbf989c31da20daf0df6"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Scholomance.lua",
+          "size_bytes": 90832,
+          "sha256": "7c8419ac573c2f209a07279c471b9000c34f73f089c0787bca0e1a9e4010eb68"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Stratholme.lua",
+          "size_bytes": 68756,
+          "sha256": "06b13bce84efb232390d734793736d87b434283701f8623541fc0ecc0927d031"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/The Deadmines.lua",
+          "size_bytes": 503,
+          "sha256": "929c7bb513c92ed23de231b3baa1033180a1f55c6a360e73aad7d5faa8bcbf49"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/The Temple of Atal'hakkar.lua",
+          "size_bytes": 61401,
+          "sha256": "28bca78d5b958855ad613bddfd2d7714718b61e856dd4d1c3a14c6d1e2584599"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Uldaman.lua",
+          "size_bytes": 30954,
+          "sha256": "7a210e30ba5988abc29a73b251983e67319134a850aa83e702a85892511ed478"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Wailing Caverns.lua",
+          "size_bytes": 15371,
+          "sha256": "791ef7bc3a4c63f6045bb7f3df7858abd5611d36693c6750b4c7013dd26d5100"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/01 - Dungeons Raids/01 - Classic/Zul'Farrak.lua",
+          "size_bytes": 20373,
+          "sha256": "d688ccf153fec3f825aa8cd5309b5ad43679e413f052f0175e405eafaecfc7d9"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/1 - Darnassus.lua",
+          "size_bytes": 37020,
+          "sha256": "0db52c43053889890bb8635fcbbc7439618f323ad9956cb72972a6d3245308a1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/2 - Orgrimmar.lua",
+          "size_bytes": 64525,
+          "sha256": "41d37add343d8375f6a032e40ea1165940469bc263b55fc360226b3dee52fc94"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/4 - Thunder Bluff.lua",
+          "size_bytes": 27204,
+          "sha256": "03a4905bdae89324a3de10db7fcf90ee99c0652a79875752e4540a7b5c6a17de"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Ashenvale.lua",
+          "size_bytes": 47775,
+          "sha256": "e88fb1697207bf60ec429fa91bde9cf5d759982747fd9f4407d681b736c69110"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Azshara.lua",
+          "size_bytes": 25224,
+          "sha256": "5f85d17de8454c828dfb70e698e9bc6dce34b1f1f3183acde07a8f423bca82b4"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Darkshore.lua",
+          "size_bytes": 37453,
+          "sha256": "f5a945740d59e69f71d2886ce1f2274b202aae62832ec0b4aec5adb4653bb62d"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Desolace.lua",
+          "size_bytes": 39923,
+          "sha256": "bde4d6d189ccf037cef20e55e7b3428c295fc3d0c8180cf115c6084ddee6a79f"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Dustwallow Marsh.lua",
+          "size_bytes": 39321,
+          "sha256": "75a9b245a733e9e57ef69b92aea3c2af514185f2aa40bd1fa3813e07676e7a91"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Felwood.lua",
+          "size_bytes": 46195,
+          "sha256": "34d90f182893b74c62827bc34d881c1ddb2c56f70bc40122cdf149f3335dd1ab"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Feralas.lua",
+          "size_bytes": 50343,
+          "sha256": "2f46f98da8deda3362eba591d5a736f9e880e3f912dfe29ffca38728cf5cad69"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Moonglade.lua",
+          "size_bytes": 18835,
+          "sha256": "c8b9ef1f3fe2ca63e0826b8ab63b62038dd29bd2b3995a6bb0a9ce0162d8a7dd"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Silithus.lua",
+          "size_bytes": 78356,
+          "sha256": "b2d706a683167204a358948d7482ea30d13133e722cbddb3ff5ffc742b9f31c6"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Stonetalon Mountains.lua",
+          "size_bytes": 28430,
+          "sha256": "e72dccd8c23ebb3c91860142565b3c5782311852e2883c94c098c0b26de87b1c"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Tanaris.lua",
+          "size_bytes": 45756,
+          "sha256": "15d819730789ec75551991cf6bd929b019cce3068b732fee994a67c6af904621"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Thousand Needles.lua",
+          "size_bytes": 33280,
+          "sha256": "0067dc274303d91c99ebf2043d5262aa8e3fd8291069f797e34413be247e2948"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Timbermaw Hold.lua",
+          "size_bytes": 12059,
+          "sha256": "9a5583a8c6d820892bde1b8a7f33edbec7114904db3700d92d0e3978965cb2bf"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Un'goro Crater.lua",
+          "size_bytes": 27051,
+          "sha256": "4f076fa7c064320290441985c25039e3a184e4379552d68574c8b172a92a58c3"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/01 Kalimdor/Winterspring.lua",
+          "size_bytes": 37864,
+          "sha256": "dca3e736d88ee960c6737787aae6d3845e27ce46ae935bc225d615b1c4859eed"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/1 - Undercity.lua",
+          "size_bytes": 47650,
+          "sha256": "0fe5becc3608fbf81482e823091458c2b1f68631f9ff5aed10f8c96c2ddb79f1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Badlands.lua",
+          "size_bytes": 32100,
+          "sha256": "8bfa9a4ae67b7674b436f5838b7868c5aa54c872a08ee8a86ed223963677d99c"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Blackrock Mountain.lua",
+          "size_bytes": 2641,
+          "sha256": "1118ab3e62858b18fa84a8b6875d7f694eb4dd3a0b62e4e15017ea4246c658a0"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Blasted Lands.lua",
+          "size_bytes": 15658,
+          "sha256": "123c806b28d5ad0ede0de0cc29ff16e9d0f86bc93be1e52636b7755c8bcf5d0e"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Burning Steppes.lua",
+          "size_bytes": 19020,
+          "sha256": "80d879a7262bce645bc1add397df35df16a5877ec6b2c1768ed3e4088bfa1bcb"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Deadwind Pass.lua",
+          "size_bytes": 1691,
+          "sha256": "d0eb2c0d01854d8ccdc3b338f827769ae0fb310f5dff939a2907394a58651ec0"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Deeprun Tram.lua",
+          "size_bytes": 1514,
+          "sha256": "b719785b349f05e699ce05386bda5fe8cfaeed52394e0a297b413884e2f96ab7"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Duskwood.lua",
+          "size_bytes": 42463,
+          "sha256": "ec6a2991cdff39fc3e6536ce228629a082c6418bb0ad6f9d7ba5a3e2b4f9b1ad"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Eastern Plaguelands.lua",
+          "size_bytes": 57956,
+          "sha256": "da9b550bf571f42127c18804b126b9f842b0ab9d4b5a35b58913e68c8b857e43"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Hillsbrad Foothills.lua",
+          "size_bytes": 41196,
+          "sha256": "476436fef51572ca07d2c072b5f94d648e479d852934d6330b04b8a47678624f"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Redridge Mountains.lua",
+          "size_bytes": 35349,
+          "sha256": "dd193a65a9dd980eb30463c7eb526223040c6503b7ba477bfc8684aecdaa0442"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Searing Gorge.lua",
+          "size_bytes": 24964,
+          "sha256": "66a5ab83fc522a975c9a311eafea9b75ba795a32055717296fd53d739d5dcda1"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Silverpine Forest.lua",
+          "size_bytes": 28956,
+          "sha256": "49be52a0b452b63f8e15493cccefde09beeffe12a8ca1fc4c748bb982feb82c3"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Swamp of Sorrows.lua",
+          "size_bytes": 23505,
+          "sha256": "e331a8b015e12e1bfb199e86272a222411e60727d7ee15e6982d5fcc9dbcb680"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/The Hinterlands.lua",
+          "size_bytes": 33003,
+          "sha256": "86cfcf60f0612061040cd04dc5cfbacba4a12f7eba16bf1dfd7acc6a4c071b39"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Tirisfal Glades.lua",
+          "size_bytes": 41500,
+          "sha256": "cf5b4e373ecc7080d8f294e8cf848427f1a5eb991a8d95e94200578932731634"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Western Plaguelands.lua",
+          "size_bytes": 48258,
+          "sha256": "7162e7ee51a75643b5fead3d63c9d196f055e55294a7a1b3b6e0b42b5ebef917"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/02 - Outdoor Zones/02 Eastern Kingdoms/Westfall.lua",
+          "size_bytes": 32387,
+          "sha256": "423a62b2b6c5a420be5780197f0361ce4bb15ef46d47044cd35bb0dfec9a7f2a"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/03 - World Drops/01 Rooted/1 - Classic.lua",
+          "size_bytes": 179808,
+          "sha256": "0da6dea2a0c141a5d515cd61b3d51439b0ee7f8c655ed2e138ee3f1175f5f9b9"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/03 - World Drops/Lockpicking.lua",
+          "size_bytes": 21229,
+          "sha256": "f7b6fe0cd5ebcc1cb87b717f7c65d8494e7549d0457570af621725cc9eb40081"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/03 - World Drops/Pick Pocket.lua",
+          "size_bytes": 3985,
+          "sha256": "f82a45573ee98f30781fd8d1ed52f052fbedb970a44b0f7eaf0c085614d99173"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/07 - Events/Elemental Invasions/Elemental Invasions.lua",
+          "size_bytes": 4877,
+          "sha256": "06e5dd6bbdee35d0fde1ada0f2004cbd4c47022d9ddb3c9b8ad0ea2617579d1e"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/07 - Events/The Ahn'Qiraj War Effort/The Ahn'Qiraj War Effort.lua",
+          "size_bytes": 60658,
+          "sha256": "6b4f1d3c16b01c90e852d523cee5a3ba38095fceb531ca27fc824935f14b0d4e"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/07 - Events/The Opening of the Dark Portal/The Opening of the Dark Portal.lua",
+          "size_bytes": 3056,
+          "sha256": "eb12bf88dabcef345854ed74abb15d447fbf8f7ba30b3ffb721d2e69ee1efd78"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/07 - Events/The Scepter of the Shifting Sands/The Scepter of the Shifting Sands.lua",
+          "size_bytes": 22132,
+          "sha256": "1a5feb5c9fb8a691dd2c22e09079e13b999234d5e3bef259ea66bd3341389d94"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/07 - Events/The Scourge Invasion/The Scourge Invasion.lua",
+          "size_bytes": 22293,
+          "sha256": "1fc6c27ef280774f5686e6e2afa2fd70cea748757cb65ea238495acd2cae62d3"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/09 - Crafted Items/01 - Classic.lua",
+          "size_bytes": 234000,
+          "sha256": "142cd6d6d13fe5740f0ac1a275e3af350b2958d78ee12449ca14ecabb1d0a651"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Alchemy.lua",
+          "size_bytes": 261,
+          "sha256": "6e9e9d9e1a1770ffe63267f34998b7d16bed1639605624441cbd34fda327c13a"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Beast Training.lua",
+          "size_bytes": 45471,
+          "sha256": "960746d9d328b2db69629a82dc2e35353253059218d0c783e59cf27081665858"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Blacksmithing - Armorsmith.lua",
+          "size_bytes": 9307,
+          "sha256": "41a82d7975c4906543bee30cce266a92282be3da4429fe67c3a6c8639dbad621"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Blacksmithing - Weaponsmith.lua",
+          "size_bytes": 15254,
+          "sha256": "560118566836452149a599bce3fd1e8161254d7ca342a99fd787df31a58a5393"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Blacksmithing.lua",
+          "size_bytes": 3250,
+          "sha256": "4e73fff6a331d899ee94432dd3e47be3dedbbaa794e11deeea176d6d1aa54b41"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Cooking.lua",
+          "size_bytes": 263,
+          "sha256": "0dd2984cd79d5ebdf5d9b04e38ba05b2265d1070fe57a3801166b45443b06598"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Enchanting.lua",
+          "size_bytes": 267,
+          "sha256": "4aac5326504524d116806fd2df54ddc0271787c2702534ecd0dd5eacd19c72a5"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Engineering.lua",
+          "size_bytes": 1339,
+          "sha256": "2cc60964764e31bfdd488ea31777ffd15b65591de1270c2b43a2d6e1b300e8ef"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/First Aid.lua",
+          "size_bytes": 7454,
+          "sha256": "f216975c2426640ebab617745ddc28bc1cb2f2b301f06b8ef15deab79f1cb5c3"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Fishing.lua",
+          "size_bytes": 263,
+          "sha256": "345f04cd427dd0c840a5a0a774d25aab444e3b8344b328d7e195db49a59e61c8"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Herbalism.lua",
+          "size_bytes": 267,
+          "sha256": "4a459bda9359e07ad05481b0e96a811e284057ad3514d7ed98d3442d7cd386d2"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Leatherworking - Dragonscale.lua",
+          "size_bytes": 7272,
+          "sha256": "0b658342d935ae95d72eca5350bd34447b8c02960be98a9e3f5a4c87df5937f0"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Leatherworking - Elemental.lua",
+          "size_bytes": 6593,
+          "sha256": "e72e8c88952aea4d81ffaaf7507b51bce3d0b1b00475395fce013ecc3104f745"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Leatherworking - Tribal.lua",
+          "size_bytes": 5619,
+          "sha256": "63d44ae484f2994c6f6573741c7891531055ed35119b780542614610838ba5c7"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Leatherworking.lua",
+          "size_bytes": 3454,
+          "sha256": "aa38dec335f4a27b1b535128316f36cd9cbe35c874cbf570f22748f1450dabfd"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Lockpicking.lua",
+          "size_bytes": 2798,
+          "sha256": "666f52bf3fbe2f5c22e7b5baa9c5e7afaff94f7563c741e4496257268be917aa"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Mining.lua",
+          "size_bytes": 261,
+          "sha256": "cdabfe28d750b4a9c82bd99e68ffa2139134b364482f9ea76e2f1222ab379f6e"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Poisons.lua",
+          "size_bytes": 4037,
+          "sha256": "f8c4d461f8c531626f8c71648d41cdbb2e280f0824ac87b5c4471017de6092c3"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Skinning.lua",
+          "size_bytes": 265,
+          "sha256": "0e30af39eea93f8c9019b7ff30c8560335af469bca4c44afdb69e4a582045115"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/10 - Professions/Tailoring.lua",
+          "size_bytes": 267,
+          "sha256": "73952cebd3d3fafff283c0d4fb0a9a8538e2c138b8fcdb8ce35fa72c35de6135"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/23 - NPC Types/Demon Trainers.lua",
+          "size_bytes": 13766,
+          "sha256": "e0efaf7ba40a8881530e6127940a11a49f3e387ab888e53bc7ad9c4463fa97cb"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/zzOLD/23 - NPC Types/Weapon Masters.lua",
+          "size_bytes": 6700,
+          "sha256": "7bcfb1c7d5ff029e4a857a458fb7811157ca3317390f083a8e5ac1d05f0695dc"
+        }
+      ],
+      "tree_sha256": "8a58c17a545c714295e54223b693075c3b292e85d3057e61bc30c38d058449a4",
+      "verification_status": "commit_verified_exact"
+    },
+    {
+      "key": "att-a054efd",
+      "repo": "https://github.com/ATTWoWAddon/AllTheThings.git",
+      "sha": "a054efd473f0b9b13c0695dc1e81a16af4918f9d",
+      "verified_head": "a054efd473f0b9b13c0695dc1e81a16af4918f9d",
+      "license_id": "MIT",
+      "license_status": "verified",
+      "upstream_provenance": "unresolved",
+      "mirrors_blizzard_csv": true,
+      "wago_dir": ".contrib/.db/forever/.config/.wago",
+      "note": "Earlier ATT state whose CSVs are labelled 69893. Used only for the cross-label DB2-manifest diff, not a quest import.",
+      "snapshot_path": "data/raw/att-a054efd",
+      "role": "DB2-manifest cross-check only -- NOT an independent Forever quest source",
+      "file_count": 3,
+      "total_size_bytes": 22257,
+      "files": [
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/TaxiNodes.1.60.1.69893.csv",
+          "size_bytes": 12386,
+          "sha256": "52e64daf109697c63b837bf51e735f61132e8c7399a4b41996ae814601d9482c"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/UiMap.1.60.1.69893.csv",
+          "size_bytes": 3093,
+          "sha256": "4c5ede52826ef48808aa7c0cd9d63fb3d028df88de1b2041148b164bb42328b2"
+        },
+        {
+          "relative_path": ".contrib/.db/forever/.config/.wago/UiMapAssignment.1.60.1.69893.csv",
+          "size_bytes": 6778,
+          "sha256": "79267e8be8034e47daab14350411b3acc0b1f64e86efc9d821a217497254ca0a"
+        }
+      ],
+      "tree_sha256": "f09983c0d061e19be357faabc1ca11622e4d2e323b0c36af15f9cdc46312df41",
+      "verification_status": "commit_verified_exact"
+    }
+  ],
+  "excluded_sources_note": "ForeverGuide and Questie/QuestieDB were NOT acquired -- excluded per docs/LICENSING.md, unchanged by this acquisition."
+}

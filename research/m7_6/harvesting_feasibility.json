@@ -1,0 +1,56 @@
+{
+  "milestone": "M7.6",
+  "purpose": "Read-only feasibility investigation. Not implementation. Every entry traced to actual source code or existing project research; none inferred.",
+  "hooked_events": ["ADDON_LOADED", "PLAYER_LOGIN", "QUEST_DETAIL", "QUEST_COMPLETE", "QUEST_TURNED_IN",
+                     "QUEST_FINISHED (registered but never dispatched to any module -- confirmed no data)",
+                     "GOSSIP_SHOW", "GET_ITEM_INFO_RECEIVED"],
+  "not_hooked_events": ["QUEST_ACCEPTED", "QUEST_LOG_UPDATE", "QUEST_WATCH_UPDATE",
+                         "PLAYER_TARGET_CHANGED/UNIT_TARGET", "UPDATE_FACTION", "TAXIMAP_OPENED"],
+  "field_feasibility_matrix": [
+    {"field": "quest ID", "available": "confirmed", "source": "GetQuestID() at QUEST_DETAIL/QUEST_COMPLETE; event arg at QUEST_TURNED_IN", "requires_interaction": true, "passive_possible": false, "confidence": "confirmed [V] -- this project's own code"},
+    {"field": "quest title", "available": "confirmed, conditional", "source": "C_QuestLog.GetInfo(index).title -- only if quest already in log", "requires_interaction": true, "passive_possible": "partial -- QUEST_ACCEPTED not hooked", "confidence": "confirmed [V]"},
+    {"field": "quest giver ID", "available": "confirmed", "source": "UnitGUID via GuidUtil at quest_detail/quest_complete/GOSSIP_SHOW", "requires_interaction": true, "passive_possible": false, "confidence": "confirmed [V]"},
+    {"field": "quest giver name", "available": "confirmed", "source": "UnitName(\"npc\")", "requires_interaction": true, "passive_possible": false, "confidence": "confirmed [V]"},
+    {"field": "quest level", "available": "confirmed, conditional", "source": "C_QuestLog.GetInfo(index).level", "requires_interaction": true, "passive_possible": "partial -- same as title", "confidence": "confirmed [V]; conflicts with a [2nd]-hand claim (another project) that level is unreliable while the frame is open -- this project's own repeated real results contradict that claim"},
+    {"field": "objective", "available": "confirmed", "source": "C_QuestLog.GetQuestObjectives(questID)", "requires_interaction": true, "passive_possible": false, "confidence": "confirmed [V] -- snapshot only, no progress-tick event exists"},
+    {"field": "reward", "available": "confirmed", "source": "GetQuestItemInfo, GetQuestLogRewardFactionInfo, QUEST_TURNED_IN event args", "requires_interaction": true, "passive_possible": false, "confidence": "confirmed [V]"},
+    {"field": "player coordinates", "available": "confirmed", "source": "C_Map.GetBestMapForUnit + GetPlayerMapPosition(\"player\")", "requires_interaction": "currently only captured alongside a quest-related checkpoint", "passive_possible": "likely -- API is callable anytime, no standalone/periodic hook exists yet", "confidence": "confirmed API; not-yet-standalone capture"},
+    {"field": "NPC coordinates", "available": "not available", "source": "PositionUtil hardcodes unit=\"player\" only -- confirmed in code", "requires_interaction": null, "passive_possible": false, "confidence": "not available in current code; whether any NPC-world-position API exists on Forever at all is unknown -- never queried"},
+    {"field": "item ID", "available": "likely", "source": "GetQuestItemInfo returns 6 positional values (r1..r6); this project has not labeled which numbered return is itemID vs icon vs quality", "requires_interaction": true, "passive_possible": false, "confidence": "likely, not confirmed which return value"},
+    {"field": "item name", "available": "confirmed", "source": "GetQuestItemInfo r1", "requires_interaction": true, "passive_possible": false, "confidence": "confirmed [V]"},
+    {"field": "zone/map", "available": "confirmed", "source": "C_Map.GetBestMapForUnit(\"player\") -> ui_map_id", "requires_interaction": "currently coupled to quest checkpoints", "passive_possible": "likely, same as player coordinates", "confidence": "confirmed API"}
+  ],
+  "scenario_matrix": [
+    {"scenario": "A: accept a quest", "automatic_today": false, "relevant_event_or_api": "none hooked (QUEST_ACCEPTED not registered)", "requires_interaction": true, "could_be_automated_later": "yes, if QUEST_ACCEPTED is hooked -- not implemented"},
+    {"scenario": "B: talk to a quest giver", "automatic_today": "partially", "relevant_event_or_api": "GOSSIP_SHOW", "requires_interaction": true, "could_be_automated_later": "already effectively passive for NPC/giver sighting -- confirmed by real M6.5 sessions"},
+    {"scenario": "C: progress objectives", "automatic_today": false, "relevant_event_or_api": "none hooked", "requires_interaction": true, "could_be_automated_later": "unknown -- no evidence of a suitable event; not investigated further this pass"},
+    {"scenario": "D: turn in a quest", "automatic_today": "yes, for the checkpoint capture itself", "relevant_event_or_api": "QUEST_COMPLETE + QUEST_TURNED_IN", "requires_interaction": true, "could_be_automated_later": "already the strongest existing capture; turn-in itself still requires normal manual play"},
+    {"scenario": "E: move around the world", "automatic_today": false, "relevant_event_or_api": "none -- PositionUtil only invoked inside GiverIdentity", "requires_interaction": false, "could_be_automated_later": "technically possible via a timer, not implemented, not evaluated for cost/noise here"}
+  ],
+  "captured_but_discarded_or_unused": [
+    "Gossip quest lists beyond the first 5 entries (total_count kept, detail not read for the rest)",
+    "UnitClassification/UnitCreatureType/UnitCreatureFamily for both npc and target units (captured by GiverIdentity, not imported by M4)",
+    "The entire 'target' unit capture (name, level, classification, position) -- recorded every time, never imported into any M6 field"
+  ],
+  "researched_but_unused_client_surfaces": [
+    {"surface": "Quest frame text APIs (GetTitleText/GetQuestText/GetObjectiveText/GetProgressText/GetRewardText)", "tag": "[V] third-party code, [2nd] that it worked on Forever", "used_by_recorder": false},
+    {"surface": "Client-side WDB cache files (questcache.wdb, creaturecache.wdb, gameobjectcache.wdb)", "tag": "[2nd], entirely unverified on Forever, never attempted", "used_by_recorder": false},
+    {"surface": "Taxi node APIs (NumTaxiNodes, TaxiNodeName, C_TaxiMap.GetAllTaxiNodes)", "tag": "[2nd] Warcraft Wiki, Forever behavior [?]", "used_by_recorder": false},
+    {"surface": "Objective target IDs (creature/item/object ID behind an objective)", "tag": "[2nd]: no known API; only the WDB cache reportedly has them", "used_by_recorder": false},
+    {"surface": "Quest prerequisites/chains", "tag": "[2nd]: another project only infers these, never reads directly", "used_by_recorder": false}
+  ],
+  "one_reexamination_worth_naming": {
+    "candidate": "QUEST_ACCEPTED",
+    "prior_exclusion_reason": "Its own event payload is redundant with QUEST_DETAIL's (single quest-ID argument, nothing else) -- per docs/M5_PRODUCTION_RECORDER_DESIGN.md",
+    "unaddressed_question": "Hooking it (not for its payload, but to trigger the SAME QuestMeta/GiverIdentity capture logic already used at QUEST_DETAIL) would capture an already-accepted quest at the exact moment it enters the log -- addressing the confirmed M6.5 finding that re-visiting an already-accepted quest's giver opens GOSSIP_SHOW, not QUEST_DETAIL.",
+    "implemented": false
+  },
+  "minimum_experiment_needed": {
+    "unknowns_not_answerable_from_repository_alone": [
+      "Whether QUEST_ACCEPTED actually fires reliably on the Forever client with a usable quest ID argument",
+      "Whether C_QuestLog.GetInfo/GetQuestObjectives succeed immediately at QUEST_ACCEPTED time (i.e., is the quest log index available that fast) or requires a short delay like quest_complete_delayed already uses",
+      "Whether any NPC-world-position API exists and returns a value for a targeted unit on this client (never queried by this addon)"
+    ],
+    "smallest_experiment": "Accept one quest, immediately check whether title/level/objectives are already resolvable (this would require a small, NOT-YET-IMPLEMENTED QUEST_ACCEPTED hook -- out of scope for this milestone) -- OR, without any code change: accept one quest and immediately re-open its giver's dialog, then /fr status, /fr save, to see empirically whether GOSSIP_SHOW or QUEST_DETAIL fires in that specific sequence on the current build."
+  }
+}
