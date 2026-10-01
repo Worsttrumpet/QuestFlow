@@ -1,3 +1,7 @@
+> **Superseded for players.** This guide covers the 0.1 engineering build and the developer window (`/codex dev`, which
+> still has Show on Map, Skip, Add quest and the route pickers). Friends testing the player build (0.2 alpha) should use
+> `CODEX_FRIEND_TEST_GUIDE.md`. Package names below refer to the old 0.1 zip, which is no longer in `dist/`.
+
 # Forever Codex 0.1 "First Light": real-client test guide
 
 About 20 minutes for the full pass; checkpoint 1 alone takes 2. Nothing here changes your characters: Codex never

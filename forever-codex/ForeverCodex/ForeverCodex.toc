@@ -2,7 +2,7 @@
 ## Title: Forever Codex (0.1 First Light, dev build)
 ## Notes: A dynamic, character-aware progression companion for WoW Classic Forever. Recommends what to do next from your class, race, faction, level and location; you stay in control (choose your route zone and style, skip, add, toggle systems). Read-only: never accepts, completes or turns in quests. Data is partial and ATT-derived data is shown as UNVERIFIED. Local development build.
 ## Author: WoW Forever open database project
-## Version: codex-0.1-first-light
+## Version: codex-0.2-alpha
 ## SavedVariables: ForeverCodexDB
 
 Core.lua
@@ -23,6 +23,14 @@ Context.lua
 Engine.lua
 Planner.lua
 PlanAdapter.lua
+Presenter.lua
+Journey.lua
+Knowledge.lua
+Navigation.lua
+Markers.lua
+Party.lua
+World.lua
+HelpCodex.lua
 Route.lua
 State.lua
 Diag.lua
@@ -32,5 +40,11 @@ MapPin.lua
 MinimapButton.lua
 UI\Widgets.lua
 UI\Window.lua
+UI\Main.lua
+UI\PageSetup.lua
+UI\PageCodex.lua
+UI\PageWorld.lua
+UI\PageJourney.lua
+UI\PageAppendices.lua
 Slash.lua
 Boot.lua

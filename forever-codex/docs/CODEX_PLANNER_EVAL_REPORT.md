@@ -675,6 +675,7 @@ SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objective
   questing_only  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
   completionist  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
 == planner evaluation: the trace changes nothing ==
+== planner evaluation: the Phase 2.5 baseline is unchanged ==
 
-734 passed, 0 failed
+928 passed, 0 failed
 ```

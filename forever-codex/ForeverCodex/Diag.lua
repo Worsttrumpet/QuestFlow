@@ -92,6 +92,9 @@ function D.Snapshot()
 		end
 		snap.planner.diag = copy(plan.diag)
 	end
+	snap.player = { setupDone = P.SetupDone(), navigation = P.NavigationOn(), navStatus = ns.Navigation and ns.Navigation.Status() or nil,
+		navOwned = ns.Navigation and ns.Navigation.Owned() or nil, party = ns.Party and ns.Party.Status() or nil,
+		journeyEntries = #P.Char().journey.entries, markers = ns.Markers and ns.Markers.Status() or nil }
 	if ns.Telemetry then
 		local st = ns.Telemetry.Status()
 		snap.telemetry = { enabled = st.enabled, stored = st.stored, cap = st.cap, anomalies = st.anomalies, types = {} }
@@ -142,6 +145,16 @@ function D.Lines(s)
 	L[#L + 1] = string.format("Data: %d quests (%d in both ATT and observed), %d flight nodes, %d zones", d.quests, d.observedAndAtt, d.flightNodes, d.zones)
 	for _, p in ipairs(d.packs) do
 		L[#L + 1] = string.format("  pack %s: src=%s verified=%s, %d records (%d with location)", p.name, tostring(p.src), tostring(p.verified), p.count, p.withLocation)
+	end
+	if s.player then
+		local p = s.player
+		L[#L + 1] = string.format("Player experience: setup %s | waypoint following %s (%s%s) | journey entries %d", p.setupDone and "done" or "NOT done", p.navigation and "on" or "off",
+			tostring(p.navStatus), p.navOwned and (", Codex pin placed for " .. tostring(p.navOwned.action)) or "", p.journeyEntries)
+		if p.party then
+			L[#L + 1] = string.format("  party news: %s | addon messages %s | party chat %s | shared items this session %d | markers: %s (test %s)", p.party.mode,
+				p.party.addonMessages and "available" or "UNAVAILABLE", p.party.chat and "available" or "UNAVAILABLE", p.party.feed,
+				p.markers and (p.markers.enabled and "on" or "off") or "?", p.markers and p.markers.probe or "?")
+		end
 	end
 	if s.planner and s.planner.diag then
 		local d = s.planner.diag

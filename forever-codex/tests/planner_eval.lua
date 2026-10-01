@@ -671,5 +671,47 @@ do
 	end
 end
 
+-- ---------------------------------------------------------------- the Phase 2.5 baseline, pinned
+
+-- tests/golden/planner_eval_baseline.txt holds every scenario's decision (NOW / ALSO DO / THEN / stops / net value) and
+-- every sweep row as the Planner made them at Phase 2.5. Later phases (the player UI, navigation, ...) must not move it;
+-- a deliberate Planner change regenerates it, together with docs/CODEX_PLANNER_EVAL_REPORT.md, in the same reviewed commit:
+--     CODEX_WRITE_GOLDEN=1 lua5.1 run_codex_tests.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide
+section("planner evaluation: the Phase 2.5 baseline is unchanged")
+do
+	local lines = {}
+	for _, sc in ipairs(scenarios) do
+		local r = run(sc)
+		local d = r.diag
+		lines[#lines + 1] = string.format("%s | %s | seq=%s | net=%.4f | secs=%.2f | stops=%s | reminders=%d", sc.name, summary(r), table.concat(d.sequence or {}, ">"), d.net or 0,
+			d.seconds or 0, tostring(d.stops), #r.plan.reminders)
+	end
+	for _, block in ipairs(sweeps) do for _, l in ipairs(block) do lines[#lines + 1] = l end end
+	local text = table.concat(lines, "\n") .. "\n"
+	local path = (arg[0]:match("^(.*)[/\\]") or ".") .. "/golden/planner_eval_baseline.txt"
+	if os.getenv("CODEX_WRITE_GOLDEN") == "1" then
+		local f = assert(io.open(path, "wb"))
+		f:write(text)
+		f:close()
+		print("  (baseline written: " .. path .. ")")
+	else
+		local f = io.open(path, "rb")
+		check(f ~= nil, "the baseline file exists")
+		if f then
+			local golden = f:read("*a")
+			f:close()
+			if golden ~= text then
+				local gl, tl = {}, {}
+				for l in golden:gmatch("([^\n]*)\n") do gl[#gl + 1] = l end
+				for l in text:gmatch("([^\n]*)\n") do tl[#tl + 1] = l end
+				for i = 1, math.max(#gl, #tl) do
+					if gl[i] ~= tl[i] then print("  first difference at line " .. i .. ":\n    baseline: " .. tostring(gl[i]):sub(1, 260) .. "\n    now:      " .. tostring(tl[i]):sub(1, 260)) break end
+				end
+			end
+			check(golden == text, "all " .. #scenarios .. " scenario decisions and every sweep row equal the Phase 2.5 baseline")
+		end
+	end
+end
+
 M.scenarios, M.run, M.report = scenarios, run, report
 _G.PLANNER_EVAL = M

@@ -13,7 +13,7 @@ local addonName, ns = ...
 
 ForeverCodex = ForeverCodex or {}
 local C = ForeverCodex
-C.VERSION = "codex-0.1-first-light"
+C.VERSION = "codex-0.2-alpha"
 C.EXPECTED_INTERFACE = 16001
 
 ns.errors = {}

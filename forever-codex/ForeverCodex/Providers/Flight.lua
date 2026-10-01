@@ -18,7 +18,7 @@ local function generate(ctx, env)
 		if not (n.faction and fac and n.faction ~= fac) then
 			local label = (n.name or ("flight node " .. n.id))
 			local a = R.NewAction({
-				id = "FP:" .. n.id, type = "FLIGHT", kind = "DISCOVER", skipKey = "FP:" .. n.id, hereOnly = true,
+				id = "FP:" .. n.id, type = "FLIGHT", kind = "DISCOVER", skipKey = "FP:" .. n.id, hereOnly = true, name = label,
 				title = "Flight path: " .. label,
 				lines = { "Flight master" .. (n.npc and (" (NPC #" .. n.npc .. ")") or "") .. " - " .. R.MapLabel(n.map),
 					string.format("Location: %.1f, %.1f (ATT, unverified)", n.x * 100, n.y * 100),

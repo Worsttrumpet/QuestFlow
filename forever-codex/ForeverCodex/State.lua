@@ -55,6 +55,17 @@ function S.Recompute()
 	end
 	S.ctx, S.plan = ctx, plan
 	S.computeCount = S.computeCount + 1
+	-- Consumers of the new context and plan. Each is isolated: a failure in one never costs the player the recommendation.
+	local function observe(name, mod, fn, ...)
+		if mod and mod[fn] then
+			local okO, errO = pcall(mod[fn], ...)
+			if not okO then ns.RecordError(name, errO) end
+		end
+	end
+	observe("journey", ns.Journey, "OnContext", ctx)
+	observe("party", ns.Party, "OnContext", ctx)
+	observe("navigation", ns.Navigation, "OnPlan", plan, ctx)
+	observe("markers", ns.Markers, "OnPlan", plan, ctx)
 	if ns.UI and ns.UI.Refresh then
 		local okU, err = pcall(ns.UI.Refresh)
 		if not okU then ns.RecordError("ui", err) end

@@ -621,7 +621,8 @@ do
 	local extra = {}
 	for t in pairs(types) do if t ~= "QUEST" and t ~= "TRAVEL" and t ~= "FLIGHT" then extra[#extra + 1] = t end end
 	check(#extra == 0, "only quest, travel and flight-hint actions exist: no grind, trainer, vendor, inn, pet, profession or respawn actions")
-	check(ns.Navigation == nil and ns.Markers == nil and ns.QuestMap == nil, "no navigation controller, markers or quest map")
+	-- (Phase 3 added Navigation and Markers as consumers of the plan; the Planner does not depend on them: see the independence check below)
+	check(ns.QuestMap == nil, "no quest map module yet")
 	check(H.world().waypointCalls == 0, "nothing placed a waypoint (Show on Map is still the only thing that does)")
 	check(#ns.errors == 0, "no caught errors")
 end

@@ -15,6 +15,10 @@ local P = ns.Prefs
 local EVENTS = {
 	"ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD", "PLAYER_LEVEL_UP", "QUEST_ACCEPTED", "QUEST_TURNED_IN",
 	"UNIT_QUEST_LOG_CHANGED", "QUEST_LOG_UPDATE", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA",
+	-- Phase 3. USER_WAYPOINT_UPDATED is proven (M8.10). The rest are standard Classic events NOT yet observed on Forever:
+	-- each registration is feature-checked and a refusal is ignored (GROUP_ROSTER_UPDATE: party; CHAT_MSG_ADDON: Codex users
+	-- sharing progress; PLAYER_TARGET_CHANGED / UPDATE_MOUSEOVER_UNIT: world markers, which are off until probed).
+	"USER_WAYPOINT_UPDATED", "GROUP_ROSTER_UPDATE", "CHAT_MSG_ADDON", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT",
 }
 
 local frame = CreateFrame("Frame")
@@ -51,16 +55,14 @@ local function onLogin()
 			end
 		end
 	end
-	local plan = ns.State.Recompute()
-	local n = ns.Registry.Stats()
-	ns.Say(string.format("data: %d quests (ATT-derived, unverified, plus %d observed on Forever). /codex diag if anything looks wrong.", n.quests,
-		(function() local c = 0 for _, p in ipairs(n.packs) do if p.src == "observed" then c = c + p.count end end return c end)()))
-	if plan and plan.next then
-		ns.Say("next: " .. plan.next.title)
-	end
+	if ns.Navigation then ns.Safe(ns.Navigation.Restore) end
+	if ns.Party then ns.Safe(ns.Party.Register) end
+	ns.State.Recompute()
+	-- the player-facing build stays quiet: the engineering summary (data counts, provenance, the plan) is /codex diag
+	if not P.SetupDone() then ns.Say("Welcome! Type /codex to set up Forever Codex.") end
 end
 
-local function onEvent(_, event, arg1)
+local function onEvent(_, event, arg1, arg2, arg3, arg4)
 	local ok, err = pcall(function()
 		if event == "ADDON_LOADED" then
 			onAddonLoaded(arg1)
@@ -68,6 +70,21 @@ local function onEvent(_, event, arg1)
 			onLogin()
 		elseif event == "UNIT_QUEST_LOG_CHANGED" then
 			if arg1 == "player" then ns.State.MarkDirty() end
+		elseif event == "QUEST_TURNED_IN" then
+			-- (questID, xp, money): the proven turn-in event feeds the Journey and the party announcement
+			ns.Journey.OnQuestTurnedIn(arg1, arg2)
+			ns.Party.OnTurnedIn(arg1, ns.State.ctx)
+			ns.State.MarkDirty()
+		elseif event == "USER_WAYPOINT_UPDATED" then
+			ns.Navigation.OnWaypointEvent()
+			ns.State.MarkDirty()
+		elseif event == "CHAT_MSG_ADDON" then
+			ns.Party.OnAddonMessage(arg1, arg2, arg3, arg4)
+			if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
+		elseif event == "PLAYER_TARGET_CHANGED" then
+			ns.Markers.OnUnit("target")
+		elseif event == "UPDATE_MOUSEOVER_UNIT" then
+			ns.Markers.OnUnit("mouseover")
 		else
 			ns.State.MarkDirty()
 		end
@@ -82,6 +99,8 @@ frame:SetScript("OnEvent", onEvent)
 frame:SetScript("OnUpdate", function(_, elapsed)
 	local ok, err = pcall(ns.State.Tick, elapsed)
 	if not ok then ns.RecordError("tick", err) end
+	local okN, errN = pcall(ns.Navigation.Tick, elapsed)
+	if not okN then ns.RecordError("navigation tick", errN) end
 end)
 
 ns._selftest.boot = { frame = frame, onEvent = onEvent }

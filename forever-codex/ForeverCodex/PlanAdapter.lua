@@ -40,6 +40,8 @@ local function sentences(plan, a)
 	return out
 end
 
+A.Sentences = sentences      -- reason codes -> short sentences (also used by the Presenter)
+
 --- Legacy-shaped plan from a Planner plan. `c` is the Engine.Candidates result the plan was made from.
 function A.ToLegacy(plan, ctx, c)
 	local env = c.env

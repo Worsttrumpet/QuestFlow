@@ -1,4 +1,5 @@
--- ForeverCodex.UI: the Codex window.
+-- ForeverCodex.DevUI: the DEVELOPER window (/codex dev): the engineering view with provenance, route pickers and the old buttons.
+-- Normal players get the compact window in UI/Main.lua.
 --
 --   header      character, race origin / route zone / current location (three separate things)
 --   controls    route zone  < >   and   route style  < >
@@ -17,7 +18,7 @@ local P = ns.Prefs
 local W = ns.Widgets
 
 local UI = {}
-ns.UI = UI
+ns.DevUI = UI      -- the developer window (/codex dev); the player window is ns.UI (UI/Main.lua)
 
 local WIDTH, HEIGHT = 500, 668
 local UPCOMING_ROWS, NEARBY_ROWS, DETAIL_LINES, ADD_ROWS = 6, 4, 6, 6

@@ -9,7 +9,10 @@ local say = ns.Say
 
 local function helpLines()
 	say("Forever Codex commands:")
-	say("  /codex                 open / close the window")
+	say("  /codex                 open / close the Codex window;  /codex world | journey | appendices opens that tab")
+	say("  /codex setup           run the first-time setup again;  /codex dev = the developer window")
+	say("  /codex nav [on|off]    the waypoint that follows what Codex recommends;  /codex markers [probe|on|off]")
+	say("  /codex party [off|ui|party|both]   what Codex does when party members (or you) finish quests")
 	say("  /codex next            print the recommended next action")
 	say("  /codex diag            print diagnostics (for bug reports); /codex report = copyable box")
 	say("  /codex style [key]     list or set the route style (efficient, fast, questing_only, completionist)")
@@ -100,6 +103,46 @@ local function handle(msg)
 
 	if cmd == "" then
 		ns.UI.Toggle()
+	elseif cmd == "dev" then
+		ns.DevUI.Toggle()
+	elseif cmd == "world" or cmd == "journey" or cmd == "appendices" then
+		ns.UI.Open(cmd)
+	elseif cmd == "setup" then
+		P.ReopenSetup()
+		ns.UI.Open("codex")
+	elseif cmd == "nav" then
+		local on = onOff(restLower)
+		if on == nil then
+			say("Waypoint following is " .. (P.NavigationOn() and "on" or "off") .. " (" .. ns.Navigation.Status() .. "). Usage: /codex nav on|off")
+		else
+			P.SetNavigation(on)
+			say("Waypoint following " .. (on and "on." or "off. Codex clears its own waypoint and leaves yours alone."))
+			ns.State.Recompute()
+		end
+	elseif cmd == "markers" then
+		if restLower == "probe" then
+			local ok, msg = ns.Markers.Probe()
+			say((ok and "markers probe passed: " or "markers probe: ") .. msg)
+		elseif restLower == "on" or restLower == "off" then
+			if restLower == "on" and ns.Markers.Status().probe ~= "passed" then
+				say("World markers need the quick test first: target an NPC and type /codex markers probe.")
+			else
+				P.SetMarkers(restLower == "on")
+				say("World markers " .. restLower .. ".")
+			end
+			ns.State.Recompute()
+		else
+			local st = ns.Markers.Status()
+			say(string.format("World markers: %s (test %s). Placement is off until /codex markers probe has passed on this client.", st.enabled and "on" or "off", st.probe))
+		end
+	elseif cmd == "party" then
+		if restLower == "" then
+			say("Party news: " .. P.PartyNotify() .. ". Usage: /codex party off|ui|party|both")
+		elseif P.SetPartyNotify(restLower) then
+			say("Party news: " .. restLower .. ".")
+		else
+			say("usage: /codex party off|ui|party|both")
+		end
 	elseif cmd == "help" or cmd == "?" then
 		helpLines()
 	elseif cmd == "diag" then

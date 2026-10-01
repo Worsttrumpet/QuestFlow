@@ -173,7 +173,7 @@ local function acceptAction(view, pinned, ctx)
 	if pl then lines[#lines + 1] = pl end
 	local t = target(view, label)
 	return attach(R.NewAction({
-		id = "Q:" .. view.id .. ":ACCEPT", type = "QUEST", kind = "ACCEPT", quest = view.id, skipKey = "Q:" .. view.id,
+		id = "Q:" .. view.id .. ":ACCEPT", type = "QUEST", kind = "ACCEPT", quest = view.id, skipKey = "Q:" .. view.id, name = view.name,
 		title = "Accept: " .. (view.name or ("quest " .. view.id)), reqLevel = view.req, level = view.level,
 		breadcrumb = view.breadcrumb, target = t, pinned = pinned or false, lines = lines,
 		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name,
@@ -203,7 +203,7 @@ local function progressAction(view, entry, pinned, ctx)
 	end
 	return attach(R.NewAction({
 		id = "Q:" .. view.id .. (complete and ":TURN_IN" or ":OBJECTIVE"), type = "QUEST", kind = complete and "TURN_IN" or "OBJECTIVE",
-		quest = view.id, skipKey = "QT:" .. view.id, title = (complete and "Turn in: " or "Continue: ") .. name,
+		quest = view.id, skipKey = "QT:" .. view.id, name = view.name or entry.title, title = (complete and "Turn in: " or "Continue: ") .. name,
 		level = view.level, reqLevel = view.req, target = t, pinned = pinned or false, lines = lines,
 		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name, giver = view.giverName,
 		noLocation = t == nil,
@@ -215,7 +215,7 @@ local function unknownLogAction(entry, ctx)
 	local complete = entry.complete
 	return attach(R.NewAction({
 		id = "Q:" .. entry.id .. (complete and ":TURN_IN" or ":OBJECTIVE"), type = "QUEST", kind = complete and "TURN_IN" or "OBJECTIVE",
-		quest = entry.id, skipKey = "QT:" .. entry.id, title = (complete and "Turn in: " or "Continue: ") .. (entry.title or ("quest " .. entry.id)),
+		quest = entry.id, skipKey = "QT:" .. entry.id, name = entry.title, title = (complete and "Turn in: " or "Continue: ") .. (entry.title or ("quest " .. entry.id)),
 		lines = { "This quest is not in Codex data yet, so there is no location to show." }, src = "log", verified = false,
 		noLocation = true, unknown = true,
 	}), entry.id, nil, ctx, nil)

@@ -334,7 +334,8 @@ do
 	check(table.concat(keys, ",") == "inProgress,nearby,next,player,routeZone,sequence,stats,strategy,upcoming,warnings",
 		"legacy mode: the plan has exactly the legacy keys: " .. table.concat(keys, ","))
 	check(ns.State.plan.now == nil and ns.State.plan.alsoDo == nil and ns.State.plan.thenAction == nil, "legacy mode: no NOW / ALSO DO / THEN")
-	check(ns.Navigation == nil and ns.Markers == nil and ns.QuestMap == nil, "no navigation controller, markers or quest map")
+	-- (Phase 3 added Navigation and Markers as CONSUMERS of the plan; the Planner still depends on neither: see planner_tests.lua)
+	check(ns.QuestMap == nil, "no quest map module yet")
 	check(#ns.errors == 0, "no caught errors")
 end
 

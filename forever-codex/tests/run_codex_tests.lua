@@ -43,7 +43,7 @@ local function widget(kind)
 		if k == "GetText" then return function(self) return self.__text end end
 		if k == "SetScript" then return function(self, n, fn) self.__scripts[n] = fn end end
 		if k == "CreateTexture" then return function() return widget("Texture") end end
-		if k == "CreateFontString" then return function() return widget("FontString") end end
+		if k == "CreateFontString" then return function() local f = widget("FontString"); if W then W.fonts = W.fonts or {}; W.fonts[#W.fonts + 1] = f end return f end end
 		if k == "GetStringHeight" then return function() return 12 end end
 		if k == "ClearAllPoints" then return function(self) self.__points = nil end end
 		if k == "SetPoint" then return function(self, ...) self.__points = { ... } end end
@@ -298,12 +298,16 @@ end
 section("loading through the stub client (TOC order, SavedVariables timing, ADDON_LOADED, PLAYER_LOGIN)")
 do
 	local ns = boot()
-	check(type(ForeverCodex) == "table" and ForeverCodex.VERSION == "codex-0.1-first-light", "global ForeverCodex with version")
-	check(chatHas("codex-0.1-first-light loaded"), "load message printed at ADDON_LOADED")
+	check(type(ForeverCodex) == "table" and ForeverCodex.VERSION == "codex-0.2-alpha", "global ForeverCodex with version")
+	check(chatHas("codex-0.2-alpha loaded"), "load message printed at ADDON_LOADED")
 	check(type(_G.SlashCmdList["FOREVERCODEX"]) == "function" and SLASH_FOREVERCODEX1 == "/codex" and SLASH_FOREVERCODEX2 == "/fcodex", "/codex and /fcodex registered")
 	check(type(ForeverCodexDB) == "table" and type(ForeverCodexDB.chars) == "table" and ForeverCodexDB.chars["Thrall-Forever"] ~= nil, "SavedVariable table created with a per-character entry at login")
 	check(ns.State.plan ~= nil and ns.State.ctx ~= nil, "a plan was computed at login")
-	check(chatHas("data:") and chatHas("ATT-derived, unverified"), "login line states the data is ATT-derived and unverified")
+	-- Phase 3: the player-facing build is quiet at login (a welcome until setup is done). The provenance statement did not go
+	-- away: it moved to /codex diag, which still labels every pack's source and verified flag (checked in the diagnostics section).
+	check(chatHas("Welcome! Type /codex to set up Forever Codex.") and not chatHas("ATT-derived") and not chatHas("next:"), "login: one welcome line, no engineering chatter")
+	slash("diag")
+	check(chatHas("src=att verified=false"), "/codex diag still states that the data is ATT-derived and unverified")
 	check(#ns.errors == 0, "no errors were caught while loading and logging in" .. (#ns.errors > 0 and (": " .. ns.errors[1]) or ""))
 	check(W.questCalls == 0, "no quest-changing API was called")
 	check(ns._selftest.boot ~= nil and #W.frames >= 2, "event frame and minimap button were created")
@@ -769,9 +773,9 @@ end
 section("UI: window, Next card, buttons, provenance wording")
 do
 	local ns = boot({ char = { level = 25 } })
-	slash("")
-	local w = ns.UI.w
-	check(ns.UI.IsShown() and ns.UI.frame.__name == "ForeverCodexWindow", "/codex opens the window")
+	slash("dev")      -- Phase 3: /codex opens the player window; the engineering window (these checks) is /codex dev
+	local w = ns.DevUI.w
+	check(ns.DevUI.IsShown() and ns.DevUI.frame.__name == "ForeverCodexWindow", "/codex dev opens the developer window")
 	check(w.charFS.__text:find("Thrall") and w.charFS.__text:find("level 25") and w.charFS.__text:find("Troll") and w.charFS.__text:find("Warrior") and w.charFS.__text:find("Horde"),
 		"header shows name, level, race, class and faction")
 	check(w.whereFS.__text:find("Race origin: Troll", 1, true) and w.whereFS.__text:find("Route zone (your choice): auto", 1, true) and w.whereFS.__text:find("Now in: The Barrens", 1, true),
@@ -851,8 +855,8 @@ do
 	ns.State.Recompute()
 	check(w.nextTitle.__text == "Nothing to recommend right now" and not w.btnMap.enabled, "with no data the card says so and Show on Map is disabled")
 	check(#ns.errors == 0, "the UI scenarios raised no caught errors" .. (#ns.errors > 0 and (": " .. ns.errors[1]) or ""))
-	slash("")
-	check(not ns.UI.IsShown(), "/codex toggles the window closed")
+	slash("dev")
+	check(not ns.DevUI.IsShown(), "/codex dev toggles the developer window closed")
 end
 
 -- ================================================================ 7. diagnostics, slash commands, events
@@ -862,7 +866,7 @@ do
 	local ns = boot({ char = { level = 25 } })
 	W.chat = {}
 	slash("diag")
-	check(chatHas("Forever Codex codex-0.1-first-light") and chatHas("client 1.60.1 build 70124 interface 16001"), "diag: addon and client versions")
+	check(chatHas("Forever Codex codex-0.2-alpha") and chatHas("client 1.60.1 build 70124 interface 16001"), "diag: addon and client versions")
 	check(chatHas("Character: Thrall level 25 Troll WARRIOR (Horde)"), "diag: the character")
 	check(chatHas("Location: The Barrens / The Crossroads | map 1413"), "diag: the location")
 	check(chatHas("Choices: style=efficient routeZone=auto"), "diag: the player's choices")
@@ -874,7 +878,7 @@ do
 	for _ = 1, 7 do slash("diag") end
 	check(#ForeverCodexDB.diag == 5, "stored diagnostics are capped at the last 5")
 	slash("report")
-	check(ns.UI.report ~= nil and ns.UI.report.box.__text:find("Forever Codex codex-0.1-first-light", 1, true) ~= nil, "/codex report fills the copyable box")
+	check(ns.UI.report ~= nil and ns.UI.report.box.__text:find("Forever Codex codex-0.2-alpha", 1, true) ~= nil, "/codex report fills the copyable box")
 	local nsb = boot({ missing = { UnitClass = true } })
 	W.chat = {}
 	slash("diag")
@@ -1326,7 +1330,7 @@ do
 	local H = { boot = boot, check = check, section = section, slash = slash, newWorld = newWorld, attPack = attPack,
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

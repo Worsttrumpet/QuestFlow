@@ -57,6 +57,13 @@ local function ensureChar(key)
 	end
 	c.skipped = type(c.skipped) == "table" and c.skipped or {}
 	c.added = type(c.added) == "table" and c.added or {}
+	-- Phase 3 (player-facing build): setup, notifications, navigation, history. All additive; nothing above changes.
+	if c.setupDone == nil then c.setupDone = false end
+	if c.partyNotify == nil then c.partyNotify = "ui" end
+	if c.navigation == nil then c.navigation = true end
+	if c.markers == nil then c.markers = false end          -- stays off until the marker probe has succeeded on this client
+	c.journey = type(c.journey) == "table" and c.journey or {}
+	c.journey.entries = type(c.journey.entries) == "table" and c.journey.entries or {}
 	return c
 end
 
@@ -75,6 +82,34 @@ function P.CharKey() return charKey end
 function P.Root() return root() end
 function P.Char() return ensureChar(charKey) end
 function P.UI() return root().ui end
+
+-- ---------------------------------------------------------------- setup, notifications, navigation, window (Phase 3)
+
+function P.SetupDone() return P.Char().setupDone == true end
+function P.FinishSetup() P.Char().setupDone = true end
+function P.ReopenSetup() P.Char().setupDone = false end
+
+P.PARTY_MODES = { "off", "ui", "party", "both" }
+function P.PartyNotify() return P.Char().partyNotify end
+function P.SetPartyNotify(mode)
+	for _, m in ipairs(P.PARTY_MODES) do
+		if m == mode then P.Char().partyNotify = mode return true end
+	end
+	return false
+end
+
+function P.NavigationOn() return P.Char().navigation == true end
+function P.SetNavigation(on) P.Char().navigation = on == true end
+function P.MarkersOn() return P.Char().markers == true end
+function P.SetMarkers(on) P.Char().markers = on == true end
+
+--- The player window's saved anchor: { point, relPoint, x, y } or nil.
+function P.WindowPos() return root().ui.window end
+function P.SetWindowPos(t) root().ui.window = t end
+
+--- The waypoint Codex last placed for this character: { action, map, x, y } or nil (see Navigation).
+function P.NavRecord() return P.Char().nav end
+function P.SetNavRecord(t) P.Char().nav = t end
 
 -- ---------------------------------------------------------------- route style / zone / systems
 
