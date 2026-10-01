@@ -13,11 +13,13 @@
 local ADDON = arg[1] or "../ForeverCodex"
 local M813 = arg[2] or "../../m8-13-progression/ForeverQuestGuide"
 local passed, failed = 0, 0
+-- run_planner_eval.lua sets PLANNER_EVAL_ONLY: print only failures and the planner evaluation reports
+local QUIET = rawget(_G, "PLANNER_EVAL_ONLY") == true
 local function check(cond, name)
-	if cond then passed = passed + 1; print("[OK]   " .. name)
+	if cond then passed = passed + 1; if not QUIET then print("[OK]   " .. name) end
 	else failed = failed + 1; print("[FAIL] " .. name) end
 end
-local function section(t) print("== " .. t .. " ==") end
+local function section(t) if not QUIET or t:find("planner evaluation", 1, true) then print("== " .. t .. " ==") end end
 
 local function readFile(path)
 	local f = assert(io.open(path, "rb"))
@@ -1324,7 +1326,7 @@ do
 	local H = { boot = boot, check = check, section = section, slash = slash, newWorld = newWorld, attPack = attPack,
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

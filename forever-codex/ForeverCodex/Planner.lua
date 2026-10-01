@@ -239,6 +239,8 @@ end
 --- plan = Planner.Compute(ctx, c, opts)
 --   c    the result of Engine.Candidates(ctx): { env, candidates, inProgress, hints }
 --   opts { prevNowId = string }  the previous plan's NOW, so a near-tie does not flip it
+--        { trace = true }        also record, in plan.diag, the per-action facts, the stops and every scored sequence
+--                                (for the evaluation harness; changes nothing about the decision, costs nothing when off)
 function Pl.Compute(ctx, c, opts)
 	opts = opts or {}
 	local env = c.env
@@ -301,6 +303,31 @@ function Pl.Compute(ctx, c, opts)
 		it.stop = home
 	end
 	diag.stops = #stops
+	local trace = opts.trace
+	local allSeqs = {}
+	if trace then
+		local function copy(v)
+			if type(v) ~= "table" then return v end
+			local out = {}
+			for k, x in pairs(v) do out[k] = copy(x) end
+			return out
+		end
+		diag.params = copy(par)
+		diag.items, diag.unlocatedIds = {}, {}
+		for _, list in ipairs({ items, extras }) do
+			for _, it in ipairs(list) do
+				diag.items[it.id] = { kind = it.a.kind, stop = it.stop and it.stop.id or nil, optional = it.stop == nil, map = it.pos.map, x = it.pos.x, y = it.pos.y,
+					status = it.status, assumed = it.assumed or false, conf = it.conf, value = it.val, dwell = it.dwell, comps = copy(it.comps) }
+			end
+		end
+		for _, a in ipairs(reminders) do diag.unlocatedIds[#diag.unlocatedIds + 1] = a.id end
+		diag.stopList = {}
+		for i, st in ipairs(stops) do
+			local ids = {}
+			for _, it in ipairs(st.items) do ids[#ids + 1] = it.id end
+			diag.stopList[i] = { id = st.id, items = ids, map = st.pos.map, x = st.pos.x, y = st.pos.y, value = st.val, dwell = st.dwell }
+		end
+	end
 	if #stops == 0 then
 		diag.reason = #reminders > 0 and "NO_LOCATED_ACTION" or "NO_CANDIDATES"
 		return plan
@@ -373,6 +400,7 @@ function Pl.Compute(ctx, c, opts)
 				used[i] = true
 				evaluated = evaluated + 1
 				seq.stops = { unpack(chosen) }
+				if trace then allSeqs[#allSeqs + 1] = seq end
 				if better(seq, best) then best = seq end
 				local f = chosen[1]
 				if better(seq, bestByFirst[f]) then bestByFirst[f] = seq end
@@ -536,6 +564,18 @@ function Pl.Compute(ctx, c, opts)
 		if d and (not nd or d < nd or (d == nd and it.id < nearest.id)) then nearest, nd = it, d end
 	end
 	diag.nearestId = nearest and nearest.id or nil
+	if trace then
+		table.sort(allSeqs, better)
+		diag.sequenceList = {}
+		for n = 1, math.min(#allSeqs, 40) do
+			local q, ids = allSeqs[n], {}
+			for k, i in ipairs(q.stops) do ids[k] = stops[i].id end
+			diag.sequenceList[n] = { stops = ids, net = q.net, secs = q.secs, unknown = q.unknown }
+		end
+		-- the best sequence that STARTS with each stop (so a reviewer can see what the alternatives were worth)
+		diag.bestByFirst = {}
+		for f, q in pairs(bestByFirst) do diag.bestByFirst[stops[f].id] = { net = q.net, secs = q.secs, unknown = q.unknown } end
+	end
 	diag.nowId, diag.alsoDoId, diag.thenId = plan.now.id, plan.alsoDo and plan.alsoDo.id or nil, plan.thenAction and plan.thenAction.id or nil
 	return plan
 end

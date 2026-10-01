@@ -815,3 +815,75 @@ differs from, or narrows, the design above:
 Not in Phase 2 (unchanged): navigation controller, waypoint lifecycle, markers, quest map, the final UI, grind and
 level-breakpoint actions, death shortcuts, trainer/vendor/inn/pet/profession actions, telemetry as a planner input.
 `/codex planner off` runs the previous engine (kept as the compatibility path; the Phase 1 golden snapshot pins it).
+
+---
+
+## 30. Phase 2.5: Planner evaluation harness (no tuning)
+
+**Purpose.** Before a UI is built around the Planner, show what the CURRENT Planner decides in situations from the level
+1-5 Orc Warrior playtest, and separate what is true by design (asserted) from what only a human can judge (reported).
+**No Planner constant, strategy weight, threshold or rule was changed.** The only Planner edit is an optional
+`opts.trace` that records per-action facts, stops and scored sequences in `plan.diag` (off by default; a test proves the
+decision is identical with it on or off).
+
+**Run it** (one command, from `forever-codex/tests`):
+`lua5.1 run_planner_eval.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide` prints a report per scenario plus
+sweep tables. `lua5.1 run_codex_tests.lua ...` runs the same scenarios as part of the full suite (one line per REVIEW
+scenario; assertions counted). The committed output is `CODEX_PLANNER_EVAL_REPORT.md` (generated; regenerate, do not edit).
+Pipeline per scenario: scenario data -> stub client state -> `Engine.Candidates` -> `Planner.Compute` (trace) -> report.
+Test-only: it needs the stub client, so there is no in-game `/codex planner test`, and no player-facing UI.
+
+**Scenarios (22).** DETERMINISTIC = asserted; REVIEW = reported (A0 and B also assert their deterministic parts).
+
+| Id | Situation | Kind |
+|---|---|---|
+| A0 | Scorpid / Vile / Cactus on REAL Durotar data as it is (objective quests have no coordinates in ATT) | REVIEW (+ no invented coordinates) |
+| A1 | Same, with the playtest-reported scorpid and Vile positions as a test-only overlay | REVIEW |
+| A2 | Same, standing at the camp turn-ins | REVIEW |
+| B | Turn-in 300 yd vs two local objectives (+ sweep over the turn-in distance) | REVIEW (+ local work first) |
+| C1, C2 | Productive travel: pickup 10 yd / 120 yd off the path (+ sweep over the offset) | REVIEW |
+| D1 | Lazy Peons camp, real data + illustrative objective placement | REVIEW |
+| D2 | Five local actions vs one 375 yd away | REVIEW |
+| E1 | Chain credit: two ready turn-ins, one unlocks a follow-up | DETERMINISTIC |
+| E2 | Chain credit on real data (Cutting Teeth, Lazy Peons) | REVIEW |
+| F | Unknown location: reminder, never NOW, no invented coordinates, no travel stop | DETERMINISTIC |
+| G | Same-name quests ("Simple Parchment") stay distinct by quest id | DETERMINISTIC |
+| H1 | Level 2 vs level 4 at the same place (eligibility follows the character) | DETERMINISTIC |
+| I1-I3 | Skip via `Q:<id>`, via `QT:<id>`, Skip then Add; legacy Add semantics | DETERMINISTIC |
+| J | Confidence / provenance: observed, approximate, assumed, ATT-only | DETERMINISTIC |
+| K1, K2 | A quest about 3000 yd away, without / with its zone as the route zone (+ sweeps) | REVIEW |
+| L, L2 | No useful ALSO DO (one action; two stops) | DETERMINISTIC |
+| M | Same-stop batching: NOW + ALSO DO at one stop, THEN the next stop | DETERMINISTIC |
+
+Fixture caveats: quest ids/names come from the playtest notes and the ATT pack and exist only in test data. Positions the
+player reported (scorpids 46.5, 58.4; Vile Familiars 45.3, 56.8; Thazz'ril's Pick 43.7, 53.8) are a scenario-local overlay;
+other placements are labelled ILLUSTRATIVE (ATT-layer, unverified). Real-data distances use the harness's stub map size
+(3500 x 2800 yd), not Forever's. Nothing was added to any data file.
+
+**What looks questionable (documented, NOT fixed).**
+1. *Objective work is valued low against short actions.* In A1 the Sting-of-the-Scorpid objective at the player's feet is only a
+   runner-up (2.6 points lower) behind a Cactus turn-in and accept stops 280+ yd away; an objective stop nets about 12
+   points, a quick accept or turn-in stop 13-15. The playtest behaviour was "finish the nearby objectives first".
+2. *Fast drops objective work entirely.* With timeValue 0.45 an objective (about 48 points over about 124 s) is net negative,
+   so Fast says "turn in", with no ALSO DO or THEN (strategy sweep).
+3. *"On the way" is generous.* A pickup 200 yd off the path (+29 s) is still NOW and labelled on the way, then a cliff at 300 yd:
+   the label and inclusion share the 30 s detour limit.
+4. *Stops are formed around a seed.* Five local actions become one stop (D2), whose "doing" time dominates its cost.
+5. *THEN can be low-information*: a far accept (about 650 yd) in A1/A2, from a long tail of about 97 candidate pickups.
+6. *A far quest (2500-3500 yd) is never planned* unless its zone is the route zone, and then the plan's net is strongly negative (K2).
+7. *Data, not Planner:* ATT has no objective coordinates for the Scorpid, Vile, Cactus or Lazy Peons quests, so the playtest's
+   main batching example cannot be batched on shipped data (A0: they are reminders). ATT's coordinate for A Peon's Burden
+   (52.0, 68.2) disagrees with the observed Razor Hill position (51.6, 41.7): possibly related to the old 375 yd suggestion (unconfirmed).
+   "The Adventurer" exists under several ids.
+
+**What looks good.** A deferred turn-in is explained with its counterfactual (B: starting with the turn-in scores 24.1 vs 35.2);
+same-stop actions are separate actions (M); local density wins (D2); chain credit is visible, bounded and does not change
+provenance (E1, E2); unknown locations never become routes (F); silence when nothing qualifies (L, L2); unknown transit ranks
+last; the route zone and added quests are honoured; the plan is identical with and without the trace.
+
+**Decisions for human review before Phase 3:** the objective value/dwell ratio and Fast's time weight (1, 2); the detour
+tolerance and the "on the way" label (3); whether THEN should be omitted when it is far or uninformative (5); how to treat the
+long tail of ATT-only accepts (1, 5); stop formation (4); far-quest and route-zone policy (6).
+
+**Future baseline / community routes.** They would enter as another candidate source (a provider) or as an `opts.hints`
+input to `Planner.Compute`; scenarios already keep "what exists" apart from "what the player did". Nothing of that exists.
