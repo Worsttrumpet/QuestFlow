@@ -1,0 +1,40 @@
+{
+  "run-001-resolve-unresolved-titles": {
+    "run_id": "run-001-resolve-unresolved-titles",
+    "status": "planned",
+    "purpose": "Revisit the 10 real quests with unresolved title/level/objectives/completion evidence identified by the M6.2 coverage report, by actually accepting and progressing them.",
+    "description": "Targets exactly the 10 quest IDs the M6.2 coverage report identified as viewed but never resolved to a title. No new data has been collected yet -- this run is registered as planned, with a real before-snapshot taken from the current coverage state, so a future session can be measured against it.",
+    "target_quest_ids": [
+      92516,
+      92517,
+      92553,
+      93318,
+      93319,
+      93951,
+      94411,
+      95350,
+      97970,
+      99196
+    ],
+    "target_fields": [
+      "objectives",
+      "quest_level",
+      "title"
+    ],
+    "target_scope": {},
+    "created_at": "2026-09-25T03:34:09Z",
+    "started_at": null,
+    "completed_at": null,
+    "notes": [],
+    "session_ids": [],
+    "before_coverage_ref": {
+      "path": "coverage_snapshots/run-001-resolve-unresolved-titles_before.json",
+      "sha256": "8022fc1306a5c4c958264285d9bca06f8e00b8503bbbdfaf88ef920eccd9e6c9",
+      "captured_at": "2026-09-25T03:34:11Z",
+      "quest_count": 95,
+      "npc_count": 63
+    },
+    "after_coverage_ref": null,
+    "results": null
+  }
+}

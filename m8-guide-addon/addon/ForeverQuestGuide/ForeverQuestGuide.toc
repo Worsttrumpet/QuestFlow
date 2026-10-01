@@ -1,0 +1,14 @@
+## Interface: 16001
+## Title: Forever Quest Guide (prototype)
+## Notes: Local, read-only quest browser AND a static, manually-authored route view for WoW Forever, built from the project's own recorder-observed M6 guide dataset. Route steps are hand-authored (see m8-guide-addon/routes/), with optional route-authored "why"/"required" metadata; includes a local quest search, route progress bar, next-step preview, and a compact/detailed view mode. The addon does not track quest state, does not auto-advance, has no directional arrow, and places no map or minimap pins. Has one small SavedVariable for UI preferences only (theme, view mode, welcome-popup dismissal) -- never for quest/route/evidence data. No automation of any kind: does not accept, complete, or turn in quests, and never calls GetQuestReward(). Distinct from the third-party "ForeverGuide" overlay (see project LICENSING.md) -- unrelated project, no shared code or data.
+## Author: WoW Forever open database project
+## Version: m8-guide-addon-0.5
+## SavedVariables: ForeverQuestGuideDB
+
+Data.lua
+RouteData.lua
+Preferences.lua
+Core.lua
+MinimapButton.lua
+WelcomePopup.lua
+UI.lua

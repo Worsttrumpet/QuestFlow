@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Forever Probe M8.9 (Objective Progress)
+## Notes: Disposable M8.9 research probe. Answers one question: can quest objective progress and completion be detected reliably on WoW Forever? Read-only: never accepts, abandons, completes or turns in a quest itself. Remove after the M8.9 test.
+## Author: WoW Forever open database project
+## Version: m8-9-probe-0.1
+## SavedVariables: ForeverProbeM89DB
+
+ForeverProbeM89.lua

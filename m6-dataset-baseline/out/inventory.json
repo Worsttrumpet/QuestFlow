@@ -1,0 +1,892 @@
+{
+  "export_file": "latest_export_ForeverRecorder.lua",
+  "total_observations": 1662,
+  "recorder_attributed_observations": 244,
+  "pre_existing_lab_attributed_observations": 1418,
+  "attribution_note": "Session-to-addon attribution for 'recorder' sessions is based on this project's own real-client testing conversation history, not on any field in the data itself -- the shared ForeverObservationLabDB schema does not record which addon wrote a given observation.",
+  "sessions": {
+    "2e787541803171": 1171,
+    "164fb18d1a3ab8": 247,
+    "90318e46308b48": 6,
+    "f0e0a3f870f296": 26,
+    "e91d734523ba1a": 206,
+    "9a2307cc62589b": 4,
+    "038eb179f79ceb": 2
+  },
+  "builds": {
+    "69977": 1171,
+    "70009": 491
+  },
+  "by_module": {
+    "GiverIdentity": 517,
+    "Gossip": 246,
+    "QuestMeta": 271,
+    "RewardsItems": 272,
+    "RewardsReputation": 271,
+    "RewardsXPMoney": 85
+  },
+  "unique_quest_ids_touched": [
+    92460,
+    92461,
+    92462,
+    92463,
+    92464,
+    92465,
+    92469,
+    92470,
+    92471,
+    92472,
+    92473,
+    92474,
+    92514,
+    92515,
+    92516,
+    92517,
+    92532,
+    92544,
+    92550,
+    92551,
+    92553,
+    92579,
+    92595,
+    92598,
+    92640,
+    92642,
+    92643,
+    92644,
+    92645,
+    92646,
+    92679,
+    92682,
+    92683,
+    92684,
+    92685,
+    92693,
+    92698,
+    92700,
+    92703,
+    92708,
+    92871,
+    92880,
+    92881,
+    92947,
+    93065,
+    93090,
+    93159,
+    93160,
+    93165,
+    93172,
+    93317,
+    93318,
+    93319,
+    93320,
+    93552,
+    93735,
+    93736,
+    93737,
+    93738,
+    93740,
+    93746,
+    93836,
+    93926,
+    93927,
+    93948,
+    93949,
+    93951,
+    93958,
+    94007,
+    94013,
+    94050,
+    94411,
+    94414,
+    94484,
+    94485,
+    94486,
+    94487,
+    94488,
+    94489,
+    94490,
+    94491,
+    94568,
+    94896,
+    94897,
+    94978,
+    94979,
+    95349,
+    95350,
+    96101,
+    96638,
+    96646,
+    97967,
+    97970,
+    98512
+  ],
+  "unique_quest_ids_touched_count": 94,
+  "quest_scoped_observations_by_module": {
+    "QuestMeta": 271,
+    "RewardsItems": 272,
+    "RewardsReputation": 271,
+    "GiverIdentity": 271,
+    "RewardsXPMoney": 85
+  },
+  "npc_coverage": {
+    "unique_npc_creature_ids_seen": [
+      6491,
+      249363,
+      250929,
+      251361,
+      251362,
+      251363,
+      251366,
+      251368,
+      251487,
+      251523,
+      251684,
+      251902,
+      251905,
+      251906,
+      251964,
+      251968,
+      251991,
+      251992,
+      251993,
+      252095,
+      252155,
+      252172,
+      252359,
+      252378,
+      252379,
+      252383,
+      252389,
+      252448,
+      252475,
+      252476,
+      252478,
+      252800,
+      253372,
+      253576,
+      253590,
+      253844,
+      253849,
+      254084,
+      254088,
+      254089,
+      254151,
+      254344,
+      254411,
+      255940,
+      256083,
+      256247,
+      256635,
+      257006,
+      257007,
+      257018,
+      257024,
+      257036,
+      257551,
+      257554,
+      257944,
+      258130,
+      259012,
+      259013,
+      259119,
+      263113,
+      263664,
+      273017,
+      276171
+    ],
+    "unique_npc_creature_ids_seen_count": 63,
+    "npc_scoped_observations": 246,
+    "quest_scoped_giver_observations": 271
+  },
+  "reward_coverage": {
+    "xp_money_observations": 85,
+    "choice_item_observations": 69,
+    "guaranteed_item_observations": 30,
+    "reputation_observations": 194
+  },
+  "guaranteed_item_quest_ids": [
+    92460,
+    92515,
+    92553,
+    92679,
+    92682,
+    92683,
+    92684,
+    92685,
+    92693,
+    93317,
+    93552,
+    93746
+  ],
+  "choice_item_quest_ids": [
+    92460,
+    92461,
+    92462,
+    92463,
+    92465,
+    92469,
+    92470,
+    92471,
+    92473,
+    92514,
+    92517,
+    92550,
+    92579,
+    92640,
+    92643,
+    92644,
+    92645,
+    92646,
+    92684,
+    92693,
+    92703,
+    92880,
+    93160,
+    93165,
+    93172,
+    93318,
+    93320,
+    93552,
+    94411,
+    94568
+  ],
+  "position_coverage": {
+    "giver_identity_observations_with_position": 517
+  },
+  "unresolved_fields": {
+    "quest_meta_title_unresolved": [
+      {
+        "quest_id": 93927,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 93926,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 92551,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 93927,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92579,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 93948,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 93317,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 92679,
+        "reason": "not found among 6 entries"
+      },
+      {
+        "quest_id": 94484,
+        "reason": "not found among 7 entries"
+      },
+      {
+        "quest_id": 94896,
+        "reason": "not found among 8 entries"
+      },
+      {
+        "quest_id": 94897,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 92700,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 93948,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 93949,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 92700,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 92708,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 93735,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 92708,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 93736,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 93736,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 93735,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 93737,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 93949,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 92682,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 92679,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 92683,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 92684,
+        "reason": "not found among 11 entries"
+      },
+      {
+        "quest_id": 92698,
+        "reason": "not found among 12 entries"
+      },
+      {
+        "quest_id": 92683,
+        "reason": "not found among 12 entries"
+      },
+      {
+        "quest_id": 92698,
+        "reason": "not found among 11 entries"
+      },
+      {
+        "quest_id": 92682,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 92685,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 92693,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 92685,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 92703,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 92693,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94978,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 92703,
+        "reason": "not found among 11 entries"
+      },
+      {
+        "quest_id": 94978,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94979,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94979,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94013,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94050,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94050,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 93317,
+        "reason": "not found among 8 entries"
+      },
+      {
+        "quest_id": 94485,
+        "reason": "not found among 7 entries"
+      },
+      {
+        "quest_id": 94486,
+        "reason": "not found among 8 entries"
+      },
+      {
+        "quest_id": 94487,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 93159,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 94485,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 94486,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 93165,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94487,
+        "reason": "not found among 8 entries"
+      },
+      {
+        "quest_id": 94488,
+        "reason": "not found among 8 entries"
+      },
+      {
+        "quest_id": 94489,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94490,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 94489,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 94490,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94491,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 94488,
+        "reason": "not found among 8 entries"
+      },
+      {
+        "quest_id": 94491,
+        "reason": "not found among 8 entries"
+      },
+      {
+        "quest_id": 94896,
+        "reason": "not found among 7 entries"
+      },
+      {
+        "quest_id": 94897,
+        "reason": "not found among 6 entries"
+      },
+      {
+        "quest_id": 93737,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 93738,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 93736,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 93738,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 93746,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 97967,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 94007,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 94007,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92871,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 93740,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92871,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 93320,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92642,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92645,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92880,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 93740,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92881,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92643,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92881,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 93159,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 93172,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 93160,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 93160,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 98512,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 98512,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92644,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92643,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 94568,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 92640,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 94568,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 93065,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92947,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 93065,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 92947,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 93958,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 93958,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 92646,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 93836,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 93090,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 93836,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 95349,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 95350,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 95349,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 92460,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 92461,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 92460,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 92462,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92462,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92465,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92464,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92532,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92598,
+        "reason": "not found among 6 entries"
+      },
+      {
+        "quest_id": 93552,
+        "reason": "not found among 7 entries"
+      },
+      {
+        "quest_id": 92532,
+        "reason": "not found among 6 entries"
+      },
+      {
+        "quest_id": 92474,
+        "reason": "not found among 6 entries"
+      },
+      {
+        "quest_id": 94414,
+        "reason": "not found among 7 entries"
+      },
+      {
+        "quest_id": 94414,
+        "reason": "not found among 7 entries"
+      },
+      {
+        "quest_id": 92474,
+        "reason": "not found among 6 entries"
+      },
+      {
+        "quest_id": 92464,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 92469,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92465,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92598,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92463,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92462,
+        "reason": "not found among 0 entries"
+      },
+      {
+        "quest_id": 92471,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92470,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92471,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92473,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92472,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 96638,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 92544,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92544,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92544,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92472,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92514,
+        "reason": "not found among 2 entries"
+      },
+      {
+        "quest_id": 92595,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 92595,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 94411,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 96101,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 96638,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 96101,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 97970,
+        "reason": "not found among 3 entries"
+      },
+      {
+        "quest_id": 96646,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 96646,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 92517,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 92514,
+        "reason": "not found among 4 entries"
+      },
+      {
+        "quest_id": 93319,
+        "reason": "not found among 5 entries"
+      },
+      {
+        "quest_id": 92516,
+        "reason": "not found among 6 entries"
+      },
+      {
+        "quest_id": 92515,
+        "reason": "not found among 7 entries"
+      },
+      {
+        "quest_id": 93951,
+        "reason": "not found among 8 entries"
+      },
+      {
+        "quest_id": 92553,
+        "reason": "not found among 9 entries"
+      },
+      {
+        "quest_id": 93318,
+        "reason": "not found among 10 entries"
+      },
+      {
+        "quest_id": 92515,
+        "reason": "not found among 10 entries"
+      }
+    ],
+    "quest_meta_title_unresolved_count": 156,
+    "item_name_unresolved_at_first_read_count": 7
+  },
+  "reported_candidate_scale": {
+    "questv2_total_rows_reported": 6600,
+    "att_forever_unique_quest_ids_reported": 1537,
+    "source": "M6 planning document, Section 6, citing prior project research; this script has no raw ID list on disk to independently verify these figures or compute a real overlap with the observed quest ID set below."
+  }
+}

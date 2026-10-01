@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Forever Probe M8.7 (QUEST_ACCEPTED)
+## Notes: Disposable M8.7 research probe. Answers one question: does QUEST_ACCEPTED exist and fire reliably on WoW Forever? Read-only: never accepts, abandons, completes or turns in a quest itself. Remove after the M8.7 test.
+## Author: WoW Forever open database project
+## Version: m8-7-probe-0.1
+## SavedVariables: ForeverProbeM87DB
+
+ForeverProbeM87.lua

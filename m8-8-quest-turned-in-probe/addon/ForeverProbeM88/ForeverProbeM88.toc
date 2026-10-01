@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Forever Probe M8.8 (QUEST_TURNED_IN)
+## Notes: Disposable M8.8 research probe. Answers one question: is QUEST_TURNED_IN a reliable progression signal on WoW Forever? Read-only: never accepts, abandons, completes or turns in a quest itself. Remove after the M8.8 test.
+## Author: WoW Forever open database project
+## Version: m8-8-probe-0.1
+## SavedVariables: ForeverProbeM88DB
+
+ForeverProbeM88.lua

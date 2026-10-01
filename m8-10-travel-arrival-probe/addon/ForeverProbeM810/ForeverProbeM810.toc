@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: Forever Probe M8.10 (Travel & Arrival)
+## Notes: Disposable M8.10 research probe. Answers one question: can TRAVEL arrival be detected on WoW Forever? Reads waypoint, super-track, navigation and player-position state; sets/clears the game's own map waypoint only on explicit /fprobe810 commands. Never touches quests. Remove after the M8.10 test.
+## Author: WoW Forever open database project
+## Version: m8-10-probe-0.1
+## SavedVariables: ForeverProbeM810DB
+
+ForeverProbeM810.lua

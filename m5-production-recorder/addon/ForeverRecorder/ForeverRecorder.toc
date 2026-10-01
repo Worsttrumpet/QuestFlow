@@ -1,0 +1,23 @@
+## Interface: 16001
+## Title: Forever Recorder
+## Notes: Read-only observation addon for WoW Forever. Never accepts, completes, or turns in quests, never calls GetQuestReward(). Records locally; export is manual and local-only (/fr save). No networking of any kind.
+## Version: m5-recorder-0.1
+## SavedVariables: ForeverObservationLabDB
+
+core/SafeCall.lua
+core/GuidUtil.lua
+core/PositionUtil.lua
+core/Bootstrap.lua
+core/Registry.lua
+core/Dispatcher.lua
+core/Export.lua
+core/SlashCommands.lua
+
+observers/QuestMeta.lua
+observers/RewardsXPMoney.lua
+observers/RewardsItems.lua
+observers/RewardsReputation.lua
+observers/GiverIdentity.lua
+observers/Gossip.lua
+
+ForeverRecorder.lua
