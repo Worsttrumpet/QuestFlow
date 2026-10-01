@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: Forever Probe M8.14 (Arrow and Drag)
-## Notes: Disposable M8.14 research probe. Tests player facing, rotatable arrow textures, arrow glyphs in the game font, and right-click dragging. Read-only: no quest or map actions. Remove after the M8.14 test.
+## Notes: Disposable M8.14 research probe. Tests player facing convention, world-axis direction, rotatable arrow textures, arrow glyphs in the game font, right-click dragging of a frame and of a clickable button, and minimap geometry. Read-only: no quest or map actions. Remove after the M8.14 test.
 ## Author: WoW Forever open database project
-## Version: m8-14-probe-0.1
+## Version: m8-14-probe-0.2
 ## SavedVariables: ForeverProbeM814DB
 
 ForeverProbeM814.lua
