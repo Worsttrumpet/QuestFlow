@@ -1,0 +1,11 @@
+{
+  "note": "Claims from the M0 investigation about tables M1 did NOT re-probe. They are second-hand for this pipeline: M0 read them from a third-party repository's vendored CSVs (ForeverGuide), a source M1 excludes. Treat as unverified until re-probed from a Wago download or a user-supplied CSV.",
+  "carried": [
+    {"table": "QuestV2", "claim": {"row_count": 6600, "columns": ["ID", "UniqueBitFlag", "UiQuestDetailsThemeID"]}, "build_claim": "1.60.1.69913", "status": "carried_from_m0_not_reprobed", "meaning": "existence of a client quest ID only; no names, levels or rewards"},
+    {"table": "QuestPOIBlob", "claim": {"row_count": 54}, "build_claim": "1.60.1.69913", "status": "carried_from_m0_not_reprobed"},
+    {"table": "QuestPOIPoint", "claim": {"row_count": 99, "distinct_quests": 22}, "build_claim": "1.60.1.69913", "status": "carried_from_m0_not_reprobed"},
+    {"table": "QuestObjective", "claim": {"exists": false}, "build_claim": "1.60.1.69913", "status": "carried_from_m0_not_reprobed", "basis": "stated in lodestar docs; contradicted by ForeverGuide's README; never resolved first-hand"},
+    {"table": "QuestV2CliTask", "claim": {"exists": false}, "build_claim": "1.60.1.69913", "status": "carried_from_m0_not_reprobed", "basis": "stated in lodestar docs; contradicted by ForeverGuide's README; never resolved first-hand"}
+  ],
+  "tables_reprobed_in_m1_agree_with_m0": ["AreaTable", "UiMap", "UiMapAssignment", "TaxiNodes", "Item", "ItemSearchName"]
+}

@@ -1,0 +1,26 @@
+# Pinned source snapshots. Nothing here is fetched unless a command asks for it.
+[[snapshot]]
+key = "att-head"
+repo = "https://github.com/ATTWoWAddon/AllTheThings.git"
+sha = "8e25511677df4ea5c3d0322009eafc18f203ffd3"
+license_id = "MIT"
+license_status = "verified"           # LICENSE file read at this commit
+upstream_provenance = "unresolved"    # origin of ATT's coordinates is not documented
+mirrors_blizzard_csv = true           # .contrib/.db/forever/.config/.wago/*.csv are Blizzard-derived
+forever_root = ".contrib/.db/forever"
+wago_dir = ".contrib/.db/forever/.config/.wago"
+constants = ".contrib/.db/forever/.config/constants/maps.lua"
+config = ".contrib/.db/forever/.config/forever.config"
+
+[[snapshot]]
+key = "att-a054efd"
+repo = "https://github.com/ATTWoWAddon/AllTheThings.git"
+sha = "a054efd473f0b9b13c0695dc1e81a16af4918f9d"
+license_id = "MIT"
+license_status = "verified"
+upstream_provenance = "unresolved"
+mirrors_blizzard_csv = true
+wago_dir = ".contrib/.db/forever/.config/.wago"
+note = "Earlier ATT state whose CSVs are labelled 69893. Used only for the cross-label diff."
+
+# Excluded on purpose (see docs/LICENSING.md): ForeverGuide, Questie/QuestieDB, RestedXP-derived data, Wowhead.

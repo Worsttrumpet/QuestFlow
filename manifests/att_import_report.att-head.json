@@ -1,0 +1,78 @@
+{
+  "att_import": {
+    "assertions_added": 10420,
+    "assertions_duplicate": 2,
+    "by_field": {
+      "att.cr": 6,
+      "att.crs": 1,
+      "att.flag.isBreadcrumb": 107,
+      "att.flag.isMonthly": 1,
+      "att.flag.isYearly": 95,
+      "att.flag.repeatable": 143,
+      "att.item_child_unverified": 706,
+      "att.provider": 54,
+      "att.providers": 235,
+      "att.qi": 23,
+      "att.qis": 1,
+      "att.qs": 1,
+      "att.restriction.classes": 332,
+      "att.restriction.races": 1128,
+      "flight_master.att_cr": 14,
+      "giver.npc": 1221,
+      "level.att_lvl_unverified": 1123,
+      "location.att_coord": 1469,
+      "name.att_comment": 1527,
+      "objective.att": 771,
+      "relation.att_alt_quest": 451,
+      "relation.att_source_quest": 1011
+    },
+    "files": 53,
+    "flight_path_records": 14,
+    "parse_errors": 3,
+    "quest_records": 1537,
+    "unique_quest_ids": 1537,
+    "unmapped_group_calls": {
+      "mount": 2,
+      "n": 1,
+      "r": 17,
+      "recipe": 37
+    },
+    "unmapped_quest_keys": {
+      "_drop": 10,
+      "allianceQuestData": 4,
+      "cost": 233,
+      "description": 34,
+      "hordeQuestData": 4,
+      "icon": 6,
+      "learnedAt": 24,
+      "lockCriteria": 3,
+      "maps": 217,
+      "maxReputation": 57,
+      "minReputation": 30,
+      "requireSkill": 43,
+      "timeline": 14
+    }
+  },
+  "derived_coordinates": {
+    "no_assignment": 2,
+    "ok": 1467,
+    "out_of_bounds": 0,
+    "unsupported_assignment": 0
+  },
+  "id_crosscheck": {
+    "fp_ids_mismatch": [],
+    "parsed_fp_ids": 14,
+    "parsed_quest_ids": 1537,
+    "quest_ids_missing_from_parse": [],
+    "quest_ids_only_parser_found": 21,
+    "regex_fp_ids": 14,
+    "regex_quest_ids": 1516
+  },
+  "parse_error_samples": [
+    ".contrib/.db/forever/dungeons & raids/0.5 - dungeon sets.lua: line 1075: unexpected '('",
+    ".contrib/.db/forever/dungeons & raids/0.5 - dungeon sets.lua: line 1075: unexpected ';'",
+    ".contrib/.db/forever/dungeons & raids/0.5 - dungeon sets.lua: line 1947: unexpected ')'"
+  ],
+  "ref": "8e25511677df4ea5c3d0322009eafc18f203ffd3",
+  "snapshot": "att-head"
+}
