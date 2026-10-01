@@ -1,0 +1,406 @@
+{
+  "assignments_supported": 59,
+  "assignments_total": 61,
+  "changed_frame_maps": {
+    "1412": {
+      "accuracy_points": 0,
+      "all_inside": true,
+      "assignment": "ok",
+      "name_terms": [
+        "Mulgore"
+      ],
+      "nodes": [
+        {
+          "inside": true,
+          "map_pct": [
+            39.8,
+            35.7
+          ],
+          "name": "Thunder Bluff, Mulgore",
+          "node_id": 22
+        }
+      ],
+      "ui_map_name": "Mulgore"
+    },
+    "1423": {
+      "accuracy_points": 0,
+      "all_inside": true,
+      "assignment": "ok",
+      "name_terms": [
+        "Eastern Plaguelands"
+      ],
+      "nodes": [
+        {
+          "inside": true,
+          "map_pct": [
+            71.8,
+            50.2
+          ],
+          "name": "Eastern Plaguelands",
+          "node_id": 15
+        },
+        {
+          "inside": true,
+          "map_pct": [
+            71.7,
+            49.6
+          ],
+          "name": "Light's Hope Chapel, Eastern Plaguelands",
+          "node_id": 67
+        },
+        {
+          "inside": true,
+          "map_pct": [
+            70.4,
+            47.6
+          ],
+          "name": "Light's Hope Chapel, Eastern Plaguelands",
+          "node_id": 68
+        },
+        {
+          "inside": true,
+          "map_pct": [
+            18.5,
+            24.2
+          ],
+          "name": "Plaguewood Tower, Eastern Plaguelands",
+          "node_id": 84
+        },
+        {
+          "inside": true,
+          "map_pct": [
+            47.2,
+            20.3
+          ],
+          "name": "Northpass Tower, Eastern Plaguelands",
+          "node_id": 85
+        },
+        {
+          "inside": true,
+          "map_pct": [
+            57.8,
+            41.6
+          ],
+          "name": "Eastwall Tower, Eastern Plaguelands",
+          "node_id": 86
+        },
+        {
+          "inside": true,
+          "map_pct": [
+            32.6,
+            64.0
+          ],
+          "name": "Crown Guard Tower, Eastern Plaguelands",
+          "node_id": 87
+        }
+      ],
+      "ui_map_name": "Eastern Plaguelands"
+    },
+    "1433": {
+      "accuracy_points": 0,
+      "all_inside": true,
+      "assignment": "ok",
+      "name_terms": [
+        "Redridge Mountains",
+        "Redridge"
+      ],
+      "nodes": [
+        {
+          "inside": true,
+          "map_pct": [
+            25.3,
+            59.0
+          ],
+          "name": "Lakeshire, Redridge",
+          "node_id": 5
+        }
+      ],
+      "ui_map_name": "Redridge Mountains"
+    },
+    "1453": {
+      "accuracy_points": 1,
+      "all_inside": true,
+      "assignment": "ok",
+      "name_terms": [
+        "Stormwind City",
+        "Stormwind"
+      ],
+      "nodes": [
+        {
+          "inside": true,
+          "map_pct": [
+            71.0,
+            72.9
+          ],
+          "name": "Stormwind, Elwynn",
+          "node_id": 2
+        }
+      ],
+      "ui_map_name": "Stormwind City"
+    }
+  },
+  "flight_path_accuracy": {
+    "max_abs_err_map_pct": 0.426,
+    "mean_abs_err_map_pct": 0.09,
+    "n": 14,
+    "points": [
+      {
+        "abs_err": [
+          0.023,
+          0.426
+        ],
+        "name": "Stormwind, Elwynn",
+        "node_id": 2,
+        "observed": [
+          71.0,
+          72.5
+        ],
+        "predicted": [
+          70.98,
+          72.93
+        ],
+        "ui_map_id": 1453
+      },
+      {
+        "abs_err": [
+          0.286,
+          0.135
+        ],
+        "name": "Ironforge, Dun Morogh",
+        "node_id": 6,
+        "observed": [
+          55.6,
+          48.0
+        ],
+        "predicted": [
+          55.89,
+          47.87
+        ],
+        "ui_map_id": 1455
+      },
+      {
+        "abs_err": [
+          0.08,
+          0.059
+        ],
+        "name": "Menethil Harbor, Wetlands",
+        "node_id": 7,
+        "observed": [
+          9.6,
+          59.6
+        ],
+        "predicted": [
+          9.52,
+          59.66
+        ],
+        "ui_map_id": 1437
+      },
+      {
+        "abs_err": [
+          0.143,
+          0.005
+        ],
+        "name": "Thelsamar, Loch Modan",
+        "node_id": 8,
+        "observed": [
+          33.8,
+          50.8
+        ],
+        "predicted": [
+          33.94,
+          50.79
+        ],
+        "ui_map_id": 1432
+      },
+      {
+        "abs_err": [
+          0.01,
+          0.067
+        ],
+        "name": "Refuge Pointe, Arathi",
+        "node_id": 16,
+        "observed": [
+          45.8,
+          46.2
+        ],
+        "predicted": [
+          45.79,
+          46.13
+        ],
+        "ui_map_id": 1417
+      },
+      {
+        "abs_err": [
+          0.062,
+          0.023
+        ],
+        "name": "Hammerfall, Arathi",
+        "node_id": 17,
+        "observed": [
+          73.0,
+          32.6
+        ],
+        "predicted": [
+          73.06,
+          32.62
+        ],
+        "ui_map_id": 1417
+      },
+      {
+        "abs_err": [
+          0.016,
+          0.004
+        ],
+        "name": "Booty Bay, Stranglethorn",
+        "node_id": 18,
+        "observed": [
+          26.8,
+          77.0
+        ],
+        "predicted": [
+          26.82,
+          77.0
+        ],
+        "ui_map_id": 1434
+      },
+      {
+        "abs_err": [
+          0.129,
+          0.072
+        ],
+        "name": "Booty Bay, Stranglethorn",
+        "node_id": 19,
+        "observed": [
+          27.4,
+          77.6
+        ],
+        "predicted": [
+          27.53,
+          77.67
+        ],
+        "ui_map_id": 1434
+      },
+      {
+        "abs_err": [
+          0.09,
+          0.076
+        ],
+        "name": "Grom'gol, Stranglethorn",
+        "node_id": 20,
+        "observed": [
+          32.6,
+          29.2
+        ],
+        "predicted": [
+          32.51,
+          29.28
+        ],
+        "ui_map_id": 1434
+      },
+      {
+        "abs_err": [
+          0.103,
+          0.206
+        ],
+        "name": "Crossroads, The Barrens",
+        "node_id": 25,
+        "observed": [
+          51.4,
+          30.2
+        ],
+        "predicted": [
+          51.5,
+          30.41
+        ],
+        "ui_map_id": 1413
+      },
+      {
+        "abs_err": [
+          0.0,
+          0.073
+        ],
+        "name": "Rut'theran Village, Teldrassil",
+        "node_id": 27,
+        "observed": [
+          58.4,
+          94.0
+        ],
+        "predicted": [
+          58.4,
+          93.93
+        ],
+        "ui_map_id": 1438
+      },
+      {
+        "abs_err": [
+          0.063,
+          0.103
+        ],
+        "name": "Camp Taurajo, The Barrens",
+        "node_id": 77,
+        "observed": [
+          44.4,
+          59.0
+        ],
+        "predicted": [
+          44.46,
+          59.1
+        ],
+        "ui_map_id": 1413
+      },
+      {
+        "abs_err": [
+          0.118,
+          0.108
+        ],
+        "name": "Ratchet, The Barrens",
+        "node_id": 80,
+        "observed": [
+          63.0,
+          37.0
+        ],
+        "predicted": [
+          63.12,
+          37.11
+        ],
+        "ui_map_id": 1413
+      },
+      {
+        "abs_err": [
+          0.006,
+          0.03
+        ],
+        "name": "Farholde Keep, Riverglades",
+        "node_id": 3276,
+        "observed": [
+          60.6,
+          81.6
+        ],
+        "predicted": [
+          60.59,
+          81.57
+        ],
+        "ui_map_id": 2548
+      }
+    ],
+    "points_per_ui_map": {
+      "1413": 3,
+      "1417": 2,
+      "1432": 1,
+      "1434": 3,
+      "1437": 1,
+      "1438": 1,
+      "1453": 1,
+      "1455": 1,
+      "2548": 1
+    },
+    "skipped": []
+  },
+  "limitations": [
+    "Accuracy is validated only where an independent map-percentage observation exists: 14 ATT flight paths across 9 UI maps.",
+    "No accuracy observation exists in the accessible sources for: Mulgore, Eastern Plaguelands, Redridge Mountains. Their accuracy is NOT validated; the containment check is weak (node names vs region rectangle).",
+    "Too few accuracy points to establish accuracy (count in brackets): Stormwind City (1).",
+    "All points come from one third-party source (ATT, coordinates given to 0.1 map-% precision); client positions come from a mirrored CSV whose build label is unverified."
+  ],
+  "transform_id": "uimap_region_v1"
+}

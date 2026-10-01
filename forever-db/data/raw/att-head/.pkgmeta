@@ -1,0 +1,33 @@
+package-as: AllTheThings
+enable-nolib-creation: no
+
+externals:
+
+ignore: # Files and directories beginning with a dot (such as .git) are automatically ignored, as is the pgkmeta file itself.
+  - _config.yml
+  - setup.cfg
+  - *.bat
+  - *.sh
+  - *.md
+  - *.cfg
+  - *.yml
+
+required-dependencies:
+
+optional-dependencies:
+
+embedded-libraries:
+
+license-output: LICENSE.txt
+
+tools-used:
+
+plain-copy:
+  - assets/*
+  - db/*
+  - lib/*
+  - locales/*
+  - src/*
+  - AllTheThings.lua
+  - Bindings.xml
+  - LICENSE.TXT

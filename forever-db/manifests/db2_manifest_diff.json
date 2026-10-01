@@ -1,0 +1,43 @@
+{
+  "a": {
+    "build_claim": "1.60.1.69893",
+    "label": "att-a054efd",
+    "ref": "a054efd473f0b9b13c0695dc1e81a16af4918f9d"
+  },
+  "added": [],
+  "b": {
+    "build_claim": "1.60.1.69913",
+    "label": "att-head",
+    "ref": "8e25511677df4ea5c3d0322009eafc18f203ffd3"
+  },
+  "changed": [],
+  "identical_content": [
+    "Achievement",
+    "AreaTable",
+    "BattlePetSpecies",
+    "ContentTuning",
+    "Criteria",
+    "CriteriaTree",
+    "Holiday",
+    "HolidayNames",
+    "Item",
+    "ItemBonus",
+    "ItemEffect",
+    "ItemModifiedAppearance",
+    "ItemSearchName",
+    "ItemXItemEffect",
+    "ModifierTree",
+    "SkillLineAbility",
+    "SpellEffect",
+    "TaxiNodes",
+    "TransmogSet",
+    "TransmogSetItem",
+    "UiMap",
+    "UiMapAssignment",
+    "WorldMapOverlay"
+  ],
+  "removed": [],
+  "warnings": [
+    "23 tables are byte-identical across build labels 1.60.1.69893 and 1.60.1.69913 in a mirrored source. This cannot distinguish 'unchanged in the game' from 'file relabelled without re-download'."
+  ]
+}
