@@ -1,0 +1,200 @@
+-- ForeverCodex.Context: one snapshot of "who is playing and where", built from read-only client calls.
+--
+-- Race ORIGIN (what the character is), ROUTE ZONE (where the player chose to level; lives in Preferences) and
+-- CURRENT LOCATION (where the character is right now) are separate fields and are never derived from one another.
+--
+-- Every client call is feature-checked and pcall-wrapped. A missing API leaves its field nil and is listed in
+-- ctx.char.missing / ctx.loc.available so the engine degrades (it never guesses) and /codex diag can say which
+-- API this client lacks. UnitLevel / UnitName / C_Map position / C_QuestLog are verified on Forever (M8.x);
+-- UnitClass / UnitRace / UnitFactionGroup / GetZoneText / GetSubZoneText / GetRealmName / GetNumGroupMembers are
+-- standard Classic APIs that have NOT been probed on Forever yet, which is what the first real-client checkpoint
+-- (/codex diag) is for.
+
+local addonName, ns = ...
+local P = ns.Prefs
+
+local Ctx = {}
+ns.Context = Ctx
+
+local function try(fn, ...)
+	if type(fn) ~= "function" then
+		return nil, false
+	end
+	local ok, a, b, c = pcall(fn, ...)
+	if not ok then
+		ns.RecordError("context", a)
+		return nil, false
+	end
+	return a, true, b, c
+end
+
+--- ATT race symbols differ from the client's race tokens for one race; normalise to the ATT symbol space.
+local RACE_ALIASES = { SCOURGE = "UNDEAD" }
+
+local function raceKey(token)
+	if type(token) ~= "string" then return nil end
+	local k = token:upper():gsub("[%s_%-']", "")
+	return RACE_ALIASES[k] or k
+end
+Ctx.RaceKey = raceKey
+
+-- ---------------------------------------------------------------- default reader (real client)
+
+local reader = {}
+
+function reader.character()
+	local c = { missing = {} }
+	local lvl, okL = try(UnitLevel, "player")
+	if okL and type(lvl) == "number" then c.level = lvl else c.missing[#c.missing + 1] = "UnitLevel" end
+	local name, okN = try(UnitName, "player")
+	if okN and type(name) == "string" then c.name = name else c.missing[#c.missing + 1] = "UnitName" end
+	local realm, okR = try(GetRealmName)
+	if okR and type(realm) == "string" then c.realm = realm else c.missing[#c.missing + 1] = "GetRealmName" end
+	if type(UnitClass) == "function" then
+		local ok, loc, token = pcall(UnitClass, "player")
+		if ok and type(token) == "string" then c.class, c.classToken = loc, token else c.missing[#c.missing + 1] = "UnitClass" end
+	else
+		c.missing[#c.missing + 1] = "UnitClass"
+	end
+	if type(UnitRace) == "function" then
+		local ok, loc, token = pcall(UnitRace, "player")
+		if ok and type(token) == "string" then c.race, c.raceToken = loc, token else c.missing[#c.missing + 1] = "UnitRace" end
+	else
+		c.missing[#c.missing + 1] = "UnitRace"
+	end
+	if type(UnitFactionGroup) == "function" then
+		local ok, fac = pcall(UnitFactionGroup, "player")
+		if ok and type(fac) == "string" then c.faction = fac else c.missing[#c.missing + 1] = "UnitFactionGroup" end
+	else
+		c.missing[#c.missing + 1] = "UnitFactionGroup"
+	end
+	return c
+end
+
+function reader.location()
+	local l = { available = false }
+	local zone = try(GetZoneText)
+	if type(zone) == "string" and zone ~= "" then l.zone = zone end
+	local sub = try(GetSubZoneText)
+	if type(sub) == "string" and sub ~= "" then l.subzone = sub end
+	if type(C_Map) == "table" and type(C_Map.GetBestMapForUnit) == "function" then
+		local map = try(C_Map.GetBestMapForUnit, "player")
+		if type(map) == "number" then
+			l.map = map
+			local pos = try(C_Map.GetPlayerMapPosition, map, "player")
+			if type(pos) == "table" then
+				local x, y
+				if type(pos.GetXY) == "function" then
+					local ok, a, b = pcall(pos.GetXY, pos)
+					if ok then x, y = a, b end
+				end
+				x, y = x or pos.x, y or pos.y
+				if type(x) == "number" and type(y) == "number" and (x ~= 0 or y ~= 0) then
+					l.x, l.y = x, y
+					l.available = true
+				end
+			end
+		end
+	end
+	if l.available and ns.Eval and ns.Eval.DefaultReader then
+		local cont, wx, wy = ns.Eval.DefaultReader.playerWorldPos()
+		if cont and wx and wy then
+			l.world = { continent = cont, x = wx, y = wy }
+		end
+	end
+	return l
+end
+
+--- Quest log: { [questID] = { id, title, complete } }, count.
+function reader.questLog()
+	local log, n = {}, 0
+	if type(C_QuestLog) ~= "table" or type(C_QuestLog.GetNumQuestLogEntries) ~= "function" then
+		return log, 0, false
+	end
+	local entries = try(C_QuestLog.GetNumQuestLogEntries)
+	if type(entries) ~= "number" then
+		return log, 0, false
+	end
+	for i = 1, entries do
+		local info = try(C_QuestLog.GetInfo, i)
+		if type(info) == "table" and not info.isHeader and type(info.questID) == "number" then
+			local id = info.questID
+			local complete = try(C_QuestLog.IsComplete, id) == true or try(C_QuestLog.ReadyForTurnIn, id) == true
+			log[id] = { id = id, title = info.title, complete = complete }
+			n = n + 1
+		end
+	end
+	return log, n, true
+end
+
+function reader.isCompleted(id)
+	if type(C_QuestLog) ~= "table" then return nil end
+	local v = try(C_QuestLog.IsQuestFlaggedCompleted, id)
+	if v == nil then return nil end
+	return v == true
+end
+
+function reader.group()
+	local g = { size = 1, inGroup = false }
+	local n = try(GetNumGroupMembers)
+	if type(n) == "number" and n > 0 then g.size = n end
+	local ing = try(IsInGroup)
+	if ing ~= nil then g.inGroup = ing == true end
+	if g.size > 1 then g.inGroup = true end
+	return g
+end
+
+Ctx.DefaultReader = reader
+
+-- ---------------------------------------------------------------- build
+
+--- Builds a context. `r` (optional) overrides any reader function (tests).
+function Ctx.Build(r)
+	r = setmetatable(r or {}, { __index = reader })
+	local ctx = { time = type(GetTime) == "function" and GetTime() or 0 }
+	local c = r.character()
+	c.key = c.name and (c.name .. "-" .. (c.realm or "?")) or "unknown"
+	c.raceKey = raceKey(c.raceToken)
+	ctx.char = c
+	ctx.loc = r.location()
+	ctx.log, ctx.logCount, ctx.logAvailable = r.questLog()
+	ctx.group = r.group()
+	ctx.prefs = P.Char()
+
+	local completedCache = {}
+	ctx.isCompleted = function(id)
+		local v = completedCache[id]
+		if v == nil then
+			local got = r.isCompleted(id)
+			if got == nil then got = false end
+			completedCache[id] = got
+			v = got
+		end
+		return v
+	end
+
+	-- Memoised map-position -> world-yard conversion (static for a given map/x/y), via the M8.13 converter.
+	local worldCache = {}
+	ctx.worldOf = function(map, x, y)
+		if type(map) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then return nil end
+		local key = map .. ":" .. x .. ":" .. y
+		local w = worldCache[key]
+		if w == nil then
+			w = false
+			if r.worldOf then
+				local cont, wx, wy = r.worldOf(map, x, y)
+				if cont and wx and wy then w = { continent = cont, x = wx, y = wy } end
+			elseif ns.Eval and ns.Eval.DefaultReader then
+				local cont, wx, wy = ns.Eval.DefaultReader.destinationWorldPos({ ui_map_id = map, x = x, y = y })
+				if cont and wx and wy then w = { continent = cont, x = wx, y = wy } end
+			end
+			worldCache[key] = w
+		end
+		return w or nil
+	end
+
+	if ctx.loc.available and not ctx.loc.world then
+		ctx.loc.world = ctx.worldOf(ctx.loc.map, ctx.loc.x, ctx.loc.y)
+	end
+	return ctx
+end

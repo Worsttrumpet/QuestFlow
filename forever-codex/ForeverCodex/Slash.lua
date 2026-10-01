@@ -1,0 +1,172 @@
+-- ForeverCodex.Slash: /codex (alias /fcodex). Every command is a thin wrapper over Preferences / State / Diag,
+-- mirroring what the window's buttons do, so everything the window offers is scriptable and testable.
+
+local addonName, ns = ...
+local R = ns.Registry
+local P = ns.Prefs
+
+local say = ns.Say
+
+local function helpLines()
+	say("Forever Codex commands:")
+	say("  /codex                 open / close the window")
+	say("  /codex next            print the recommended next action")
+	say("  /codex diag            print diagnostics (for bug reports); /codex report = copyable box")
+	say("  /codex style [key]     list or set the route style (efficient, fast, questing_only, completionist)")
+	say("  /codex zone [key|auto] list or set your route zone (your choice, not tied to your race or location)")
+	say("  /codex skip | unskip   skip the current recommendation | bring all skipped items back")
+	say("  /codex add <id|name>   add a quest to your route;  /codex remove <id>")
+	say("  /codex sys <key> on|off   toggle a system;  /codex hardcore on|off")
+	say("  /codex where | reset | help")
+end
+
+local function printNext()
+	local plan = ns.State.Recompute()
+	local a = plan and plan.next
+	if not a then
+		say("Nothing to recommend right now.")
+		for _, w in ipairs(plan and plan.warnings or {}) do say("  " .. w) end
+		return
+	end
+	say("NEXT: " .. a.title)
+	for _, l in ipairs(a.lines) do say("  " .. l) end
+	if #a.reasons > 0 then say("  Why: " .. table.concat(a.reasons, "; ")) end
+	say("  " .. (ns.UI.ProvenanceText(a)))
+end
+
+local function listStyles()
+	local keys = {}
+	for _, s in ipairs(R.Strategies()) do
+		keys[#keys + 1] = s.key .. (s.active == false and " (planned)" or "")
+	end
+	say("Route style: " .. P.GetStyle() .. ". Available: " .. table.concat(keys, ", "))
+end
+
+local function listZones()
+	local keys = { "auto" }
+	for _, z in ipairs(R.Zones()) do keys[#keys + 1] = z.key end
+	say("Route zone: " .. P.GetRouteZone() .. ". Available: " .. table.concat(keys, ", "))
+end
+
+local function onOff(word)
+	if word == "on" or word == "1" or word == "true" then return true end
+	if word == "off" or word == "0" or word == "false" then return false end
+	return nil
+end
+
+local function handle(msg)
+	msg = tostring(msg or "")
+	local raw = msg:gsub("^%s+", ""):gsub("%s+$", "")
+	local cmd, rest = raw:match("^(%S*)%s*(.-)$")
+	cmd = (cmd or ""):lower()
+	local restLower = (rest or ""):lower()
+
+	if cmd == "" then
+		ns.UI.Toggle()
+	elseif cmd == "help" or cmd == "?" then
+		helpLines()
+	elseif cmd == "diag" then
+		ns.Diag.Print()
+	elseif cmd == "report" then
+		ns.Diag.Report()
+	elseif cmd == "next" then
+		printNext()
+	elseif cmd == "style" then
+		if restLower == "" then
+			listStyles()
+		else
+			local ok, why = P.SetStyle(restLower)
+			say(ok and ("route style set to " .. restLower .. ".") or ("could not set style: " .. tostring(why)))
+			ns.State.Recompute()
+		end
+	elseif cmd == "zone" then
+		if restLower == "" then
+			listZones()
+		else
+			local ok, why = P.SetRouteZone(restLower)
+			say(ok and ("route zone set to " .. restLower .. ".") or ("could not set zone: " .. tostring(why)))
+			ns.State.Recompute()
+		end
+	elseif cmd == "skip" then
+		local plan = ns.State.plan or ns.State.Recompute()
+		local a = plan and plan.next
+		if a and P.Skip(a.skipKey) then
+			say("skipped: " .. a.title)
+			ns.State.Recompute()
+		else
+			say("nothing to skip.")
+		end
+	elseif cmd == "unskip" then
+		P.ClearSkips()
+		say("skipped items restored.")
+		ns.State.Recompute()
+	elseif cmd == "add" then
+		local id = tonumber(restLower)
+		if not id and restLower ~= "" then
+			local found = R.Search(restLower, 1)[1]
+			id = found and found.id
+		end
+		if id then
+			P.Add(id)
+			local q = R.Quest(id)
+			say("added quest " .. id .. (q and (" (" .. tostring(q.name) .. ")") or " (not in Codex data)") .. " to your route.")
+			ns.State.Recompute()
+		else
+			say("usage: /codex add <quest id or part of its name>")
+		end
+	elseif cmd == "remove" then
+		local id = tonumber(restLower)
+		if id then
+			P.RemoveAdded(id)
+			say("removed quest " .. id .. " from your added list.")
+			ns.State.Recompute()
+		else
+			say("usage: /codex remove <quest id>")
+		end
+	elseif cmd == "sys" or cmd == "system" then
+		local key, word = restLower:match("^(%S+)%s*(%S*)$")
+		local on = onOff(word)
+		if not key or on == nil then
+			say("usage: /codex sys <key> on|off")
+		else
+			local ok, why = P.SetSystem(key, on)
+			say(ok and (key .. (on and " on." or " off.")) or ("could not change " .. tostring(key) .. ": " .. tostring(why)))
+			ns.State.Recompute()
+		end
+	elseif cmd == "hardcore" then
+		local on = onOff(restLower)
+		if on == nil then
+			say("Hardcore is " .. (P.IsHardcore() and "on" or "off") .. ". Usage: /codex hardcore on|off")
+		else
+			P.SetHardcore(on)
+			say("Hardcore " .. (on and "on: respawn skips will never be recommended." or "off."))
+			ns.State.Recompute()
+		end
+	elseif cmd == "where" then
+		local ctx = ns.State.Recompute() and ns.State.ctx
+		if ctx then
+			local c, l = ctx.char, ctx.loc
+			say(string.format("%s: level %s %s %s (%s). Race origin: %s. Route zone (your choice): %s. Now in: %s%s.", tostring(c.name),
+				tostring(c.level), tostring(c.race), tostring(c.class), tostring(c.faction), tostring(c.race), P.GetRouteZone(),
+				tostring(l.zone), l.subzone and (" / " .. l.subzone) or ""))
+		end
+	elseif cmd == "reset" then
+		P.ResetOverrides()
+		say("skips and added quests cleared.")
+		ns.State.Recompute()
+	else
+		say("unknown command '" .. cmd .. "'. Try /codex help.")
+	end
+end
+
+ns.Slash = { Handle = handle }
+
+SLASH_FOREVERCODEX1 = "/codex"
+SLASH_FOREVERCODEX2 = "/fcodex"
+SlashCmdList["FOREVERCODEX"] = function(msg)
+	local ok, err = pcall(handle, msg)
+	if not ok then
+		ns.RecordError("slash", err)
+		say("something went wrong (" .. tostring(err) .. "). /codex diag will include this.")
+	end
+end

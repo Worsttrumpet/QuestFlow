@@ -1,0 +1,13 @@
+Forever Codex data manifest (generated; deterministic)
+generator: codex-data-1
+att source: https://github.com/ATTWoWAddon/AllTheThings.git @ 8e25511677df4ea5c3d0322009eafc18f203ffd3 (MIT)
+att quests: 1041 (with coordinates: 1017, with giver npc: 790, with required level: 888, repeatable/yearly: 44)
+att flight paths: 14
+att zones: 18
+observed quests: 96 (of which also in ATT: 19)
+
+56f6c3390997fb73dc1f05b80a43d61fc82069bd7be85d7517e1ca5f0a2b617e  Pack_ATT_EasternKingdoms.lua
+41b6788fe473c2270ffad09b81a2a40ef5075d485bbc5ba77c5682271b156311  Pack_ATT_FlightPaths.lua
+4fabd4217fc8d41c1fd48448d34dab86d2706aacc20e536f2083aff4c3a15ca2  Pack_ATT_Kalimdor.lua
+8ab93a86b2b587154abc50027b5a9a587bb79c8798f523d5483bfa259b605e82  Pack_ATT_Other.lua
+4597b2f709002853184de96063ebae4a2f6706fae30c2af62de5351c0f42eb81  Pack_Observed.lua

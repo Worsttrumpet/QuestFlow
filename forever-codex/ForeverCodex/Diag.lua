@@ -1,0 +1,188 @@
+-- ForeverCodex.Diag: everything a tester (or a developer reading a screenshot) needs to understand a report.
+--
+--   /codex diag     prints the snapshot to chat and stores it (last 5) in ForeverCodexDB.diag
+--   /codex report   shows the same text in a copyable box (best effort; falls back to chat)
+--
+-- The snapshot carries: addon/client versions, which APIs exist on this client, the character, location,
+-- the player's choices, which data packs are loaded (with provenance), the current plan and WHY, filter counts,
+-- and the last caught errors. It contains no account data beyond the character name the game already shows.
+
+local addonName, ns = ...
+local C = ForeverCodex
+local R = ns.Registry
+local P = ns.Prefs
+
+local D = {}
+ns.Diag = D
+
+local API_CHECKS = {
+	{ "UnitLevel" }, { "UnitName" }, { "UnitClass" }, { "UnitRace" }, { "UnitFactionGroup" }, { "GetRealmName" },
+	{ "GetZoneText" }, { "GetSubZoneText" }, { "GetNumGroupMembers" }, { "IsInGroup" }, { "GetPlayerFacing" },
+	{ "GetBindLocation" }, { "CreateVector2D" },
+	{ "C_Map", "GetBestMapForUnit" }, { "C_Map", "GetPlayerMapPosition" }, { "C_Map", "GetWorldPosFromMapPos" },
+	{ "C_Map", "CanSetUserWaypointOnMap" }, { "C_Map", "SetUserWaypoint" }, { "C_SuperTrack", "SetSuperTrackedUserWaypoint" },
+	{ "C_QuestLog", "GetNumQuestLogEntries" }, { "C_QuestLog", "GetInfo" }, { "C_QuestLog", "IsComplete" },
+	{ "C_QuestLog", "IsQuestFlaggedCompleted" }, { "C_TaxiMap", "GetAllTaxiNodes" },
+}
+
+local function present(path)
+	local v = _G[path[1]]
+	if #path == 2 then
+		v = type(v) == "table" and v[path[2]] or nil
+	end
+	return type(v) == "function"
+end
+
+function D.Apis()
+	local out = {}
+	for _, p in ipairs(API_CHECKS) do
+		out[#out + 1] = { name = table.concat(p, "."), present = present(p) }
+	end
+	return out
+end
+
+local function summarize(a)
+	if not a then return nil end
+	return { id = a.id, type = a.type, kind = a.kind, title = a.title, src = a.src, verified = a.verified == true,
+		score = a._score and math.floor(a._score * 10 + 0.5) / 10 or nil, dist = a._dist and math.floor(a._dist + 0.5) or nil,
+		map = a.target and a.target.map or nil, x = a.target and a.target.x or nil, y = a.target and a.target.y or nil,
+		reasons = a.reasons }
+end
+
+--- A plain-table snapshot (SavedVariables-safe).
+function D.Snapshot()
+	local ctx, plan = ns.State and ns.State.ctx, ns.State and ns.State.plan
+	local okB, ver, build, date, toc = pcall(GetBuildInfo)
+	local snap = {
+		addon = { version = C.VERSION, expectedInterface = C.EXPECTED_INTERFACE },
+		client = { version = okB and ver or nil, build = okB and build or nil, interface = okB and toc or nil },
+		apis = D.Apis(), data = R.Stats(), choices = {}, errors = {}, time = type(GetTime) == "function" and GetTime() or 0,
+		computeCount = ns.State and ns.State.computeCount or 0,
+	}
+	local c = P.Char()
+	snap.choices = { charKey = P.CharKey(), style = c.style, routeZone = c.routeZone, hardcore = c.hardcore == true,
+		skipped = #P.SkippedKeys(), added = #P.AddedList(), systems = {} }
+	for _, s in ipairs(R.Systems()) do
+		snap.choices.systems[#snap.choices.systems + 1] = { key = s.key, on = c.systems[s.key] == true, planned = s.planned }
+	end
+	if ctx then
+		snap.character = { name = ctx.char.name, realm = ctx.char.realm, class = ctx.char.classToken, race = ctx.char.raceToken,
+			raceKey = ctx.char.raceKey, faction = ctx.char.faction, level = ctx.char.level, missing = ctx.char.missing }
+		snap.location = { map = ctx.loc.map, x = ctx.loc.x, y = ctx.loc.y, zone = ctx.loc.zone, subzone = ctx.loc.subzone,
+			available = ctx.loc.available, world = ctx.loc.world ~= nil }
+		snap.group = { size = ctx.group.size, inGroup = ctx.group.inGroup }
+		snap.questLog = { count = ctx.logCount, available = ctx.logAvailable }
+	end
+	if plan then
+		snap.plan = { strategy = plan.strategy, routeZone = plan.routeZone, routeMap = plan.routeMap, candidates = plan.stats.candidates,
+			filtered = plan.stats.filtered, byType = plan.stats.byType, warnings = plan.warnings, next = summarize(plan.next),
+			sequence = {}, nearby = {}, inProgress = #plan.inProgress }
+		for i, a in ipairs(plan.sequence) do
+			if i <= 6 then snap.plan.sequence[#snap.plan.sequence + 1] = summarize(a) end
+		end
+		for _, a in ipairs(plan.nearby) do snap.plan.nearby[#snap.plan.nearby + 1] = summarize(a) end
+	end
+	for _, e in ipairs(ns.errors) do snap.errors[#snap.errors + 1] = e end
+	return snap
+end
+
+local function sortedFiltered(f)
+	local keys = {}
+	for k in pairs(f or {}) do keys[#keys + 1] = k end
+	table.sort(keys)
+	local out = {}
+	for _, k in ipairs(keys) do out[#out + 1] = k .. "=" .. f[k] end
+	return table.concat(out, " ")
+end
+
+--- Human-readable lines for a snapshot.
+function D.Lines(s)
+	local L = {}
+	L[#L + 1] = string.format("Forever Codex %s (dev build) | client %s build %s interface %s (addon expects %s)", s.addon.version,
+		tostring(s.client.version), tostring(s.client.build), tostring(s.client.interface), tostring(s.addon.expectedInterface))
+	if s.character then
+		local c = s.character
+		L[#L + 1] = string.format("Character: %s level %s %s %s (%s) | race key %s | group %d%s", tostring(c.name), tostring(c.level),
+			tostring(c.race), tostring(c.class), tostring(c.faction), tostring(c.raceKey), s.group.size, s.group.inGroup and " (in group)" or "")
+		if #c.missing > 0 then L[#L + 1] = "  APIs missing for character info: " .. table.concat(c.missing, ", ") end
+	else
+		L[#L + 1] = "Character: not read yet"
+	end
+	if s.location then
+		local l = s.location
+		L[#L + 1] = string.format("Location: %s / %s | map %s at %s, %s | position available: %s | world coords: %s", tostring(l.zone),
+			tostring(l.subzone), tostring(l.map), l.x and string.format("%.1f", l.x * 100) or "?", l.y and string.format("%.1f", l.y * 100) or "?",
+			tostring(l.available), tostring(l.world))
+	end
+	local ch = s.choices
+	local on = {}
+	for _, sys in ipairs(ch.systems) do
+		if sys.on then on[#on + 1] = sys.key end
+	end
+	L[#L + 1] = string.format("Choices: style=%s routeZone=%s hardcore=%s skipped=%d added=%d systems on: %s", tostring(ch.style), tostring(ch.routeZone),
+		tostring(ch.hardcore), ch.skipped, ch.added, #on > 0 and table.concat(on, ",") or "none")
+	local d = s.data
+	L[#L + 1] = string.format("Data: %d quests (%d in both ATT and observed), %d flight nodes, %d zones", d.quests, d.observedAndAtt, d.flightNodes, d.zones)
+	for _, p in ipairs(d.packs) do
+		L[#L + 1] = string.format("  pack %s: src=%s verified=%s, %d records (%d with location)", p.name, tostring(p.src), tostring(p.verified), p.count, p.withLocation)
+	end
+	if s.plan then
+		local p = s.plan
+		L[#L + 1] = string.format("Plan: strategy=%s candidates=%d in-progress(no location)=%d | filtered: %s", p.strategy, p.candidates, p.inProgress, sortedFiltered(p.filtered))
+		if p.next then
+			L[#L + 1] = string.format("  NEXT: [%s/%s] %s | src=%s verified=%s score=%s dist=%s", tostring(p.next.type), tostring(p.next.kind), tostring(p.next.title),
+				tostring(p.next.src), tostring(p.next.verified), tostring(p.next.score), tostring(p.next.dist))
+			if p.next.reasons then L[#L + 1] = "  why: " .. table.concat(p.next.reasons, "; ") end
+		else
+			L[#L + 1] = "  NEXT: nothing to recommend"
+		end
+		for i, a in ipairs(p.sequence) do
+			if i > 1 then L[#L + 1] = string.format("  then %d: [%s] %s", i, tostring(a.kind), tostring(a.title)) end
+		end
+		for _, w in ipairs(p.warnings) do L[#L + 1] = "  warning: " .. w end
+	else
+		L[#L + 1] = "Plan: not computed yet"
+	end
+	local miss = {}
+	for _, a in ipairs(s.apis) do
+		if not a.present then miss[#miss + 1] = a.name end
+	end
+	L[#L + 1] = "APIs absent on this client: " .. (#miss > 0 and table.concat(miss, ", ") or "none of the ones Codex checks")
+	L[#L + 1] = string.format("Recomputes: %d | caught errors: %d", s.computeCount, #s.errors)
+	for _, e in ipairs(s.errors) do L[#L + 1] = "  error: " .. e end
+	return L
+end
+
+local MAX_STORED = 5
+
+--- Stores a snapshot in ForeverCodexDB.diag (kept to the last 5).
+function D.Store(snap)
+	local list = P.Root().diag
+	list[#list + 1] = snap
+	while #list > MAX_STORED do table.remove(list, 1) end
+end
+
+--- Takes a fresh snapshot, prints it, stores it. Returns the snapshot and its lines.
+function D.Print()
+	if ns.State then ns.State.Recompute() end
+	local snap = D.Snapshot()
+	local lines = D.Lines(snap)
+	for _, l in ipairs(lines) do ns.Say(l) end
+	D.Store(snap)
+	return snap, lines
+end
+
+--- Best-effort copyable report box.
+function D.Report()
+	if ns.State then ns.State.Recompute() end
+	local snap = D.Snapshot()
+	local lines = D.Lines(snap)
+	D.Store(snap)
+	local text = table.concat(lines, "\n")
+	if ns.UI and ns.UI.ShowReport then
+		local ok = pcall(ns.UI.ShowReport, text)
+		if ok then return snap, lines end
+	end
+	for _, l in ipairs(lines) do ns.Say(l) end
+	return snap, lines
+end
