@@ -7,6 +7,7 @@
 local addonName, ns = ...
 local C = ForeverCodex
 local R = ns.Registry
+local K = ns.Contract
 
 C.RegisterActionType("FLIGHT", { label = "Flight path" })
 
@@ -16,7 +17,7 @@ local function generate(ctx, env)
 	for _, n in ipairs(R.FlightNodes()) do
 		if not (n.faction and fac and n.faction ~= fac) then
 			local label = (n.name or ("flight node " .. n.id))
-			out[#out + 1] = R.NewAction({
+			local a = R.NewAction({
 				id = "FP:" .. n.id, type = "FLIGHT", kind = "DISCOVER", skipKey = "FP:" .. n.id, hereOnly = true,
 				title = "Flight path: " .. label,
 				lines = { "Flight master" .. (n.npc and (" (NPC #" .. n.npc .. ")") or "") .. " - " .. R.MapLabel(n.map),
@@ -25,6 +26,16 @@ local function generate(ctx, env)
 				target = { map = n.map, x = n.x, y = n.y, label = label, src = n.src, verified = n.verified },
 				src = n.src, verified = n.verified,
 			})
+			-- Contract: discovery cannot be detected (taxi APIs unproven on Forever), so the state is UNKNOWN, never
+			-- "available"; there is no completion signal to watch. The location keeps the node's own provenance.
+			local where = K.Where("known", { { map = n.map, x = n.x, y = n.y } }, "exact")
+			K.Attach(a, {
+				ref = { kind = "flightNode", id = n.id }, state = "UNKNOWN", stateWhy = "DISCOVERY_UNDETECTABLE",
+				targets = { K.Target({ role = "SERVICE", service = "FLIGHT", entity = { kind = "npc", id = n.npc, name = nil },
+					where = where, prov = { src = n.src or "unknown", verified = (n.src == "observed") and n.verified == true } }) },
+				requirements = {}, optional = true, prov = { state = "unknown" },
+			})
+			out[#out + 1] = a
 		end
 	end
 	return out

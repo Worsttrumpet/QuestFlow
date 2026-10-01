@@ -128,6 +128,10 @@ end
 
 function P.Unskip(key) P.Char().skipped[key] = nil end
 function P.IsSkipped(key) return P.Char().skipped[key] == true end
+
+--- The player's veto on a quest across BOTH legacy keys ("Q:<id>" and "QT:<id>"), as { logical, keys }. Read-only: it
+-- changes nothing, and the engine/provider still honour each key separately (migration to one key is a later phase).
+function P.QuestSkipState(questId) return ns.Contract.SkipState(P.Char().skipped, questId) end
 function P.ClearSkips() P.Char().skipped = {} end
 
 function P.SkippedKeys()

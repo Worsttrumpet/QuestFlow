@@ -182,7 +182,13 @@ local function bump(stats, key)
 	stats.filtered[key] = (stats.filtered[key] or 0) + 1
 end
 
-function E.Compute(ctx)
+--- STAGE 1 (reusable, no scoring): environment + candidate collection + global filters.
+-- Returns { env, candidates, inProgress, hints }:
+--   candidates  actions that can be placed on the map (a target) and go on to scoring
+--   inProgress  OBJECTIVE actions with no location: reminders, never routed
+--   hints       "here only" actions (flight hints): never part of the route, only of the nearby list
+-- Order, counts, filters and warnings are exactly what Compute has always produced; Compute now calls this.
+function E.Candidates(ctx)
 	local prefs = ctx.prefs
 	local strategy = R.Strategy(prefs.style)
 	if not strategy or strategy.active == false then strategy = R.Strategy("efficient") end
@@ -227,8 +233,11 @@ function E.Compute(ctx)
 		end
 	end
 	env.stats.candidates = #cands
+	return { env = env, candidates = cands, inProgress = inProgress, hints = hints }
+end
 
-	-- 3. static scores (with hub detection through a coarse grid)
+--- STAGE 2 (existing urgency policy, unchanged): position-independent scores, with hub detection through a coarse grid.
+local function applyStaticScores(cands, ctx, env)
 	local grid = {}
 	local function cell(a) return a.target.map .. ":" .. math.floor(a.target.x * CLUSTER_CELL) .. ":" .. math.floor(a.target.y * CLUSTER_CELL) end
 	for _, a in ipairs(cands) do
@@ -249,8 +258,10 @@ function E.Compute(ctx)
 		return n
 	end
 	for _, a in ipairs(cands) do a._static = staticScore(a, ctx, env.w, clusterCount) end
+end
 
-	-- 4. greedy chain from the character's position
+--- STAGE 3 (existing greedy chain, unchanged): walks the map from the character's position, inserting TRAVEL steps.
+local function buildChain(cands, ctx, env)
 	local pool = {}
 	for i, a in ipairs(cands) do pool[i] = a end
 	local seq, pos = {}, env.player
@@ -284,8 +295,13 @@ function E.Compute(ctx)
 			pos = { map = chosen.target.map, x = chosen.target.x, y = chosen.target.y, world = chosen.target.world }
 		end
 	end
+	return seq
+end
 
-	-- 5. "While you're here": anything close to where the character actually is, from the SAME provider output
+--- STAGE 4 (existing "while you're here" list, unchanged): anything close to where the character actually is,
+-- from the SAME provider output.
+local function buildNearby(cands, hints, seq, ctx, env)
+	local prefs = ctx.prefs
 	local nearby = {}
 	if env.player then
 		local radius = prefs.hereRadius or 200
@@ -308,6 +324,18 @@ function E.Compute(ctx)
 		end)
 		while #nearby > NEARBY_LIMIT do nearby[#nearby] = nil end
 	end
+	return nearby
+end
+
+--- Compute = stage 1 + the existing policy stages 2-4. This is the compatibility path the UI still uses.
+function E.Compute(ctx)
+	local prefs = ctx.prefs
+	local c = E.Candidates(ctx)
+	local env, cands, inProgress, hints = c.env, c.candidates, c.inProgress, c.hints
+	local strategy = env.strategy
+	applyStaticScores(cands, ctx, env)
+	local seq = buildChain(cands, ctx, env)
+	local nearby = buildNearby(cands, hints, seq, ctx, env)
 
 	table.sort(inProgress, function(x, y) return x.id < y.id end)
 

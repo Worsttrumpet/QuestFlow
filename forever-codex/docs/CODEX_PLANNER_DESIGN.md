@@ -65,8 +65,10 @@ Read directly from the code (`forever-codex/ForeverCodex/`):
   `Q:<id>` / `QT:<id>`, completion via `ctx.isCompleted(id)` (`C_QuestLog.IsQuestFlaggedCompleted`). Name is used only
   for display and for the Add-box search. **Good; keep.** One gap: skip keys differ between accept (`Q:`) and
   in-progress (`QT:`) states, so a quest has two independent skip flags.
-- **Quest log reader** (`Context.lua`) records only `{id, title, complete}` per entry. **No per-objective progress**
-  (no counts, no per-objective done flags). **[API?]** (`C_QuestLog` objective APIs not probed on Forever.)
+- **Quest log reader** (`Context.lua`) recorded only `{id, title, complete}` per entry in the original 0.1 build.
+  *Correction (review of Section 27):* per-objective progress is **[PROVEN]**: `C_QuestLog.GetQuestObjectives`
+  returns `text, type, finished, numFulfilled, numRequired`, current at `UNIT_QUEST_LOG_CHANGED("player")` (M8.9,
+  15/15 steps). Phase 1 now reads it into `ctx.log[id].objectives`.
 - **Context has no** XP/XP-max, inventory, money, dead/ghost, bind location, spells/trainers, discovered flight nodes.
   It reads `GetNumGroupMembers`/`IsInGroup` only. **[EXISTS-INSUFFICIENT]**
 - **Flight provider**: ATT flight nodes as `hereOnly` hints; cannot know if discovered. **Planned provider**: registers
@@ -82,7 +84,10 @@ Read directly from the code (`forever-codex/ForeverCodex/`):
   (section 24).
 - **Navigation**: `MapPin.Place` is invoked only from the Window's Show on Map button; `MapPin.Clear` (which calls
   `C_Map.ClearUserWaypoint` if present) is never called. The stale waypoint is therefore a lifecycle gap, not a
-  placement bug. `ClearUserWaypoint` behaviour on Forever is not recorded as proven. **[API?]**
+  placement bug. *Correction:* `C_Map.ClearUserWaypoint` is **[PROVEN]** (M8.6-B confirmed list; the operator's clear in
+  M8.10 fired `USER_WAYPOINT_UPDATED` and removed the pin), as are `C_Map.HasUserWaypoint` / `C_Map.GetUserWaypoint`
+  (exact map + coordinates on every read, M8.10). Caveat from M8.10: quests reclaim super-tracking from the user
+  waypoint and one pin vanished without a command, so Codex cannot assume its pin stays.
 - **Telemetry** is independent and records session-timed events (`GetTime` resets each session). **[PROVEN design]**
 
 Differences from the audit: the audit said "Engine computes value per action". More precisely it computes *urgency by
@@ -178,7 +183,7 @@ Target = {
      kind   = "exact" | "area" | "player_position",  -- how the coordinate was obtained
   },
   order    = nil | integer,                          -- only when the game forces an order (e.g. cave inner room)
-  progress = nil | { have = n, need = m },           -- OBJECTIVE targets, from the quest log  [API?]
+  -- (objective progress is NOT a Target field: it is quest-log state, `objectiveState`, on the action)
   done     = true | false | nil,                     -- nil = unknown
   prov     = { src = "att"|"observed"|..., verified = bool, ... },   -- per target, never merged
 }
@@ -408,11 +413,18 @@ State enum (derived each recompute from client state, authoritative over anythin
 | `SKIPPED` | player skip flag on that id | no (unless pinned? see open questions) |
 | `UNKNOWN` | state unavailable (no quest log API, no data) | no (diagnostic) |
 
-"Objective progress": per-objective `have/need/done` is **not available today**; ready-to-turn-in is derived from
-`IsComplete`/`ReadyForTurnIn` **[PROVEN M8.9]**. Per-objective data **[API?]**; until then an ACTIVE action carries
-`progress = nil` (unknown), and "partially complete" cannot be shown. Completed pre-install chain steps are handled
-because completion is read from the client (`IsQuestFlaggedCompleted`, used by Codex 0.1; its behaviour on Forever is
-exercised by the playtest but has no formal probe on record: verify with `/codex diag`).
+"Objective progress": per-objective `have/need/finished` is **[PROVEN M8.9]** via `C_QuestLog.GetQuestObjectives` and
+lives in the action's `objectiveState` (quest-log state), never on a Target. Ready-to-turn-in comes from
+`IsComplete`/`ReadyForTurnIn` **[PROVEN M8.9]**. When the objective list cannot be read, `objectiveState.known = false`
+(unknown), not "complete". Known quirks (M8.9): objective names are blank for ~0.2 s after accept (counts are right);
+a quest reads un-done for a moment at turn-in; client objective order is stable but its mapping to ATT/route objective
+indexes is unverified, so ATT objective coordinates are **not** tied to objective indexes.
+
+**Caveat (new): `C_QuestLog.IsQuestFlaggedCompleted` is still UNVERIFIED on Forever** (M8.11 lists it as unverified at
+startup; Codex 0.1 uses it, and the playtest exercised it only implicitly). It is how `COMPLETED` and pre-install chain
+steps are known, so it must be verified (tiny `/run` check on a quest the character really turned in, before and after a
+relog) before the Planner treats "completed quests are never actionable" as a hard dependency. Until then the existing
+behaviour is preserved and `ctx.isCompleted` cannot express "unknown" (it coerces to false).
 
 Rule: completed status is checked by **ID** at the provider *and* re-checked by the planner when projecting successors,
 so a same-named quest can never revive an actionable item. A projected successor is identified by its own quest ID and
@@ -538,11 +550,13 @@ onCompletion(actionId) -> same as plan change (the planner recomputes; navigatio
   quest logic of its own.
 - Backend 1 (first implementation): the built-in user waypoint: `UiMapPoint.CreateFromCoordinates` +
   `C_Map.SetUserWaypoint` + `C_SuperTrack.SetSuperTrackedUserWaypoint` **[PROVEN]** (map 1413 confirmed; other maps not
-  recorded as proven). `C_Map.ClearUserWaypoint` is referenced by `MapPin.Clear` **[API?]**: confirm it clears the pin
-  *and* super-tracking; if not, the clear path needs its own probe.
+  recorded as proven). `C_Map.ClearUserWaypoint` is **[PROVEN]** (M8.6-B, M8.10); whether it also ends super-tracking
+  was not separately recorded.
 - Backend 2 (later): Codex-owned arrow (M8.14 probe v0.2, results outstanding) **[DEFERRED]**.
 - Player-set waypoints: the controller should only clear a waypoint it placed (`owned`). Detecting that the player
-  replaced it requires reading the current user waypoint **[API?]**; open question (section 27).
+  replaced it can be done by reading the waypoint back: `HasUserWaypoint` / `GetUserWaypoint` are **[PROVEN]** (M8.10,
+  exact map + coordinates), so ownership = "the readback equals the coordinates Codex placed". There is no owner tag;
+  whether a pin survives `/reload` or relog is unproven.
 - The Show on Map button is removed in the player UI once this exists; dev access stays via slash/diag.
 - Multi-target actions: `nav` is the *current leg* (nearest unfinished target, or the forced `order`), so the waypoint
   advances inside one action without changing `actionId` (nav changes by `targetIndex`).
@@ -679,7 +693,7 @@ Harness: the existing Lua 5.1 stub-client harness (`tests/run_codex_tests.lua`),
 coordinates and levels (synthetic, labelled as fixtures; no real quest data invented), plus mutation checks (as used
 for the probe) on the planner's key rules.
 
-**Quest state**: available; active; objective partially complete (only when per-objective API data is supplied by the
+**Quest state**: available; active; objective partially complete (from the proven `GetQuestObjectives` shape, supplied by the
 stub); objective complete -> READY; ready-to-turn-in; completed (never actionable); **duplicate names** (two quests,
 same name, different ids, one completed -> only the other is actionable); unknown state (no log API -> no actionable
 claims, a warning).
@@ -744,9 +758,10 @@ validation is explicitly **deferred**, not claimed.
 3. **Skip semantics**: unify `Q:`/`QT:` skip keys to one per quest ID; should a pinned (Added) quest override a skip?
 4. **Unknown-location quests in the log** (e.g. The Adventurer): `inLog` reminders only, or may they be NOW when
    nothing located is worth doing?
-5. **Waypoint ownership**: can Codex read the current user waypoint to avoid clearing a player-set one? **[API?]**
-6. **Per-objective progress API** on Forever (counts, per-objective completion) **[API?]** gates "partially complete"
-   and multi-objective legs.
+5. **Waypoint ownership**: the readback APIs are **[PROVEN]** (M8.10); open: does a pin survive `/reload` / relog, and
+   who removed a vanished pin (quest tracking can).
+6. **Per-objective progress API**: **resolved**, `C_QuestLog.GetQuestObjectives` is **[PROVEN]** (M8.9). Open: mapping
+   ATT objective coordinates to objective indexes (no evidence).
 7. **Turn-in NPC**: ATT has none; until observed, `TURN_IN` target = giver (labelled assumed). Do we surface "assumed"
    as neutral "approximate" in the UI?
 8. **Where does ALSO DO's candidate shortlist live for diagnostics** and for the Quest Map highlight set?
@@ -764,7 +779,8 @@ validation is explicitly **deferred**, not claimed.
 3. **Planner v1** with stops, walk transit, rate-based sequence evaluation, stickiness, NOW/ALSO DO/THEN, behind a
    flag + legacy adapter, with the scenario tests (A-C first; D with the reverse prereq index).
 4. **Presenter + ViewModel** and the reason-code table; then the compact UI.
-5. Probes (separate small addons): per-objective API, `ClearUserWaypoint`, XP/level/combat events, marker APIs,
+5. Probes (separate small addons): `IsQuestFlaggedCompleted` at startup, waypoint survival across reload/relog,
+   XP/level/combat events, marker APIs,
    trainer/spell/taxi events, `GetBindLocation`.
 6. Knowledge/Context extensions per probe results; level-breakpoint and service actions.
 7. Markers, Quest Map, Codex arrow, party, sharing: each later, each a Plan consumer.

@@ -7,6 +7,7 @@
 
 Core.lua
 Registry.lua
+Contract.lua
 ProgressionEval.lua
 Preferences.lua
 Strategies.lua

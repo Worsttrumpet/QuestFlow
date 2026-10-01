@@ -17,6 +17,7 @@ local addonName, ns = ...
 local C = ForeverCodex
 local R = ns.Registry
 local P = ns.Prefs
+local K = ns.Contract
 
 local Q = {}
 ns.QuestProvider = Q
@@ -115,7 +116,54 @@ local function prereqLine(view)
 	return "Follows: " .. table.concat(names, " / ")
 end
 
-local function acceptAction(view, pinned)
+
+-- ---------------------------------------------------------------- structured contract (dual-written, Phase 1)
+-- The legacy fields above are what the Engine and the UI use and are unchanged. These add the structured
+-- Action/Target contract (see Contract.lua) next to them. Nothing here changes a decision.
+
+local REACHES = { ACCEPT = "ACCEPTED", OBJECTIVE = "OBJECTIVES", TURN_IN = "TURNED_IN" }
+
+local function giverEntity(view)
+	if view and (view.giverNpc or view.giverName) then
+		return { kind = "npc", id = view.giverNpc, name = view.giverName, prov = view.prov and (view.prov.giverNpc or view.prov.giverName) or nil }
+	end
+	return { kind = "unknown" }
+end
+
+--- The targets of one quest action. `t` is the LEGACY target the action already carries (or nil).
+local function questTargets(a, view, t)
+	if a.kind == "ACCEPT" then
+		return { K.FromLegacyTarget(t, "GIVER", { entity = giverEntity(view) }) }
+	elseif a.kind == "TURN_IN" then
+		-- ATT has no turn-in NPC: the turn-in is ASSUMED to be at the giver, so it is at best approximate
+		return { K.FromLegacyTarget(t, "TURN_IN", { entity = giverEntity(view), assumed = true, status = t and "approx" or nil, kind = "assumed_giver" }) }
+	end
+	-- OBJECTIVE: every known objective coordinate, as ONE area target. ATT's coordinate list is not indexed by
+	-- objective (the mapping has no evidence), so the points are not alternatives and are not tied to an objective.
+	local pts = {}
+	for _, oc in ipairs(view and view.objCoords or {}) do
+		if type(oc.map) == "number" and type(oc.x) == "number" and type(oc.y) == "number" then pts[#pts + 1] = { map = oc.map, x = oc.x, y = oc.y } end
+	end
+	local src = view and view.prov and view.prov.objCoords or "att"
+	local target = K.Target({ role = "OBJECTIVE", entity = { kind = "area" }, where = K.Where("approx", pts, "area"), prov = K.Prov(src) })
+	if target.where.status ~= "unknown" then target.where.indexed = false end
+	if target.where.status == "unknown" then target.entity = { kind = "unknown" }; target.prov = { src = "unknown", verified = false } end
+	return { target }
+end
+
+local function attach(a, id, view, ctx, t)
+	local st = K.QuestState(id, view, ctx)
+	local entry = ctx.log[id]
+	return K.Attach(a, {
+		ref = { kind = "quest", id = id }, state = st.state, stateWhy = st.why, skip = P.QuestSkipState(id),
+		targets = questTargets(a, view, t), requirements = st.requirements,
+		completion = { watch = "quest", id = id, reaches = REACHES[a.kind] },
+		objectiveState = entry and K.ObjectiveState(entry.objectives) or nil,
+		optional = false, prov = { name = view and view.prov and view.prov.name or nil, state = "client" },
+	})
+end
+
+local function acceptAction(view, pinned, ctx)
 	local label = placeLabel(view)
 	local lines = {}
 	lines[1] = "Talk to " .. label
@@ -124,16 +172,16 @@ local function acceptAction(view, pinned)
 	local pl = prereqLine(view)
 	if pl then lines[#lines + 1] = pl end
 	local t = target(view, label)
-	return R.NewAction({
+	return attach(R.NewAction({
 		id = "Q:" .. view.id .. ":ACCEPT", type = "QUEST", kind = "ACCEPT", quest = view.id, skipKey = "Q:" .. view.id,
 		title = "Accept: " .. (view.name or ("quest " .. view.id)), reqLevel = view.req, level = view.level,
 		breadcrumb = view.breadcrumb, target = t, pinned = pinned or false, lines = lines,
 		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name,
 		giver = view.giverName,
-	})
+	}), view.id, view, ctx, t)
 end
 
-local function progressAction(view, entry, pinned)
+local function progressAction(view, entry, pinned, ctx)
 	local complete = entry.complete
 	local name = view.name or entry.title or ("quest " .. entry.id)
 	local label = placeLabel(view)
@@ -153,32 +201,32 @@ local function progressAction(view, entry, pinned)
 			lines[#lines + 1] = "Objective area: " .. coordText(oc) .. " (ATT, unverified)"
 		end
 	end
-	return R.NewAction({
+	return attach(R.NewAction({
 		id = "Q:" .. view.id .. (complete and ":TURN_IN" or ":OBJECTIVE"), type = "QUEST", kind = complete and "TURN_IN" or "OBJECTIVE",
 		quest = view.id, skipKey = "QT:" .. view.id, title = (complete and "Turn in: " or "Continue: ") .. name,
 		level = view.level, reqLevel = view.req, target = t, pinned = pinned or false, lines = lines,
 		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name, giver = view.giverName,
 		noLocation = t == nil,
-	})
+	}), view.id, view, ctx, t)
 end
 
 --- A quest in the player's log that no pack knows: still worth a reminder (e.g. turn-in), never a guess at where.
-local function unknownLogAction(entry)
+local function unknownLogAction(entry, ctx)
 	local complete = entry.complete
-	return R.NewAction({
+	return attach(R.NewAction({
 		id = "Q:" .. entry.id .. (complete and ":TURN_IN" or ":OBJECTIVE"), type = "QUEST", kind = complete and "TURN_IN" or "OBJECTIVE",
 		quest = entry.id, skipKey = "QT:" .. entry.id, title = (complete and "Turn in: " or "Continue: ") .. (entry.title or ("quest " .. entry.id)),
 		lines = { "This quest is not in Codex data yet, so there is no location to show." }, src = "log", verified = false,
 		noLocation = true, unknown = true,
-	})
+	}), entry.id, nil, ctx, nil)
 end
 
-local function addedUnknown(id)
-	return R.NewAction({
+local function addedUnknown(id, ctx)
+	return attach(R.NewAction({
 		id = "Q:" .. id .. ":ACCEPT", type = "QUEST", kind = "ACCEPT", quest = id, skipKey = "Q:" .. id,
 		title = "Added by you: quest " .. id, pinned = true, noLocation = true, unknown = true, src = "player", verified = false,
 		lines = { "You added this quest. It is not in Codex data, so there is no location to show." },
-	})
+	}), id, nil, ctx, nil)
 end
 
 function Q.Generate(ctx, env)
@@ -196,11 +244,11 @@ function Q.Generate(ctx, env)
 			if P.IsSkipped("QT:" .. id) then
 				bump(stats, "skipped")
 			else
-				out[#out + 1] = progressAction(view, entry, pinned)
+				out[#out + 1] = progressAction(view, entry, pinned, ctx)
 			end
 		elseif pinned then
 			if not ctx.isCompleted(id) then
-				out[#out + 1] = acceptAction(view, true)
+				out[#out + 1] = acceptAction(view, true, ctx)
 			else
 				bump(stats, "completed")
 			end
@@ -213,7 +261,7 @@ function Q.Generate(ctx, env)
 			elseif ctx.isCompleted(id) then
 				bump(stats, "completed")
 			else
-				out[#out + 1] = acceptAction(view, false)
+				out[#out + 1] = acceptAction(view, false, ctx)
 			end
 		end
 	end
@@ -221,12 +269,12 @@ function Q.Generate(ctx, env)
 	-- Quests the player holds or added that no pack knows.
 	for id, entry in pairs(ctx.log) do
 		if not R.Quest(id) and not P.IsSkipped("QT:" .. id) then
-			out[#out + 1] = unknownLogAction(entry)
+			out[#out + 1] = unknownLogAction(entry, ctx)
 		end
 	end
 	for id in pairs(added) do
 		if not R.Quest(id) and not ctx.log[id] and not P.IsSkipped("Q:" .. id) then
-			out[#out + 1] = addedUnknown(id)
+			out[#out + 1] = addedUnknown(id, ctx)
 		end
 	end
 	return out

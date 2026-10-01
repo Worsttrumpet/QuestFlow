@@ -105,7 +105,18 @@ function reader.location()
 	return l
 end
 
---- Quest log: { [questID] = { id, title, complete } }, count.
+--- The client's objective list for a quest, or nil when it cannot be read. C_QuestLog.GetQuestObjectives is PROVEN on
+-- Forever (M8.9): an array of { text, type, finished, numFulfilled, numRequired }, current at UNIT_QUEST_LOG_CHANGED.
+-- Known quirks (M8.9): names are blank for ~0.2 s after accept (counts are right), and a quest reads un-done for a
+-- moment at turn-in. Nothing here interprets them; ns.Contract.ObjectiveState normalises the list.
+local function readObjectives(id)
+	if type(C_QuestLog) ~= "table" or type(C_QuestLog.GetQuestObjectives) ~= "function" then return nil end
+	local objs = try(C_QuestLog.GetQuestObjectives, id)
+	if type(objs) ~= "table" then return nil end
+	return objs
+end
+
+--- Quest log: { [questID] = { id, title, complete, objectives } }, count. `objectives` is nil when unreadable.
 function reader.questLog()
 	local log, n = {}, 0
 	if type(C_QuestLog) ~= "table" or type(C_QuestLog.GetNumQuestLogEntries) ~= "function" then
@@ -120,7 +131,7 @@ function reader.questLog()
 		if type(info) == "table" and not info.isHeader and type(info.questID) == "number" then
 			local id = info.questID
 			local complete = try(C_QuestLog.IsComplete, id) == true or try(C_QuestLog.ReadyForTurnIn, id) == true
-			log[id] = { id = id, title = info.title, complete = complete }
+			log[id] = { id = id, title = info.title, complete = complete, objectives = readObjectives(id) }
 			n = n + 1
 		end
 	end

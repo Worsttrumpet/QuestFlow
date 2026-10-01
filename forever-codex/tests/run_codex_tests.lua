@@ -113,6 +113,8 @@ local function newWorld(opts)
 		ReadyForTurnIn = function(id) for _, e in ipairs(W.log) do if e.questID == id then return e.complete == true end end return false end,
 		IsOnQuest = function(id) for _, e in ipairs(W.log) do if e.questID == id then return true end end return false end,
 		IsQuestFlaggedCompleted = function(id) return W.completed[id] == true end,
+		-- real shape (M8.9): an array of { text, type, finished, numFulfilled, numRequired }; nil for an unknown quest
+		GetQuestObjectives = function(id) return W.objectives and W.objectives[id] or nil end,
 	}
 	-- the stub client must never be asked to change quest state
 	for _, f in ipairs({ "AcceptQuest", "CompleteQuest", "GetQuestReward", "AbandonQuest", "SelectGossipOption" }) do
@@ -1304,6 +1306,16 @@ do
 	slash("telemetry bogus"); check(chatHas("usage: /codex telemetry"), "unknown telemetry subcommand prints usage")
 	slash("help"); check(chatHas("/codex telemetry"), "help mentions telemetry")
 	check(#ns.errors == 0, "no caught errors from any telemetry scenario" .. (#ns.errors > 0 and (": " .. ns.errors[1]) or ""))
+end
+
+-- ================================================================ 9. structured Action/Target contract (Phase 1)
+-- Lives in its own file; it shares this harness through one table so there is a single stub client.
+do
+	local H = { boot = boot, check = check, section = section, slash = slash, newWorld = newWorld, attPack = attPack,
+		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
+	local chunk, err = loadfile((arg[0]:match("^(.*)[/\\]") or ".") .. "/contract_tests.lua")
+	assert(chunk, err)
+	chunk(H)
 end
 
 print(string.format("\n%d passed, %d failed", passed, failed))
