@@ -260,6 +260,21 @@ local function applyStaticScores(cands, ctx, env)
 	for _, a in ipairs(cands) do a._static = staticScore(a, ctx, env.w, clusterCount) end
 end
 
+--- The TRAVEL step that gets you to `chosen` (d yards away). Shared by the greedy chain and the plan adapter.
+function E.MakeTravel(chosen, d)
+	return ns.Registry.NewAction({
+		id = "T:" .. chosen.id, type = "TRAVEL", kind = "TRAVEL", forId = chosen.id, skipKey = chosen.skipKey,
+		title = "Travel to " .. (chosen.target.label or "the next stop"), target = chosen.target, dist = d,
+		src = chosen.src, verified = chosen.verified,
+		lines = { (d >= DIFFERENT_CONTINENT and "That is in another area." or string.format("About %d yards away.", math.floor(d + 0.5))),
+			"Then: " .. chosen.title },
+		reasons = { "Needed to reach: " .. chosen.title },
+	})
+end
+
+E.DIFFERENT_CONTINENT, E.TRAVEL_MIN = DIFFERENT_CONTINENT, TRAVEL_MIN
+E.LevelFit = levelFit        -- per-action fact (level fit points), reused by the Planner
+
 --- STAGE 3 (existing greedy chain, unchanged): walks the map from the character's position, inserting TRAVEL steps.
 local function buildChain(cands, ctx, env)
 	local pool = {}
@@ -280,14 +295,7 @@ local function buildChain(cands, ctx, env)
 		chosen._dist = d
 		chosen.reasons = explain(chosen, env, ctx)
 		if chosen.target and pos and d and (d >= TRAVEL_MIN or d >= DIFFERENT_CONTINENT) then
-			seq[#seq + 1] = ns.Registry.NewAction({
-				id = "T:" .. chosen.id, type = "TRAVEL", kind = "TRAVEL", forId = chosen.id, skipKey = chosen.skipKey,
-				title = "Travel to " .. (chosen.target.label or "the next stop"), target = chosen.target, dist = d,
-				src = chosen.src, verified = chosen.verified,
-				lines = { (d >= DIFFERENT_CONTINENT and "That is in another area." or string.format("About %d yards away.", math.floor(d + 0.5))),
-					"Then: " .. chosen.title },
-				reasons = { "Needed to reach: " .. chosen.title },
-			})
+			seq[#seq + 1] = E.MakeTravel(chosen, d)
 		end
 		seq[#seq + 1] = chosen
 		stops = stops + 1
@@ -325,6 +333,11 @@ local function buildNearby(cands, hints, seq, ctx, env)
 		while #nearby > NEARBY_LIMIT do nearby[#nearby] = nil end
 	end
 	return nearby
+end
+
+--- The existing "while you're here" list for a given first action (used by the plan adapter).
+function E.Nearby(cands, hints, first, ctx, env)
+	return buildNearby(cands, hints, { first }, ctx, env)
 end
 
 --- Compute = stage 1 + the existing policy stages 2-4. This is the compatibility path the UI still uses.

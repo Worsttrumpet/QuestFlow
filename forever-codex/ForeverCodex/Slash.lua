@@ -18,6 +18,7 @@ local function helpLines()
 	say("  /codex add <id|name>   add a quest to your route;  /codex remove <id>")
 	say("  /codex sys <key> on|off   toggle a system;  /codex hardcore on|off")
 	say("  /codex telemetry [status|summary|events|on|off|reset]   observation log (does not affect recommendations)")
+	say("  /codex planner [on|off]   the sequence planner (default on); off = the previous one-action-at-a-time engine")
 	say("  /codex where | reset | help")
 end
 
@@ -185,6 +186,15 @@ local function handle(msg)
 			say(string.format("%s: level %s %s %s (%s). Race origin: %s. Route zone (your choice): %s. Now in: %s%s.", tostring(c.name),
 				tostring(c.level), tostring(c.race), tostring(c.class), tostring(c.faction), tostring(c.race), P.GetRouteZone(),
 				tostring(l.zone), l.subzone and (" / " .. l.subzone) or ""))
+		end
+	elseif cmd == "planner" then
+		local on = onOff(restLower)
+		if on == nil then
+			say("Planner is " .. (ns.State.mode == "planner" and "on" or "off") .. ". Usage: /codex planner on|off (not saved; on again at every login)")
+		else
+			ns.State.SetPlanner(on)
+			say(on and "Planner on: NOW / ALSO DO / THEN decisions from short sequences." or "Planner off: using the previous one-action-at-a-time engine.")
+			ns.State.Recompute()
 		end
 	elseif cmd == "telemetry" then
 		telemetryCommand(rest or "")

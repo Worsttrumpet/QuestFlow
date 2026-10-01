@@ -221,6 +221,7 @@ end)
 
 local function runScenario(sc)
 	local ns = sc.fn()
+	ns.State.SetPlanner(false)     -- the golden file pins the LEGACY engine path (Phase 2 keeps it as the compatibility path)
 	ns.State.Recompute()
 	return snapshot(ns.State.plan), ns
 end
@@ -316,7 +317,7 @@ end
 
 -- ---------------------------------------------------------------- the contract exists and is wired in
 
-section("contract: wiring (no Planner, no new behaviour surface)")
+section("contract: wiring (the legacy path is intact; navigation / markers / quest map are absent)")
 do
 	local ns = boot({ char = { level = 25 } })
 	check(type(ns.Contract) == "table" and ns.Contract.VERSION == 1, "ns.Contract is loaded")
@@ -324,15 +325,15 @@ do
 	local toc = H.readFile(H.addonDir .. "/ForeverCodex.toc")
 	local iC, iQ, iP = toc:find("Contract.lua", 1, true), toc:find("Providers\\Quest.lua", 1, true), toc:find("Preferences.lua", 1, true)
 	check(iC and iQ and iP and iC < iQ and iC < iP, "Contract.lua loads before Preferences and the providers")
-	check(ns.Planner == nil and not toc:find("Planner", 1, true), "there is no Planner module")
+	ns.State.SetPlanner(false)
 	ns.State.Recompute()
 	local keys = {}
 	for k in pairs(ns.State.plan) do keys[#keys + 1] = k end
 	table.sort(keys)
 	-- (routeMap is nil with route zone "auto", and a nil value is not a key)
 	check(table.concat(keys, ",") == "inProgress,nearby,next,player,routeZone,sequence,stats,strategy,upcoming,warnings",
-		"the plan has exactly the legacy keys (no now / alsoDo / then): " .. table.concat(keys, ","))
-	check(ns.State.plan.now == nil and ns.State.plan.alsoDo == nil and ns.State.plan.thenItem == nil, "and no NOW / ALSO DO / THEN")
+		"legacy mode: the plan has exactly the legacy keys: " .. table.concat(keys, ","))
+	check(ns.State.plan.now == nil and ns.State.plan.alsoDo == nil and ns.State.plan.thenAction == nil, "legacy mode: no NOW / ALSO DO / THEN")
 	check(ns.Navigation == nil and ns.Markers == nil and ns.QuestMap == nil, "no navigation controller, markers or quest map")
 	check(#ns.errors == 0, "no caught errors")
 end

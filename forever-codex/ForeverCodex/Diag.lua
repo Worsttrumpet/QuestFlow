@@ -82,6 +82,16 @@ function D.Snapshot()
 		end
 		for _, a in ipairs(plan.nearby) do snap.plan.nearby[#snap.plan.nearby + 1] = summarize(a) end
 	end
+	snap.planner = { mode = ns.State and ns.State.mode or "legacy" }
+	if plan and plan.diag then
+		local function copy(v)
+			if type(v) ~= "table" then return v end
+			local out = {}
+			for k, x in pairs(v) do out[k] = copy(x) end
+			return out
+		end
+		snap.planner.diag = copy(plan.diag)
+	end
 	if ns.Telemetry then
 		local st = ns.Telemetry.Status()
 		snap.telemetry = { enabled = st.enabled, stored = st.stored, cap = st.cap, anomalies = st.anomalies, types = {} }
@@ -132,6 +142,31 @@ function D.Lines(s)
 	L[#L + 1] = string.format("Data: %d quests (%d in both ATT and observed), %d flight nodes, %d zones", d.quests, d.observedAndAtt, d.flightNodes, d.zones)
 	for _, p in ipairs(d.packs) do
 		L[#L + 1] = string.format("  pack %s: src=%s verified=%s, %d records (%d with location)", p.name, tostring(p.src), tostring(p.verified), p.count, p.withLocation)
+	end
+	if s.planner and s.planner.diag then
+		local d = s.planner.diag
+		local function codes(id)
+			local out = {}
+			for _, r in ipairs(d.reasons and d.reasons[id] or {}) do out[#out + 1] = r.code end
+			return #out > 0 and (" [" .. table.concat(out, ",") .. "]") or ""
+		end
+		L[#L + 1] = string.format("Planner (%s): %s candidates, %s optional, %s unlocated -> %s stops, %s considered, %s sequences searched | value is policy points, not XP",
+			tostring(s.planner.mode), tostring(d.candidates), tostring(d.optional), tostring(d.unlocated), tostring(d.stops), tostring(d.considered), tostring(d.sequences))
+		if d.nowId then
+			L[#L + 1] = string.format("  NOW %s%s | ALSO DO %s%s | THEN %s%s", d.nowId, codes(d.nowId), tostring(d.alsoDoId), d.alsoDoId and codes(d.alsoDoId) or "",
+				tostring(d.thenId), d.thenId and codes(d.thenId) or "")
+			L[#L + 1] = string.format("  sequence %s | net %.1f over ~%.0f s | ALSO DO interruption %s s | unknown legs %s%s", table.concat(d.sequence or {}, " > "),
+				d.net or 0, d.seconds or 0, tostring(d.interruption), tostring(d.unknownLegs), d.stuck and " | kept previous NOW" or "")
+			local rej = {}
+			for _, r in ipairs(d.rejected or {}) do rej[#rej + 1] = r.id .. ":" .. r.code .. (r.seconds and ("(" .. r.seconds .. "s)") or "") end
+			local alt = {}
+			for _, r in ipairs(d.alternatives or {}) do alt[#alt + 1] = r.id .. "(-" .. tostring(r.deficit) .. ")" end
+			L[#L + 1] = string.format("  nearest %s | alternatives %s | rejected ALSO DO %s", tostring(d.nearestId), #alt > 0 and table.concat(alt, " ") or "none",
+				#rej > 0 and table.concat(rej, " ") or "none")
+		else
+			L[#L + 1] = "  NOW none: " .. tostring(d.reason or "nothing eligible")
+		end
+		for _, w in ipairs(d.warnings or {}) do L[#L + 1] = "  planner warning: " .. w end
 	end
 	if s.plan then
 		local p = s.plan

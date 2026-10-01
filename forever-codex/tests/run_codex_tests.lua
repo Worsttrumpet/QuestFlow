@@ -522,6 +522,7 @@ do
 	W.completed[907] = true
 	check(not has(cands(), 907), "a completed quest is never offered again")
 	W.completed[907] = nil
+	ns.State.SetPlanner(false)   -- Phase 2: the next checks pin the LEGACY greedy engine (the Planner may defer a turn-in or leave an unlocated quest out of the route; contract_tests.lua covers that)
 	W.log = { { questID = 907, title = "Enraged Thunder Lizards", complete = true } }
 	local plan = recompute(ns)
 	local ti = firstQuest(plan)
@@ -541,6 +542,7 @@ do
 	local mystery
 	for _, a in ipairs(plan.sequence) do if a.quest == 99999990 then mystery = a end end
 	check(mystery ~= nil and mystery.target == nil and mystery.unknown == true, "a quest in the log that no pack knows is still a reminder, with no invented location")
+	ns.State.SetPlanner(true)
 	local ns2 = boot({ char = { level = 5 } })
 	local ctx2 = ns2.Context.Build()
 	local acts = ns2.QuestProvider.Generate(ctx2, { stats = { filtered = {}, byType = {} }, strategy = ns2.Registry.Strategy("completionist") })
@@ -685,9 +687,14 @@ do
 	local plan = recompute(ns)
 	check(plan.next.type == "QUEST" and plan.next.quest == 2, "the nearby quest comes first and needs no travel")
 	local far
-	for i, a in ipairs(plan.sequence) do if a.kind == "TRAVEL" then far = { i = i, a = a } end end
+	-- Phase 2: the Planner does not plan a quest 3000 yards away while there is local work (it costs more time than it
+	-- earns; contract_tests.lua covers that), so the legacy "whole chain" travel step is pinned on the legacy path.
+	ns.State.SetPlanner(false)
+	local legacyPlan = recompute(ns)
+	ns.State.SetPlanner(true)
+	for i, a in ipairs(legacyPlan.sequence) do if a.kind == "TRAVEL" then far = { i = i, a = a } end end
 	check(far ~= nil and far.a.forId == "Q:1:ACCEPT" and far.a.target.map == 9002 and far.a.dist > 150, "far quest: a TRAVEL step is inserted before it, with the distance")
-	check(plan.sequence[far.i + 1].id == "Q:1:ACCEPT", "the TRAVEL step is immediately followed by the quest it serves")
+	check(legacyPlan.sequence[far.i + 1].id == "Q:1:ACCEPT", "the TRAVEL step is immediately followed by the quest it serves")
 	local fp, ally
 	for _, a in ipairs(plan.nearby) do if a.type == "FLIGHT" then fp = a end if a.id == "FP:2" then ally = a end end
 	check(fp ~= nil and fp.id == "FP:1" and fp.src == "att" and fp.verified == false, "'while you're here': a flight node close by, labelled ATT / unverified")
@@ -893,8 +900,11 @@ do
 	W.completed = {}
 	local plan = recompute(ns)
 	local addedUnknown
-	for _, a in ipairs(plan.sequence) do if a.quest == 12345678 then addedUnknown = a end end
-	check(addedUnknown ~= nil and addedUnknown.target == nil and addedUnknown.pinned, "an added quest unknown to the data is listed with no invented location")
+	for _, a in ipairs(plan.reminders) do if a.quest == 12345678 then addedUnknown = a end end
+	local routed = false
+	for _, a in ipairs(plan.sequence) do if a.quest == 12345678 then routed = true end end
+	-- Phase 2: an action with no usable location is a reminder, never part of NOW / ALSO DO / THEN
+	check(addedUnknown ~= nil and addedUnknown.target == nil and addedUnknown.pinned and not routed, "an added quest unknown to the data is a reminder with no invented location (never routed)")
 	slash("reset"); check(#ns.Prefs.AddedList() == 0 and #ns.Prefs.SkippedKeys() == 0, "reset clears skips and added quests")
 	slash("where"); check(chatHas("Race origin: Troll. Route zone (your choice): auto. Now in: The Barrens"), "where reports the three concepts")
 	slash("bogus"); check(chatHas("unknown command"), "unknown command is reported")
@@ -1308,14 +1318,17 @@ do
 	check(#ns.errors == 0, "no caught errors from any telemetry scenario" .. (#ns.errors > 0 and (": " .. ns.errors[1]) or ""))
 end
 
--- ================================================================ 9. structured Action/Target contract (Phase 1)
--- Lives in its own file; it shares this harness through one table so there is a single stub client.
+-- ================================================================ 9. structured Action/Target contract (Phase 1) and Planner (Phase 2)
+-- Each lives in its own file; they share this harness through one table so there is a single stub client.
 do
 	local H = { boot = boot, check = check, section = section, slash = slash, newWorld = newWorld, attPack = attPack,
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
-	local chunk, err = loadfile((arg[0]:match("^(.*)[/\\]") or ".") .. "/contract_tests.lua")
-	assert(chunk, err)
-	chunk(H)
+	local dir = arg[0]:match("^(.*)[/\\]") or "."
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua" }) do
+		local chunk, err = loadfile(dir .. "/" .. name)
+		assert(chunk, err)
+		chunk(H)
+	end
 end
 
 print(string.format("\n%d passed, %d failed", passed, failed))

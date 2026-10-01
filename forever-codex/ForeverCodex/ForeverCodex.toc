@@ -21,6 +21,8 @@ Data\Pack_ATT_FlightPaths.lua
 Data\Pack_Observed.lua
 Context.lua
 Engine.lua
+Planner.lua
+PlanAdapter.lua
 Route.lua
 State.lua
 Diag.lua

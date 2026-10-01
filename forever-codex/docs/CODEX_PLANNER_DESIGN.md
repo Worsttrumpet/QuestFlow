@@ -787,3 +787,31 @@ validation is explicitly **deferred**, not claimed.
 
 **Do not implement yet:** value/XP optimizer, GRIND/breakpoint generation, transit edges beyond WALK, markers, Quest Map,
 arrow, party, trainer/vendor/profession/pet data, uploads, UI redesign, telemetry changes, new quest data.
+
+---
+
+## 29. Phase 2 as implemented (first real Planner)
+
+`ForeverCodex/Planner.lua` (+ `PlanAdapter.lua`, a temporary bridge to the existing window). Where the implementation
+differs from, or narrows, the design above:
+
+| Topic | Design said | Phase 2 does | Why |
+|---|---|---|---|
+| Sequence score | value per unit time (a ratio) | **net = sum(value) - timeValue x (walking + doing)**, positive exactly when the sequence earns more than `timeValue` points per second | a plain ratio over sequences of different length always prefers the single cheapest action, i.e. "turn it in first" (reproduced while testing) |
+| Search | beam over top-K stops, depth 3-4 | top 8 stops by solo net value, ordered sequences up to 3 stops (at most 400 scored); deterministic | bounded work |
+| NOW | first action of the best sequence | same: best-valued action of the sequence's first stop | |
+| ALSO DO | cheap insertion into the sequence | at most one: another action in the same stop (interruption 0), or one outside the sequence whose extra time is within `detour` seconds and whose net value clears `alsoFloor`. An action that is positive enough to be worth a stop is part of the sequence instead (it is NOW or THEN, with reason code ON_THE_WAY when it lies on the way) | keeps ALSO DO a decision rather than a runner-up |
+| THEN | next contextual step | best action of the second stop, nil when there is none | |
+| Value | policy points by component | policy points: kind value + level fit (the Engine's, so `levelFit`/`fitMul`/`maxGap` still apply) + 1-hop chain credit + pinned bonus, times a data-confidence factor. **No XP** | no quest XP exists before turn-in |
+| Time | transit model + dwell | walking = yards / 7 (ESTIMATED game constant, unverified on Forever) + policy seconds per kind; progress counts from the quest log shorten an objective's time but never move its location | |
+| Cross-continent | transit unknown | a leg whose time cannot be known ranks after every fully-known sequence (except into a quest the player added) | unknown stays unknown |
+| Unlocated actions | reminder lane | `plan.reminders`; the adapter lists them under the old "location unknown" line | |
+| Chain | bounded lookahead | one hop: a turn-in is credited with a share of the follow-up quest it makes available within `CHAIN_RADIUS` (derived from ATT prerequisites, unverified, any-of) | |
+| Route zone | player's choice | when the chosen route zone has anything to do, only its stops are sequenced (others can still be an ALSO DO) | the old engine's "choice beats convenience" |
+| Added quests | explicit choice | a stop containing an added quest starts the sequence; the data's requirements (ATT, unverified) do not veto it | player control |
+| Skip | one flag per quest ID | the planner honours the logical skip (either legacy key); Preferences still writes both keys | |
+| Stability | previous NOW + approach check | previous NOW kept within `stickiness` points; **the "is the player approaching it" check is not implemented** | later |
+
+Not in Phase 2 (unchanged): navigation controller, waypoint lifecycle, markers, quest map, the final UI, grind and
+level-breakpoint actions, death shortcuts, trainer/vendor/inn/pet/profession actions, telemetry as a planner input.
+`/codex planner off` runs the previous engine (kept as the compatibility path; the Phase 1 golden snapshot pins it).

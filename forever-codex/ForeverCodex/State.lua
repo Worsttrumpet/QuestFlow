@@ -11,6 +11,7 @@ ns.State = S
 
 S.ctx, S.plan = nil, nil
 S.computeCount = 0
+S.mode = "planner"      -- "planner" (Engine.Candidates -> Planner -> adapter) or "legacy" (the old Engine.Compute); not saved
 
 local dirty = true
 local sinceCompute = 0
@@ -18,6 +19,12 @@ local DIRTY_DELAY = 0.4      -- seconds before a dirty state recomputes
 local PERIODIC = 3           -- seconds between refreshes while the window is open
 
 function S.MarkDirty()
+	dirty = true
+end
+
+--- Switches between the Planner and the legacy engine path (kept for comparison and as a fallback). Session only.
+function S.SetPlanner(on)
+	S.mode = on and "planner" or "legacy"
 	dirty = true
 end
 
@@ -30,7 +37,18 @@ function S.Recompute()
 		ns.RecordError("context", ctx)
 		return S.plan
 	end
-	local okE, plan = pcall(ns.Engine.Compute, ctx)
+	local okE, plan
+	if S.mode == "planner" then
+		okE, plan = pcall(ns.PlanAdapter.Compute, ctx, { prevNowId = S.plan and S.plan.now and S.plan.now.id or nil })
+		if not okE then
+			-- never leave the player without a recommendation: record the error and fall back to the old engine
+			ns.RecordError("planner", plan)
+			okE, plan = pcall(ns.Engine.Compute, ctx)
+			if okE then plan.warnings[#plan.warnings + 1] = "The planner failed (see /codex diag); using the previous method." end
+		end
+	else
+		okE, plan = pcall(ns.Engine.Compute, ctx)
+	end
 	if not okE then
 		ns.RecordError("engine", plan)
 		return S.plan
