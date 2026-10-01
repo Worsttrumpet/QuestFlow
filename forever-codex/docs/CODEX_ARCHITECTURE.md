@@ -37,6 +37,7 @@ M8.13 observed quest table (read-only) /                                        
 | `Route.lua` | adapts actions to the M8.13 step schema; evaluates progress with the M8.13 evaluators |
 | `State.lua` | latest context/plan, throttled recompute |
 | `Diag.lua` | `/codex diag`, `/codex report`: the bug-report snapshot |
+| `Telemetry.lua`, `TelemetryMetrics.lua` | quiet observation log (XP, kills, combat, movement, quests) + pure, labelled calculators. Independent of the engine, strategies, UI and navigation; read by nothing yet. See `CODEX_TELEMETRY.md` |
 | `UI/Widgets.lua`, `UI/Window.lua` | the window (only primitives proven on Forever in M8.x; ASCII only) |
 | `Slash.lua`, `Boot.lua` | `/codex`, events |
 | `ProgressionEval.lua`, `MapPin.lua`, `MinimapButton.lua` | **copied from M8.13** (renames only; a test proves it) |
@@ -78,6 +79,11 @@ See `CODEX_PROVENANCE_DECISION.md` for the ATT decision and what it does not dec
   the system. The toggle, the engine, hardcore filtering and "while you're here" already work for it.
 * **A new route style:** `ForeverCodex.RegisterStrategy{key, label, active, w = weights, allow = types}`.
 * **A new class system** (e.g. hunter pets): a provider + a system toggle, nothing class-specific in the engine.
+
+## Telemetry foundation
+
+A recorder of raw gameplay observations (`CODEX_TELEMETRY.md`) lets a future Fast strategy use the character's real
+XP/minute, kill XP, combat/travel/downtime split and quest durations. It makes no decisions and nothing consumes it yet.
 
 ## Not in 0.1 (deliberately)
 

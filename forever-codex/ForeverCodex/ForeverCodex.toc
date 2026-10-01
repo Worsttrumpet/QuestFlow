@@ -23,6 +23,8 @@ Engine.lua
 Route.lua
 State.lua
 Diag.lua
+Telemetry.lua
+TelemetryMetrics.lua
 MapPin.lua
 MinimapButton.lua
 UI\Widgets.lua

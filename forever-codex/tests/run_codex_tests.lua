@@ -72,7 +72,12 @@ local function newWorld(opts)
 	_G.GameFontNormal, _G.GameTooltip = {}, widget("GameTooltip")
 	_G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) table.insert(W.chat, m) end }
 	_G.GetBuildInfo = function() return "1.60.1", "70124", "Sep 29 2026", 16001 end
-	_G.GetTime = function() return 100 end
+	W.now, W.wall, W.xp, W.xpMax, W.clog = opts.now or 100, 1790000000, 1000, 5000, nil
+	_G.GetTime = function() return W.now end
+	_G.time = function() return W.wall end
+	_G.UnitXP = function() return W.xp end
+	_G.UnitXPMax = function() return W.xpMax end
+	_G.CombatLogGetCurrentEventInfo = function() if W.clog then return unpack(W.clog, 1, 12) end end
 	_G.SlashCmdList, _G.ToggleWorldMap = {}, function() W.mapShown = true end
 	_G.CreateVector2D = V
 	_G.UnitLevel = function() return W.char.level end
@@ -158,7 +163,11 @@ local function boot(opts)
 	if opts.synthetic then ns.Registry.ClearPacks() else layoutMaps(ns) end
 	_G.ForeverCodexDB = opts.savedVars     -- SavedVariables are restored AFTER the files run, BEFORE ADDON_LOADED (M8.12)
 	ns._selftest.boot.onEvent(nil, "ADDON_LOADED", "ForeverCodex")
-	if opts.login ~= false then ns._selftest.boot.onEvent(nil, "PLAYER_LOGIN") end
+	ns._selftest.telemetry.onEvent("ADDON_LOADED", "ForeverCodex")
+	if opts.login ~= false then
+		ns._selftest.boot.onEvent(nil, "PLAYER_LOGIN")
+		ns._selftest.telemetry.onEvent("PLAYER_LOGIN")
+	end
 	return ns
 end
 
@@ -928,6 +937,373 @@ do
 		"the ATT data files carry their provenance statement in the file header")
 	check(header:find("GENERATED FILE -- do not hand-edit", 1, true) ~= nil, "generated files say so")
 	check(readFile(ADDON .. "/Data/Pack_Observed.lua"):find("src=observed, verified=true", 1, true) ~= nil, "the observed data file declares src=observed, verified=true")
+end
+
+
+-- ================================================================ 8. telemetry (observation only)
+
+local function tfire(ns, ev, ...) ns._selftest.telemetry.onEvent(ev, ...) end
+--- Advances the simulated clock by `secs` one second at a time, running the telemetry poll each second.
+local function ttick(ns, secs, each)
+	for _ = 1, secs do
+		W.now, W.wall = W.now + 1, W.wall + 1
+		if each then each() end
+		ns._selftest.telemetry.tick(1)
+	end
+end
+local function evOf(ns, e)
+	local out = {}
+	for _, ev in ipairs(ns.Telemetry.Events()) do if ev.e == e then out[#out + 1] = ev end end
+	return out
+end
+local function last(list) return list[#list] end
+
+section("telemetry: structure, independence and honesty about what is proven")
+do
+	local files = tocFiles()
+	local listed = {}
+	for i, f in ipairs(files) do listed[f] = i end
+	check(listed["Telemetry.lua"] and listed["TelemetryMetrics.lua"], "Telemetry.lua and TelemetryMetrics.lua are in the .toc")
+	local forbiddenDeps = { "ns%.Engine", "ns%.Strategies", "ns%.UI", "ns%.Route", "ns%.State", "ns%.MapPin", "ns%.Registry", "ns%.Context",
+		"ns%.Prefs", "ns%.QuestProvider", "ns%.Eval", "ns%.Widgets", "ns%.Slash", "ns%.Diag" }
+	local bad = {}
+	for _, f in ipairs({ "Telemetry.lua", "TelemetryMetrics.lua" }) do
+		local code = readFile(ADDON .. "/" .. f):gsub("%-%-[^\n]*", "")
+		for _, pat in ipairs(forbiddenDeps) do if code:find(pat) then bad[#bad + 1] = f .. " uses " .. pat end end
+		for _, api in ipairs({ "UnitGUID", "GetQuestReward", "AcceptQuest", "SendChatMessage", "UnitName", "GetUnitName" }) do
+			if code:find(api .. "%s*%(") then bad[#bad + 1] = f .. " calls " .. api end
+		end
+	end
+	check(#bad == 0, "telemetry is independent of the engine, strategies, UI, navigation and registry, and never reads GUIDs or names" .. (#bad > 0 and (": " .. bad[1]) or ""))
+	local reverse = {}
+	for _, f in ipairs({ "Engine.lua", "Strategies.lua", "Context.lua", "Route.lua", "State.lua", "Registry.lua", "Preferences.lua", "MapPin.lua",
+		"ProgressionEval.lua", "UI/Window.lua", "UI/Widgets.lua", "Providers/Quest.lua", "Providers/Flight.lua", "Providers/Planned.lua", "Boot.lua" }) do
+		if readFile(ADDON .. "/" .. f):find("Telemetry") then reverse[#reverse + 1] = f end
+	end
+	check(#reverse == 0, "no route/engine/strategy/UI/navigation module references telemetry (it does not influence recommendations yet)" .. (#reverse > 0 and (": " .. reverse[1]) or ""))
+
+	local ns = boot()
+	local defs = {}
+	for _, d in ipairs(ns.Telemetry.EVENT_DEFS) do defs[d.type] = d end
+	for _, name in ipairs({ "XP_GAIN", "MOB_KILL", "QUEST_ACCEPT", "QUEST_COMPLETE", "QUEST_TURNIN", "PLAYER_MOVE", "LEVEL_UP", "COMBAT_START", "COMBAT_END" }) do
+		check(defs[name] ~= nil and type(defs[name].evidence) == "string" and #defs[name].sources >= 1, "event type " .. name .. " is defined with sources and an evidence note")
+	end
+	check(defs.QUEST_ACCEPT.verified and defs.QUEST_COMPLETE.verified and defs.QUEST_TURNIN.verified and defs.PLAYER_MOVE.verified,
+		"quest events and position sampling are marked proven (M8.7/M8.8/M8.9/M8.10)")
+	check(not defs.XP_GAIN.verified and not defs.MOB_KILL.verified and not defs.LEVEL_UP.verified and not defs.COMBAT_START.verified and not defs.COMBAT_END.verified,
+		"XP, kill, level-up and combat sources are marked UNPROVEN: never observed on Forever")
+	local reg = ns._selftest.telemetry.registered
+	local all = true
+	for _, e in ipairs({ "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "QUEST_ACCEPTED", "QUEST_TURNED_IN", "UNIT_QUEST_LOG_CHANGED", "QUEST_LOG_UPDATE",
+		"PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "COMBAT_LOG_EVENT_UNFILTERED" }) do
+		if reg[e] ~= true then all = false end
+	end
+	check(all, "telemetry registers all its events on its own frame (a refused registration would show as false)")
+	check(ns.Telemetry.IsEnabled() and #ns.Telemetry.Events() == 1 and ns.Telemetry.Events()[1].e == "SESSION", "the log starts with one SESSION marker at login")
+	local sess = ns.Telemetry.Events()[1]
+	check(sess.v == 1 and sess.lvl == 25 and sess.xp == 1000 and sess.max == 5000 and type(sess.w) == "number" and sess.build == "70124", "SESSION records schema, level, XP, build and wall time")
+end
+
+section("telemetry: XP and level-up")
+do
+	local ns = boot()
+	W.xp = 1150; tfire(ns, "PLAYER_XP_UPDATE")
+	local g = last(evOf(ns, "XP_GAIN"))
+	check(g and g.d == 150 and g.xp == 1150 and g.max == 5000 and g.lvl == 25 and g.src == "event", "PLAYER_XP_UPDATE records the XP delta")
+	tfire(ns, "PLAYER_XP_UPDATE")
+	check(#evOf(ns, "XP_GAIN") == 1, "an event with no XP change records nothing")
+	W.xp = 1200; ttick(ns, 1)
+	g = last(evOf(ns, "XP_GAIN"))
+	check(#evOf(ns, "XP_GAIN") == 2 and g.d == 50 and g.src == "poll", "the 1 Hz poll catches an XP change even if the event never fires")
+	tfire(ns, "PLAYER_XP_UPDATE")
+	check(#evOf(ns, "XP_GAIN") == 2, "event + poll never double count the same gain")
+	-- level up: 1200 -> finish level (5000-1200) + 120 into the next
+	W.char.level, W.xp, W.xpMax = 26, 120, 5200
+	tfire(ns, "PLAYER_XP_UPDATE")
+	g = last(evOf(ns, "XP_GAIN"))
+	check(g.d == 3920 and g.lvlup == true and g.lvl == 26 and g.multi == nil, "XP across a level-up = finish the old level + progress in the new one (3800 + 120)")
+	local lu = evOf(ns, "LEVEL_UP")
+	check(#lu == 1 and lu[1].lvl == 26, "LEVEL_UP recorded once")
+	tfire(ns, "PLAYER_LEVEL_UP"); ttick(ns, 2)
+	check(#evOf(ns, "LEVEL_UP") == 1 and #evOf(ns, "XP_GAIN") == 3, "the level-up event and the poll do not duplicate it")
+	-- two levels at once: the middle level's size is unknown, so flag it
+	W.char.level, W.xp, W.xpMax = 28, 50, 5600
+	ttick(ns, 1)
+	g = last(evOf(ns, "XP_GAIN"))
+	check(g.multi == true and g.lvlup == true and last(evOf(ns, "LEVEL_UP")).lvl == 28, "several levels at once are flagged (the delta is a lower bound)")
+	-- the XP bar reset can land before the level: never a negative gain
+	W.xp = 10; tfire(ns, "PLAYER_XP_UPDATE")
+	local n = #evOf(ns, "XP_GAIN")
+	check(true, "XP bar dropped without a level change (waiting one more check)")
+	W.char.level = 29; W.xp = 10; tfire(ns, "PLAYER_XP_UPDATE")
+	g = last(evOf(ns, "XP_GAIN"))
+	check(#evOf(ns, "XP_GAIN") == n + 1 and g.d > 0 and g.lvlup, "a bar reset followed by the level change is recorded as a level-up with a positive gain")
+	W.xp = 3000; ttick(ns, 1)
+	W.xp = 100; tfire(ns, "PLAYER_XP_UPDATE"); tfire(ns, "PLAYER_XP_UPDATE")
+	local anyNegative = false
+	for _, e in ipairs(evOf(ns, "XP_GAIN")) do if e.d <= 0 then anyNegative = true end end
+	check(not anyNegative and ns.Telemetry.Status().anomalies >= 1, "a real decrease with no level change is counted as an anomaly, never recorded as a gain")
+end
+
+section("telemetry: kills (combat log), no GUIDs stored")
+do
+	local ns = boot()
+	local function kill(flags, destGuid) W.clog = { 1000, "PARTY_KILL", false, "Player-1-0000AAAA", "Thrall", flags, 0, destGuid, "Mottled Boar", 0x10a48 }; tfire(ns, "COMBAT_LOG_EVENT_UNFILTERED") end
+	kill(0x511, "Creature-0-3-1-2-3144-00001A2B")
+	local k = last(evOf(ns, "MOB_KILL"))
+	check(k and k.npc == 3144 and k.by == "me" and k.pet == nil, "a player killing blow records the creature id")
+	W.xp = 1075; tfire(ns, "PLAYER_XP_UPDATE")
+	local g = last(evOf(ns, "XP_GAIN"))
+	check(g.d == 75 and g.sk == 0, "an XP gain right after a kill carries the seconds-since-kill (timing only; no attribution claimed)")
+	W.now = W.now + 30; W.xp = 1200; tfire(ns, "PLAYER_XP_UPDATE")
+	check(last(evOf(ns, "XP_GAIN")).sk == nil, "an XP gain long after the last kill carries no kill link")
+	kill(0x512, "Creature-0-3-1-2-5555-00000001")
+	check(last(evOf(ns, "MOB_KILL")).by == "party", "a party member's kill is recorded as 'party'")
+	kill(0x1511, "Creature-0-3-1-2-6666-00000002")
+	check(last(evOf(ns, "MOB_KILL")).pet == true and last(evOf(ns, "MOB_KILL")).by == "me", "a kill by the player's pet is flagged")
+	local before = #evOf(ns, "MOB_KILL")
+	kill(0x548, "Creature-0-3-1-2-7777-00000003")
+	kill(0x511, "Player-1-0000BBBB")
+	kill(0x511, nil)
+	W.clog = { 1000, "SWING_DAMAGE", false, "Player-1-0000AAAA", "Thrall", 0x511, 0, "Creature-0-3-1-2-3144-00001A2B", "x", 0x10a48 }; tfire(ns, "COMBAT_LOG_EVENT_UNFILTERED")
+	check(#evOf(ns, "MOB_KILL") == before, "other combat-log events, hostile killers, player victims and malformed payloads record nothing")
+	local leaks = {}
+	for _, ev in ipairs(ns.Telemetry.Events()) do
+		for key, v in pairs(ev) do
+			if type(v) == "string" and (v:find("Creature%-") or v:find("Player%-") or v:find("%-%d%d%d")) then leaks[#leaks + 1] = key .. "=" .. v end
+			if type(v) ~= "string" and type(v) ~= "number" and type(v) ~= "boolean" then leaks[#leaks + 1] = key end
+		end
+	end
+	check(#leaks == 0, "no event contains a GUID or any non-primitive value")
+	W.clog = nil
+	local ns2 = boot()
+	_G.CombatLogGetCurrentEventInfo = nil
+	ns2._selftest.telemetry.onEvent("COMBAT_LOG_EVENT_UNFILTERED", 1000, "PARTY_KILL", false, "Player-1-0000AAAA", "Thrall", 0x511, 0, "Creature-0-3-1-2-3144-00001A2B", "Mottled Boar", 0x10a48)
+	check(#evOf(ns2, "MOB_KILL") == 1, "if the client passes the payload as event arguments instead of CombatLogGetCurrentEventInfo, kills still record")
+end
+
+section("telemetry: combat, quests")
+do
+	local ns = boot()
+	tfire(ns, "PLAYER_REGEN_DISABLED"); tfire(ns, "PLAYER_REGEN_DISABLED")
+	check(#evOf(ns, "COMBAT_START") == 1, "entering combat records one COMBAT_START even if the event repeats")
+	W.now = W.now + 12; tfire(ns, "PLAYER_REGEN_ENABLED")
+	local ce = last(evOf(ns, "COMBAT_END"))
+	check(ce and ce.dur == 12, "leaving combat records the fight duration (12 s)")
+	tfire(ns, "PLAYER_REGEN_ENABLED")
+	check(#evOf(ns, "COMBAT_END") == 1, "leaving combat without having entered records nothing")
+
+	tfire(ns, "QUEST_ACCEPTED", 907)
+	local qa = last(evOf(ns, "QUEST_ACCEPT"))
+	check(qa and qa.q == 907 and qa.w == W.wall, "QUEST_ACCEPTED records the quest id and wall time")
+	W.log = { { questID = 907, title = "Enraged Thunder Lizards", complete = false }, { questID = 123, title = "Old Quest", complete = false } }
+	tfire(ns, "QUEST_LOG_UPDATE"); ttick(ns, 1)
+	check(#evOf(ns, "QUEST_COMPLETE") == 0, "an incomplete quest in the log records no completion")
+	W.wall = W.wall + 300; W.now = W.now + 300
+	W.log[1].complete = true
+	tfire(ns, "UNIT_QUEST_LOG_CHANGED", "player"); ttick(ns, 1)
+	local qc = last(evOf(ns, "QUEST_COMPLETE"))
+	check(qc and qc.q == 907 and qc.dur == 302, "objectives completing is detected by diffing the quest log, with the time since accept (1 + 300 + 1 = 302 s wall)")
+	ttick(ns, 3); tfire(ns, "QUEST_LOG_UPDATE"); ttick(ns, 1)
+	check(#evOf(ns, "QUEST_COMPLETE") == 1, "a completed quest is not reported again")
+	tfire(ns, "UNIT_QUEST_LOG_CHANGED", "target"); ttick(ns, 1)
+	W.log[2].complete = true
+	tfire(ns, "QUEST_LOG_UPDATE"); ttick(ns, 1)
+	qc = last(evOf(ns, "QUEST_COMPLETE"))
+	check(#evOf(ns, "QUEST_COMPLETE") == 2 and qc.q == 123 and qc.dur == nil, "a quest accepted before this session completes with no duration (accept time unknown)")
+	tfire(ns, "QUEST_TURNED_IN", 907, 8300, 0)
+	local ti = last(evOf(ns, "QUEST_TURNIN"))
+	check(ti and ti.q == 907 and ti.xp == 8300 and ti.money == 0 and ti.dur and ti.dur >= 302, "QUEST_TURNED_IN records quest id, XP, money and the time since accept")
+	tfire(ns, "QUEST_TURNED_IN", 555, 100, 5)
+	check(last(evOf(ns, "QUEST_TURNIN")).dur == nil, "a turn-in whose accept was not seen has no duration")
+	check(ForeverCodexDB.telemetry.accepted[907] == nil, "the remembered accept time is cleared on turn-in")
+	-- accept-time memory is bounded
+	for id = 1, 90 do tfire(ns, "QUEST_ACCEPTED", 5000 + id); W.wall = W.wall + 1 end
+	local count = 0
+	for _ in pairs(ForeverCodexDB.telemetry.accepted) do count = count + 1 end
+	check(count <= 60, "remembered accept times are capped at 60")
+end
+
+section("telemetry: movement segments")
+do
+	local ns = boot()
+	W.loc = { map = 9001, x = 0.10, y = 0.50, zone = "Zone A" }
+	local function walk(steps, dx)
+		for _ = 1, steps do W.loc.x = W.loc.x + dx; ttick(ns, 1) end
+	end
+	ttick(ns, 1)                       -- first sample: where we are
+	walk(10, 0.007)                    -- 7 yards per second for 10 seconds (map 9001 is 1000 yards wide)
+	check(#evOf(ns, "PLAYER_MOVE") == 0, "a segment is open while still moving: nothing recorded yet")
+	ttick(ns, 3)                       -- stand still
+	local mv = evOf(ns, "PLAYER_MOVE")
+	check(#mv == 1 and mv[1].dist == 70 and mv[1].dur == 10 and mv[1].map == 9001 and mv[1].approx == nil, "standing still ends the segment: 70 yd in 10 s, from world coordinates")
+	check(math.abs(mv[1].x0 - 0.1) < 1e-4 and math.abs(mv[1].x1 - 0.17) < 1e-4, "start and end positions are recorded as map fractions")
+	ttick(ns, 600)
+	check(#evOf(ns, "PLAYER_MOVE") == 1 and #ns.Telemetry.Events() < 30, "10 idle minutes record nothing")
+	local stored = #ns.Telemetry.Events()
+	-- a teleport / loading screen is not walking
+	walk(3, 0.007); W.loc.x = W.loc.x + 0.5; ttick(ns, 1); ttick(ns, 3)
+	local anom = ns.Telemetry.Status().anomalies
+	local totalDist = 0
+	for _, e in ipairs(evOf(ns, "PLAYER_MOVE")) do totalDist = totalDist + e.dist end
+	check(anom >= 1 and totalDist <= 70 + 25, "a 500-yard jump in one second is counted as an anomaly, not as travel")
+	-- long travel is split so no segment grows without bound
+	W.loc.x = 0.02
+	ttick(ns, 3); local before = #evOf(ns, "PLAYER_MOVE")
+	walk(130, 0.007); ttick(ns, 3)
+	local after = evOf(ns, "PLAYER_MOVE")
+	check(#after - before >= 2 and after[before + 1].dur >= 119 and after[before + 1].dur <= 121, "travel longer than 120 s is split into several PLAYER_MOVE events")
+	-- no world conversion: distance falls back to map fractions and says so
+	local ns2 = boot()
+	ns2.Telemetry.reader.position = function() return { map = 9001, x = W.loc.x, y = W.loc.y } end
+	W.loc = { map = 9001, x = 0.10, y = 0.50 }
+	ttick(ns2, 1)
+	for _ = 1, 6 do W.loc.x = W.loc.x + 0.001; ttick(ns2, 1) end
+	ttick(ns2, 3)
+	local approx = last(evOf(ns2, "PLAYER_MOVE"))
+	check(approx ~= nil and approx.approx == true, "without world coordinates the distance is an approximation and the event says so")
+	-- position unavailable ends a segment and never raises
+	local ns3 = boot()
+	W.loc = { map = 9001, x = 0.10, y = 0.50 }
+	ttick(ns3, 1); for _ = 1, 5 do W.loc.x = W.loc.x + 0.007; ttick(ns3, 1) end
+	W.loc.x, W.loc.y, W.loc.map = nil, nil, nil
+	ttick(ns3, 2)
+	check(#evOf(ns3, "PLAYER_MOVE") == 1 and #ns3.errors == 0, "losing the position ends the segment cleanly, no error")
+end
+
+section("telemetry: size, persistence, enable/disable")
+do
+	local ns = boot()
+	for i = 1, 450 do ns.Telemetry.Record("QUEST_ACCEPT", { q = i, w = i }) end
+	local list = ns.Telemetry.Events()
+	check(#list == 300 and list[#list].q == 450 and list[1].q == 151, "the log is capped at 300 events, newest kept")
+	check(ForeverCodexDB.telemetry.events == list, "the log lives directly in ForeverCodexDB.telemetry (saved by /reload, no copy)")
+	check(ns.Prefs.IsSavedVariablesSafe(ForeverCodexDB), "the whole SavedVariable, telemetry included, is SavedVariables-safe")
+	local bytes = 0
+	for _, ev in ipairs(list) do for k, v in pairs(ev) do bytes = bytes + #tostring(k) + #tostring(v) + 4 end end
+	check(bytes < 20000, "a full log is small (" .. bytes .. " bytes of key/value text)")
+	-- simulate /reload: the saved table comes back, a new SESSION marker is appended
+	local saved = ForeverCodexDB
+	local ns2 = boot({ savedVars = saved })
+	local evs = ns2.Telemetry.Events()
+	check(evs[#evs].e == "SESSION" and #evs == 300 and evs[1].q == 152, "after a reload the previous log is kept and a new SESSION marker is appended (oldest dropped at the cap)")
+	local sessions = 0
+	for _, ev in ipairs(evs) do if ev.e == "SESSION" then sessions = sessions + 1 end end
+	check(sessions == 1 and #ns2.TelemetryMetrics.LastSession(evs) == 1, "metrics only ever look at the latest session (GetTime restarts each session)")
+	-- disable / enable
+	local n = #ns2.Telemetry.Events()
+	ns2.Telemetry.SetEnabled(false)
+	W.xp = 2000; tfire(ns2, "PLAYER_XP_UPDATE"); tfire(ns2, "QUEST_ACCEPTED", 1); ttick(ns2, 3)
+	check(not ns2.Telemetry.IsEnabled() and #ns2.Telemetry.Events() == n, "disabled: nothing is recorded")
+	check(ns2.Telemetry.Record("QUEST_ACCEPT", { q = 1 }) == nil and #ns2.Telemetry.Events() == n, "disabled: even a direct Record call is refused (second line of defence)")
+	ns2.Telemetry.SetEnabled(true)
+	W.xp = 2100; tfire(ns2, "PLAYER_XP_UPDATE")
+	check(ns2.Telemetry.IsEnabled() and #evOf(ns2, "XP_GAIN") >= 1, "re-enabled: recording resumes")
+	ns2.Telemetry.Reset()
+	local after = ns2.Telemetry.Events()
+	check(#after == 1 and after[1].e == "SESSION" and next(ForeverCodexDB.telemetry.accepted) == nil, "reset clears the log and starts a fresh session marker")
+	-- persisted disabled flag is honoured at load
+	ForeverCodexDB.telemetry.enabled = false
+	local ns3 = boot({ savedVars = ForeverCodexDB })
+	tfire(ns3, "QUEST_ACCEPTED", 9)
+	check(not ns3.Telemetry.IsEnabled() and #evOf(ns3, "QUEST_ACCEPT") == 0, "a saved 'off' choice is respected after a reload")
+end
+
+section("telemetry metrics: observed vs calculated vs estimated (hand-computed expectations)")
+do
+	local ns = boot()
+	local M = ns.TelemetryMetrics
+	local ev = {
+		{ e = "SESSION", t = 0 },
+		{ e = "XP_GAIN", t = 10, d = 100, lvl = 25 },
+		{ e = "MOB_KILL", t = 20, npc = 1 },
+		{ e = "XP_GAIN", t = 20.2, d = 80, sk = 0.2, lvl = 25 },
+		{ e = "COMBAT_END", t = 25, dur = 15 },
+		{ e = "PLAYER_MOVE", t = 60, dur = 30, dist = 210 },
+		{ e = "QUEST_ACCEPT", t = 70, q = 1 },
+		{ e = "QUEST_COMPLETE", t = 100, q = 1, dur = 240 },
+		{ e = "QUEST_TURNIN", t = 110, q = 1, xp = 1000, dur = 300 },
+		{ e = "XP_GAIN", t = 120, d = 500, lvl = 26, lvlup = true },
+		{ e = "LEVEL_UP", t = 120, lvl = 26 },
+	}
+	local snapshot = #ev
+	local s = M.Summary(ev)
+	check(s.window.seconds == 120 and s.window.events == 10, "the window spans the session so far (120 s, 10 events)")
+	check(s.xp.total.value == 680 and s.xp.total.kind == "observed", "total XP is OBSERVED: 100 + 80 + 500")
+	check(math.abs(s.xp.perMinute.value - 340) < 1e-9 and s.xp.perMinute.kind == "calculated" and s.xp.perMinute.unit == "xp/min", "XP per minute is CALCULATED: 680 over 2 minutes = 340")
+	check(math.abs(s.xp.perHour.value - 20400) < 1e-6, "XP per hour = 20400")
+	check(math.abs(s.xp.perActiveMinute.value - 680 / 0.75) < 1e-6, "XP per ACTIVE minute uses observed combat + movement time (45 s)")
+	check(s.kills.count.value == 1 and s.kills.count.kind == "observed", "kills are OBSERVED")
+	check(s.kills.avgXpPerKill.value == 80 and s.kills.avgXpPerKill.kind == "estimated" and s.kills.avgXpPerKill.n == 1,
+		"XP per kill is only ESTIMATED (timing pairing); the level-up gain and the earlier gain are not paired")
+	check(s.timing.combatSeconds.value == 15 and s.timing.moveSeconds.value == 30 and s.timing.moveDistance.value == 210, "combat seconds, move seconds and distance are observed sums")
+	check(s.timing.downtimeSeconds.value == 75 and math.abs(s.timing.downtimeShare.value - 0.625) < 1e-9 and s.timing.downtimeShare.kind == "calculated",
+		"downtime is CALCULATED as the remainder: 120 - 45 = 75 s (62.5%)")
+	check(s.quests.accepted.value == 1 and s.quests.completed.value == 1 and s.quests.turnedIn.value == 1 and s.quests.xp.value == 1000, "quest counts and turn-in XP are observed")
+	check(s.quests.avgSecondsToComplete.value == 240 and s.quests.xpPerQuestMinute.value == 200, "quest time to complete (240 s) and quest XP per minute (1000 / 5 min = 200) are calculated")
+	check(s.levelUps.value == 1, "level-ups counted")
+	check(#ev == snapshot and ev[2].d == 100, "the calculators do not modify the event list")
+	-- evidence gates: never invent a number
+	local short = M.Summary({ { e = "SESSION", t = 0 }, { e = "XP_GAIN", t = 20, d = 50 } })
+	check(short.xp.perMinute.value == nil and short.xp.perMinute.reason:find("shorter than 60") and short.xp.total.value == 50,
+		"under a minute of data: the rate is nil with a reason, the observed total is still reported")
+	local none = M.Summary({})
+	check(none.xp.perMinute.value == nil and none.kills.avgXpPerKill.value == nil and none.reason ~= nil and none.window.events == 0, "no events: every derived metric is nil with a reason")
+	local noXp = M.Summary({ { e = "SESSION", t = 0 }, { e = "COMBAT_END", t = 120, dur = 10 } })
+	check(noXp.xp.perMinute.value == nil and noXp.xp.perMinute.reason == "no XP gains recorded", "a long window with no XP gains reports no rate")
+	local noPair = M.Summary({ { e = "SESSION", t = 0 }, { e = "MOB_KILL", t = 10, npc = 1 }, { e = "XP_GAIN", t = 40, d = 90 } })
+	check(noPair.kills.avgXpPerKill.value == nil, "an XP gain 30 s after a kill is not paired with it")
+	-- sessions and windows
+	local two = M.Summary({ { e = "SESSION", t = 0 }, { e = "XP_GAIN", t = 50, d = 999 }, { e = "SESSION", t = 0 }, { e = "XP_GAIN", t = 90, d = 10 }, { e = "XP_GAIN", t = 100, d = 20 } })
+	check(two.xp.total.value == 30, "only the latest session is summarised")
+	local clipped = M.Summary(ev, { span = 60 })
+	check(clipped.window.seconds == 60 and clipped.xp.total.value == 500 + 0 and clipped.quests.turnedIn.value == 1, "a shorter span only counts events inside it")
+	local lines = M.Format(s)
+	check(#lines == 8 and lines[2]:find("340 xp/min %[calculated, n=3%]") and lines[4]:find("%[estimated"), "the text summary labels every number observed / calculated / estimated")
+end
+
+section("telemetry does not change what Codex recommends")
+do
+	local nsA = boot({ char = { level = 25 } })
+	local planA = recompute(nsA)
+	local idsA, scoreA = seqIds(planA), planA.next._score
+	local computes = nsA.State.computeCount
+	local weightsBefore = nsA.Registry.Strategy("fast").w.distScale
+	-- flood telemetry with every event type
+	W.xp = 2000; tfire(nsA, "PLAYER_XP_UPDATE"); tfire(nsA, "PLAYER_REGEN_DISABLED"); W.now = W.now + 5; tfire(nsA, "PLAYER_REGEN_ENABLED")
+	W.clog = { 1, "PARTY_KILL", false, "Player-1-1", "x", 0x511, 0, "Creature-0-1-1-1-100-1", "m", 0 }; tfire(nsA, "COMBAT_LOG_EVENT_UNFILTERED")
+	tfire(nsA, "QUEST_ACCEPTED", 4242); tfire(nsA, "QUEST_TURNED_IN", 4242, 500, 0); tfire(nsA, "QUEST_LOG_UPDATE"); ttick(nsA, 5)
+	check(nsA.State.computeCount == computes, "telemetry events do not mark the plan dirty or trigger a recompute")
+	local planB = recompute(nsA)
+	check(seqIds(planB) == idsA and planB.next._score == scoreA, "the plan (order and scores) is identical before and after telemetry activity")
+	check(nsA.Registry.Strategy("fast").w.distScale == weightsBefore, "route style weights are untouched")
+	nsA.Telemetry.SetEnabled(false)
+	check(seqIds(recompute(nsA)) == idsA, "and identical with telemetry switched off")
+end
+
+section("telemetry: /codex diag and /codex telemetry")
+do
+	local ns = boot({ char = { level = 25 } })
+	W.xp = 1100; tfire(ns, "PLAYER_XP_UPDATE")
+	W.chat = {}
+	slash("diag")
+	check(chatHas("Telemetry: enabled") and chatHas("observation only; it does not affect recommendations"), "diag reports telemetry status")
+	check(chatHas("XP_GAIN[UNPROVEN reg=true rec=1]") and chatHas("QUEST_ACCEPT[proven reg=true rec=0]"), "diag lists each event type: proven or UNPROVEN, registered, and how many were recorded")
+	check(ns.Prefs.IsSavedVariablesSafe(ForeverCodexDB.diag[#ForeverCodexDB.diag]), "the diag snapshot with telemetry is SavedVariables-safe")
+	W.chat = {}
+	slash("telemetry")
+	check(chatHas("Telemetry is on") and chatHas("XP_GAIN") and chatHas("UNPROVEN on Forever") and chatHas("proven on Forever"), "/codex telemetry shows per-event status")
+	slash("telemetry events 2")
+	check(chatHas("XP_GAIN") and chatHas("d=100"), "/codex telemetry events prints recent raw events")
+	W.chat = {}
+	slash("telemetry summary")
+	check(chatHas("window:") and chatHas("XP gained:") and chatHas("n/a ("), "/codex telemetry summary prints labelled metrics, n/a where evidence is insufficient")
+	slash("telemetry off"); check(not ns.Telemetry.IsEnabled(), "/codex telemetry off")
+	slash("telemetry on"); check(ns.Telemetry.IsEnabled(), "/codex telemetry on")
+	slash("telemetry reset"); check(#ns.Telemetry.Events() == 1, "/codex telemetry reset")
+	slash("telemetry bogus"); check(chatHas("usage: /codex telemetry"), "unknown telemetry subcommand prints usage")
+	slash("help"); check(chatHas("/codex telemetry"), "help mentions telemetry")
+	check(#ns.errors == 0, "no caught errors from any telemetry scenario" .. (#ns.errors > 0 and (": " .. ns.errors[1]) or ""))
 end
 
 print(string.format("\n%d passed, %d failed", passed, failed))

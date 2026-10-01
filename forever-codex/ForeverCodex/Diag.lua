@@ -82,6 +82,13 @@ function D.Snapshot()
 		end
 		for _, a in ipairs(plan.nearby) do snap.plan.nearby[#snap.plan.nearby + 1] = summarize(a) end
 	end
+	if ns.Telemetry then
+		local st = ns.Telemetry.Status()
+		snap.telemetry = { enabled = st.enabled, stored = st.stored, cap = st.cap, anomalies = st.anomalies, types = {} }
+		for _, c in ipairs(ns.Telemetry.Capabilities()) do
+			snap.telemetry.types[#snap.telemetry.types + 1] = { type = c.type, verified = c.verified, registered = c.registered, recorded = c.recorded }
+		end
+	end
 	for _, e in ipairs(ns.errors) do snap.errors[#snap.errors + 1] = e end
 	return snap
 end
@@ -142,6 +149,16 @@ function D.Lines(s)
 		for _, w in ipairs(p.warnings) do L[#L + 1] = "  warning: " .. w end
 	else
 		L[#L + 1] = "Plan: not computed yet"
+	end
+	if s.telemetry then
+		local tl = s.telemetry
+		L[#L + 1] = string.format("Telemetry: %s, %d/%d events stored, %d anomalies (observation only; it does not affect recommendations)",
+			tl.enabled and "enabled" or "OFF", tl.stored, tl.cap, tl.anomalies)
+		local parts = {}
+		for _, ty in ipairs(tl.types) do
+			parts[#parts + 1] = string.format("%s[%s reg=%s rec=%d]", ty.type, ty.verified and "proven" or "UNPROVEN", tostring(ty.registered), ty.recorded)
+		end
+		L[#L + 1] = "  " .. table.concat(parts, " ")
 	end
 	local miss = {}
 	for _, a in ipairs(s.apis) do

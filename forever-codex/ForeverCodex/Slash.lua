@@ -17,6 +17,7 @@ local function helpLines()
 	say("  /codex skip | unskip   skip the current recommendation | bring all skipped items back")
 	say("  /codex add <id|name>   add a quest to your route;  /codex remove <id>")
 	say("  /codex sys <key> on|off   toggle a system;  /codex hardcore on|off")
+	say("  /codex telemetry [status|summary|events|on|off|reset]   observation log (does not affect recommendations)")
 	say("  /codex where | reset | help")
 end
 
@@ -46,6 +47,41 @@ local function listZones()
 	local keys = { "auto" }
 	for _, z in ipairs(R.Zones()) do keys[#keys + 1] = z.key end
 	say("Route zone: " .. P.GetRouteZone() .. ". Available: " .. table.concat(keys, ", "))
+end
+
+local function telemetryCommand(rest)
+	local T = ns.Telemetry
+	if not T then say("telemetry is not loaded.") return end
+	local sub, arg = rest:match("^(%S*)%s*(.-)$")
+	sub = sub:lower()
+	if sub == "" or sub == "status" then
+		local st = T.Status()
+		say(string.format("Telemetry is %s: %d/%d events stored, %d anomalies. It only records observations; it does not change recommendations.",
+			st.enabled and "on" or "OFF", st.stored, st.cap, st.anomalies))
+		for _, c in ipairs(T.Capabilities()) do
+			say(string.format("  %-13s %s | registered: %s | recorded this session: %d", c.type, c.verified and "proven on Forever" or "UNPROVEN on Forever",
+				tostring(c.registered), c.recorded))
+		end
+	elseif sub == "summary" then
+		local span = tonumber(arg)
+		for _, l in ipairs(ns.TelemetryMetrics.Format(ns.TelemetryMetrics.Summary(T.Events(), { span = span }))) do say("  " .. l) end
+	elseif sub == "events" then
+		local list, n = T.Events(), tonumber(arg) or 10
+		for i = math.max(1, #list - n + 1), #list do
+			local ev, parts = list[i], {}
+			for k, v in pairs(ev) do if k ~= "e" and k ~= "t" then parts[#parts + 1] = k .. "=" .. tostring(v) end end
+			table.sort(parts)
+			say(string.format("  t=%s %s %s", tostring(ev.t), ev.e, table.concat(parts, " ")))
+		end
+	elseif sub == "on" or sub == "off" then
+		T.SetEnabled(sub == "on")
+		say("telemetry " .. sub .. ".")
+	elseif sub == "reset" then
+		T.Reset()
+		say("telemetry log cleared.")
+	else
+		say("usage: /codex telemetry [status | summary [seconds] | events [n] | on | off | reset]")
+	end
 end
 
 local function onOff(word)
@@ -150,6 +186,8 @@ local function handle(msg)
 				tostring(c.level), tostring(c.race), tostring(c.class), tostring(c.faction), tostring(c.race), P.GetRouteZone(),
 				tostring(l.zone), l.subzone and (" / " .. l.subzone) or ""))
 		end
+	elseif cmd == "telemetry" then
+		telemetryCommand(rest or "")
 	elseif cmd == "reset" then
 		P.ResetOverrides()
 		say("skips and added quests cleared.")
