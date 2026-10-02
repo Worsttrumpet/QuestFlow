@@ -917,3 +917,21 @@ do
 	check(not def.sources[1]:find("COMBAT") and not def.sources[2]:find("COMBAT") and not def.sources[3]:find("COMBAT"), "no combat-log source")
 	check(table.concat(ns.HelpCodex.Learned(), "|"):find("Quest objectives you finished: 1", 1, true) ~= nil, "Help Improve Codex counts it")
 end
+
+section("chat: a literal pipe is escaped (real client printed 'flipset' for 'flip|reset')")
+do
+	local ns = boot({ char = { level = 6 }, synthetic = true })
+	local W = H.world()
+	W.chat, W.chatRaw = {}, {}
+	ns.Say("usage: /codex arrow on|off|flip|reset")
+	check(W.chatRaw[1] and W.chatRaw[1]:find("on||off||flip||reset", 1, true) ~= nil, "pipes are doubled so the client shows them literally")
+	check(W.chatRaw[1]:find("^|cff33cc99%[Codex%]|r ") ~= nil, "while Codex's own colour prefix is untouched")
+	check(W.chat[1] == "[Codex] usage: /codex arrow on|off|flip|reset", "and the player sees the whole line: " .. tostring(W.chat[1]))
+	local bad = {}
+	for _, f in ipairs({ "Slash.lua", "Diag.lua", "Party.lua", "Navigation.lua", "Boot.lua" }) do
+		for l in H.readFile(H.addonDir .. "/" .. f):gmatch("[^\n]+") do
+			if l:find("|c%x%x", 1) and not l:find("^%s*%-%-") then bad[#bad + 1] = f end
+		end
+	end
+	check(#bad == 0, "no Codex chat text relies on colour escapes")
+end

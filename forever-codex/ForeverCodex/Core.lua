@@ -31,7 +31,7 @@ end
 
 local function say(msg)
 	if DEFAULT_CHAT_FRAME then
-		DEFAULT_CHAT_FRAME:AddMessage("|cff33cc99[Codex]|r " .. tostring(msg))
+		DEFAULT_CHAT_FRAME:AddMessage("|cff33cc99[Codex]|r " .. (tostring(msg):gsub("|", "||")))   -- a literal pipe must be doubled or chat reads "|r" etc. as a colour code
 	end
 end
 ns.Say = say

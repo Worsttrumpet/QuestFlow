@@ -77,7 +77,8 @@ local function newWorld(opts)
 	_G.CreateFrame = function(kind, name) local f = widget(kind); f.__name = name; if name then _G[name] = f end; table.insert(W.frames, f); return f end   -- named frames become globals, as in WoW
 	_G.UIParent, _G.Minimap, _G.WorldMapFrame = widget("UIParent"), widget("Minimap"), widget("WorldMapFrame")
 	_G.GameFontNormal, _G.GameTooltip = {}, widget("GameTooltip")
-	_G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) table.insert(W.chat, m) end }
+	-- the real client shows "||" as one literal pipe (and reads a lone "|r" etc. as a colour code): W.chat is what the player SEES, W.chatRaw what was sent
+	_G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) W.chatRaw = W.chatRaw or {}; table.insert(W.chatRaw, m); table.insert(W.chat, (m:gsub("||", "\1"):gsub("|r", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("\1", "|"))) end }
 	_G.GetBuildInfo = function() return "1.60.1", "70124", "Sep 29 2026", 16001 end
 	W.now, W.wall, W.xp, W.xpMax, W.clog = opts.now or 100, 1790000000, 1000, 5000, nil
 	_G.GetTime = function() return W.now end
