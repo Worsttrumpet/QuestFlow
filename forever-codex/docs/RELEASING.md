@@ -29,4 +29,4 @@ Builds 0.2.10 to 0.2.20 were numbered before the 0-9 rule. In the new numbering 
 | 0.2.10 ... 0.2.19 | 0.3.0 ... 0.3.9 |
 | 0.2.20 | 0.4.0 (the build packaged as `ForeverCodex-0.4.0.zip`; there is no 0.2.20 zip) |
 
-The older zips in `dist/` keep their original names and `docs/CODEX_REALCLIENT_FIXES.md` keeps the numbers it was written with.
+The zips for 0.2.10 to 0.2.19 were renamed to `ForeverCodex-0.3.0.zip` ... `ForeverCodex-0.3.9.zip` so the folder sorts in release order. Only the file names changed: a renamed zip's contents still say the old version (for example `ForeverCodex-0.3.5.zip` shows `v0.2.15` in the window). `docs/CODEX_REALCLIENT_FIXES.md` keeps the numbers it was written with.
