@@ -224,3 +224,6 @@ Real-client checks: right click on the badge, the tabs, the settings tab, the tr
 
 ## 24. Release 0.2.11: the quest-log counter
 The tracker shows the quest-log count at the right end of the character line: "14/40". Grey normally, gold at 38/40 and above, red at 40/40; hidden when the quest log cannot be read (nothing is guessed). It is the count the quest log itself reports (a finished quest still holds its slot); 40 is the figure given by the project owner, not probed from the client. The same count is in `/codex report`.
+
+## 25. Real-client result: hiding the game's quest tracker (v0.2.10, build 70170)
+`/codex tracker on` hid the game's own quest tracker ("All Objectives") and `/codex tracker off` brought it back; both printed the expected message and no blocked-action popup appeared. The right-hand tracker area was clear, with the Codex tracker (top right, below the minimap) in its place. So `ObjectiveTrackerFrame` Hide / Show is a working, popup-free way to do this on Forever. Still unobserved: whether it survives a `/reload` / relog with the setting on (it is re-applied at login), whether the game ever re-shows it mid-session, and how it behaves with Questie's own tracker enabled. The "UNVERIFIED" notes in `BlizzardTracker.lua` and `/codex diag` are left as they are until those are seen.
