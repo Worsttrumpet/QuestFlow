@@ -44,16 +44,8 @@ local function onLogin()
 		local ok, err = pcall(ns.MinimapButton.Build)
 		if not ok then
 			ns.Say("minimap button failed to initialize: " .. tostring(err))
-		else
-			-- The copied M8.13 button anchors exactly where ForeverQuestGuide's does; move ours down so both can coexist.
-			local btn = _G["ForeverCodexMinimapButton"]
-			if btn and Minimap then
-				pcall(function()
-					btn:ClearAllPoints()
-					btn:SetPoint("TOPLEFT", Minimap, "TOPRIGHT", 6, -34)
-				end)
-			end
 		end
+		-- (its position, saved or default, is applied by the button itself: nothing here may re-anchor it, or a saved spot would be lost at every login)
 	end
 	if ns.Navigation then ns.Safe(ns.Navigation.Restore) end
 	if ns.Party then ns.Safe(ns.Party.Register) end

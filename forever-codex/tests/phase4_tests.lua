@@ -1003,3 +1003,98 @@ do
 	check(A.Info().navOn == false and A.state.reason == "nav off", "with waypoint following off the reason says so")
 	check(#ns.errors == 0, "no errors")
 end
+
+
+-- ================================================================ minimap button: drag, save, restore
+
+section("minimap button: it can be dragged, the position is saved and restored, and it can be reset")
+do
+	local function copy(v) if type(v) ~= "table" then return v end local o = {} for k, x in pairs(v) do o[k] = copy(x) end return o end
+	local function findButton() for _, f in ipairs(H.world().frames) do if f.__name == "ForeverCodexMinimapButton" then return f end end end
+	local function samePoint(f, point, rel, x, y) local p = f.__points; return p and p[1] == point and p[3] == rel and p[4] == x and p[5] == y end
+
+	local ns = boot({ char = { level = 10 } })
+	local W = H.world()
+	local mm = findButton()
+	check(mm ~= nil, "the button exists")
+	-- registered for dragging (the cause of the bug: none of this existed)
+	check(mm.__movable == true and mm.__mouse == true and mm.__drag and mm.__drag[1] == "LeftButton", "it is movable, takes the mouse and is registered for left-button drag")
+	check(mm.__clamped == true, "it is clamped to the screen")
+	check(type(mm.__scripts.OnDragStart) == "function" and type(mm.__scripts.OnDragStop) == "function" and type(mm.__scripts.OnMouseDown) == "function" and type(mm.__scripts.OnClick) == "function", "drag, mouse-down and click handlers are installed")
+	-- default spot, nothing saved yet
+	check(mm.__points and mm.__points[1] == "TOPLEFT" and mm.__points[2] == _G.Minimap and mm.__points[3] == "TOPRIGHT" and mm.__points[4] == 6 and mm.__points[5] == -34, "with nothing saved it sits at the default spot on the minimap")
+	check(ns.Prefs.MinimapPos() == nil, "and nothing is stored")
+
+	-- a drag: start, the engine moves it, stop
+	local started, stopped = 0, 0
+	mm.StartMoving = function() started = started + 1 end
+	mm.StopMovingOrSizing = function() stopped = stopped + 1 end
+	local toggles = 0
+	ns.UI.Toggle = function() toggles = toggles + 1 end
+	mm.__scripts.OnMouseDown(mm)
+	mm.__scripts.OnDragStart(mm)
+	check(started == 1 and stopped == 0, "starting the drag starts moving the frame")
+	mm.__points = { "TOPLEFT", _G.UIParent, "BOTTOMLEFT", 300, 400 }     -- what the engine leaves after StartMoving / StopMovingOrSizing
+	mm.__scripts.OnDragStop(mm)
+	check(stopped == 1, "releasing the mouse stops the drag")
+	local saved = ns.Prefs.MinimapPos()
+	check(saved and saved.point == "TOPLEFT" and saved.rel == "BOTTOMLEFT" and saved.x == 300 and saved.y == 400, "the position was saved")
+	check(ns.Prefs.IsSavedVariablesSafe(ForeverCodexDB), "and it is stored in a SavedVariables-safe form")
+	mm.__scripts.OnClick(mm)
+	check(toggles == 0, "letting go of a drag over the button does not also open or close the window")
+	mm.__scripts.OnMouseDown(mm); mm.__scripts.OnClick(mm)
+	check(toggles == 1, "a plain click still opens or closes the window")
+
+	-- reload: same SavedVariables, a fresh client session
+	local db = copy(ForeverCodexDB)
+	local ns2 = boot({ char = { level = 10 }, savedVars = db })
+	local mm2 = findButton()
+	check(samePoint(mm2, "TOPLEFT", "BOTTOMLEFT", 300, 400) and mm2.__points[2] == _G.UIParent, "after a reload the button is where it was left (login does not re-anchor it)")
+	check(#ns2.errors == 0, "no errors at login")
+
+	-- unusable saved positions fall back to the default instead of losing the button
+	for name, bad in pairs({ badPoint = { point = "NOWHERE", rel = "CENTER", x = 1, y = 1 }, huge = { point = "CENTER", rel = "CENTER", x = 1e9, y = 0 },
+		nan = { point = "CENTER", rel = "CENTER", x = 0 / 0, y = 0 }, text = { point = "CENTER", rel = "CENTER", x = "10", y = 0 }, notTable = "oops" }) do
+		local dbBad = copy(ForeverCodexDB); dbBad.ui.minimapPos = bad
+		local nsB = boot({ char = { level = 10 }, savedVars = dbBad })
+		local b = findButton()
+		check(nsB.Prefs.MinimapPos() == nil and b.__points[1] == "TOPLEFT" and b.__points[2] == _G.Minimap and b.__points[5] == -34, "an unusable saved position (" .. name .. ") falls back to the default spot")
+	end
+
+	-- a missing rel defaults to the point
+	local dbRel = copy(ForeverCodexDB); dbRel.ui.minimapPos = { point = "CENTER", x = 5, y = 6 }
+	boot({ char = { level = 10 }, savedVars = dbRel })
+	check(samePoint(findButton(), "CENTER", "CENTER", 5, 6), "a saved position without a relative point uses the same point")
+
+	-- the drag is always released, even when the position cannot be read
+	local ns3 = boot({ char = { level = 10 } })
+	local m3 = findButton()
+	local stop3 = 0
+	m3.StopMovingOrSizing = function() stop3 = stop3 + 1 end
+	m3.GetPoint = function() return nil end
+	m3.__scripts.OnDragStart(m3); m3.__scripts.OnDragStop(m3)
+	check(stop3 == 1 and ns3.Prefs.MinimapPos() == nil and #ns3.errors == 0, "if the position cannot be read the drag still ends, nothing odd is saved, and no error is raised")
+	local errs = 0
+	m3.StopMovingOrSizing = function() errs = errs + 1; error("boom") end
+	local okStop = pcall(m3.__scripts.OnDragStop, m3)
+	check(okStop and errs == 1, "even a failing StopMovingOrSizing does not escape the handler (it is recorded for /codex diag)")
+
+	-- reset
+	local ns4 = boot({ char = { level = 10 }, savedVars = copy(db) })
+	local m4 = findButton()
+	check(samePoint(m4, "TOPLEFT", "BOTTOMLEFT", 300, 400), "(setup) a moved button")
+	H.world().chat = {}
+	H.slash("minimap reset")
+	check(ns4.Prefs.MinimapPos() == nil and m4.__points[2] == _G.Minimap and m4.__points[5] == -34, "/codex minimap reset puts it back at the default spot and forgets the saved one")
+	check(#H.world().chat > 0, "and says so")
+	H.world().chat = {}
+	H.slash("minimap")
+	check(table.concat(H.world().chat, "\n"):find("dragged", 1, true) ~= nil, "/codex minimap explains dragging")
+	H.slash("help")
+	check(table.concat(H.world().chat, "\n"):find("/codex minimap reset", 1, true) ~= nil, "help lists the reset command")
+	check(#ns4.errors == 0, "no errors")
+
+	-- the button never hides behind a re-anchor in another start-up path
+	local boot_src = H.readFile(H.addonDir .. "/Boot.lua"):gsub("%-%-[^\n]*", "")
+	check(not boot_src:find('SetPoint("TOPLEFT", Minimap', 1, true), "Boot no longer re-anchors the button")
+end

@@ -113,6 +113,22 @@ function P.SetMarkers(on) P.Char().markers = on == true end
 function P.WindowPos() return root().ui.window end
 function P.SetWindowPos(t) root().ui.window = t end
 
+local ANCHORS = { TOPLEFT = true, TOP = true, TOPRIGHT = true, LEFT = true, CENTER = true, RIGHT = true, BOTTOMLEFT = true, BOTTOM = true, BOTTOMRIGHT = true }
+
+--- The minimap button's saved anchor on UIParent: { point, rel, x, y }, or nil when none is saved or what is saved is not usable
+-- (a hand-edited or damaged file must never leave the button off-screen: nil means "use the default spot").
+function P.MinimapPos()
+	local t = root().ui.minimapPos
+	if type(t) ~= "table" or not ANCHORS[t.point] then return nil end
+	local rel = t.rel == nil and t.point or t.rel
+	if not ANCHORS[rel] then return nil end
+	local x, y = t.x, t.y
+	if type(x) ~= "number" or type(y) ~= "number" or x ~= x or y ~= y or math.abs(x) > 10000 or math.abs(y) > 10000 then return nil end
+	return { point = t.point, rel = rel, x = x, y = y }
+end
+function P.SetMinimapPos(t) root().ui.minimapPos = t end
+function P.ClearMinimapPos() root().ui.minimapPos = nil end
+
 --- The waypoint Codex last placed for this character: { action, map, x, y } or nil (see Navigation).
 function P.NavRecord() return P.Char().nav end
 function P.SetNavRecord(t) P.Char().nav = t end

@@ -113,3 +113,15 @@ labelled proven only for what M8.9 proved (reading objectives); its diff is stat
 Changes: frame created (hidden) at the first tick; learning independent of destination; `/codex arrow` now prints destination yes/NO, frame created/shown and where, GetPlayerFacing available and its current value, learned or not and the samples this session;
 `/codex arrow test` shows a spinning arrow for 10 s with no destination and no navigation involved, to prove the frame, texture and rotation on the real client.
 To get a destination for a real check: `/codex add <quest id>` (a quest you add is always planned), or stand in a zone with quests. Still unverified on Forever: the frame's appearance, texture orientation, rotation sign (`/codex arrow flip`), and the learned convention.
+
+## 11. The minimap button could not be moved
+The button was visible but fixed. Causes (all found in the code, none needed a client change):
+1. **No drag support at all.** `MinimapButton.lua` (a copy of the M8.13 button) never called `SetMovable` / `RegisterForDrag` and had no `OnDragStart` / `OnDragStop`, so nothing could start a drag.
+2. **No saved position.** Nothing stored where the button was.
+3. **A second path reset it.** `Boot.lua` re-anchored the button to a fixed spot (34 px down) at every login, which would have erased any saved position.
+Changes: the button is movable, takes the mouse and is registered for left-button drag; `OnDragStop` always releases the drag first, then saves the anchor (point, relative point, x, y against UIParent) through
+`Preferences` (validated on read: an unknown anchor, a non-number, NaN or a huge value falls back to the default spot, so a damaged file never loses the button); the position is applied by the button itself at build time
+(saved, else the old default) and Boot no longer re-anchors it; releasing a drag over the button does not also toggle the window; the button stays clamped to the screen; `/codex minimap reset` restores the default spot.
+The same mechanism (SetMovable + RegisterForDrag + StartMoving / StopMovingOrSizing + GetPoint saved to SavedVariables) is already proven on Forever for Codex's window and arrow. It is NOT proven for this button until it is tried in-game.
+The position is not a ring-orbit one (that needs the minimap's geometry, unverified on Forever); the button is placed freely and stored against the screen.
+**Real-client check:** `/reload`, drag the button somewhere, release (it must stop following the mouse and the window must not open), `/reload` (it stays), log out and in (it stays), `/codex minimap reset` (it goes back).

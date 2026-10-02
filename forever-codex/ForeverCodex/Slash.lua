@@ -23,6 +23,7 @@ local function helpLines()
 	say("  /codex sys <key> on|off   toggle a system;  /codex hardcore on|off")
 	say("  /codex telemetry [status|summary|events|on|off|reset]   observation log (does not affect recommendations)")
 	say("  /codex planner [on|off]   the sequence planner (default on); off = the previous one-action-at-a-time engine")
+	say("  /codex minimap reset   put the (draggable) minimap button back at its default spot")
 	say("  /codex where | reset | help")
 end
 
@@ -142,6 +143,18 @@ local function handle(msg)
 				i.point and (" at " .. i.point) or "", i.facingApi and "available" or "MISSING", i.facing and string.format(" (now %.2f)", i.facing) or " (no value)"))
 			say(string.format("  facing convention learned: %s (%d samples this session). Walk in a few directions to learn it. Unproven on the real client. Usage: /codex arrow on|off|flip|reset|test",
 				cal and string.format("yes, %d samples", cal.n or 0) or "no", i.samples))
+		end
+	elseif cmd == "minimap" then
+		if restLower == "reset" then
+			if ns.MinimapButton and ns.MinimapButton.button then
+				ns.MinimapButton.Reset()
+				say("Minimap button put back at its default spot.")
+			else
+				P.ClearMinimapPos()
+				say("Minimap button position forgotten; it will use its default spot.")
+			end
+		else
+			say("The Codex minimap button can be dragged with the left mouse button; its position is saved. /codex minimap reset puts it back at the default spot.")
 		end
 	elseif cmd == "pins" then
 		if restLower == "on" or restLower == "off" then

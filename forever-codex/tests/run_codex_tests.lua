@@ -52,6 +52,11 @@ local function widget(kind)
 		if k == "GetStringHeight" then return function() return 12 end end
 		if k == "ClearAllPoints" then return function(self) self.__points = nil end end
 		if k == "SetPoint" then return function(self, ...) self.__points = { ... } end end
+		if k == "SetMovable" then return function(self, v) self.__movable = v end end
+		if k == "EnableMouse" then return function(self, v) self.__mouse = v end end
+		if k == "RegisterForDrag" then return function(self, ...) self.__drag = { ... } end end
+		if k == "SetClampedToScreen" then return function(self, v) self.__clamped = v end end
+		if k == "GetPoint" then return function(self) local p = self.__points; if p then return p[1], p[2], p[3], p[4], p[5] end end end
 		if type(k) == "string" and k:match("^%u") then return function() end end
 		return nil
 	end })
@@ -290,8 +295,7 @@ do
 	local cases = {
 		{ "ProgressionEval.lua", { { "ns.ProgressionEval = {", "ns.Eval = {" }, { "-- ForeverQuestGuide.ProgressionEval:", "-- ForeverCodex.Eval (was ForeverQuestGuide.ProgressionEval):" } } },
 		{ "MapPin.lua", { { "-- ForeverQuestGuide.MapPin:", "-- ForeverCodex.MapPin (was ForeverQuestGuide.MapPin):" } } },
-		{ "MinimapButton.lua", { { '"ForeverQuestGuideMinimapButton"', '"ForeverCodexMinimapButton"' }, { 'btn.label:SetText("Q")', 'btn.label:SetText("C")' },
-			{ '"Forever Quest Guide"', '"Forever Codex"' }, { "-- ForeverQuestGuide.MinimapButton:", "-- ForeverCodex.MinimapButton (was ForeverQuestGuide.MinimapButton):" } } },
+		-- MinimapButton.lua is no longer a verbatim copy: it gained drag-to-move and a saved position (see phase4_tests.lua, "minimap button").
 	}
 	for _, c in ipairs(cases) do
 		local copy = stripBanner(readFile(ADDON .. "/" .. c[1]))

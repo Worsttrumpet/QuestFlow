@@ -1,6 +1,6 @@
--- COPIED from m8-13-progression/ForeverQuestGuide/MinimapButton.lua (M8.13, real-client validated).
--- Only the exported namespace name / user-facing strings were changed; the logic is untouched.
--- Re-copy rather than editing logic here, so fixes stay traceable to the M8.13 original.
+-- Started as a copy of m8-13-progression/ForeverQuestGuide/MinimapButton.lua (M8.13, real-client validated for the button
+-- appearing and opening the window). It has since DIVERGED on purpose: the original could not be moved. This version adds
+-- drag-to-move and a saved position (see "Moving the button" below). The icon, tooltip and click behaviour are unchanged.
 
 -- ForeverCodex.MinimapButton (was ForeverQuestGuide.MinimapButton): a small, self-contained open/close button.
 --
@@ -37,10 +37,57 @@
 
 local addonName, ns = ...
 
+-- ---------------------------------------------------------------- moving the button
+--
+-- Why the original could not be moved: it never called SetMovable / RegisterForDrag and had no OnDragStart / OnDragStop, so
+-- there was nothing to start a drag; it had no saved position; and Boot re-anchored it to a fixed spot at every login.
+--
+-- Moving it uses the same mechanism that is already proven on Forever for Codex's own window and arrow (SetMovable +
+-- RegisterForDrag("LeftButton") + StartMoving / StopMovingOrSizing, then GetPoint saved to SavedVariables). The position is
+-- stored against UIParent, so it does not depend on where the minimap is. It is NOT a ring-orbit position (that needs the
+-- minimap's geometry, which has not been verified on Forever). The button stays clamped to the screen, and
+-- /codex minimap reset puts it back at the default spot.
+
+local DEFAULT = { point = "TOPLEFT", rel = "TOPRIGHT", x = 6, y = -34 }   -- on the Minimap, 34 px down so the Quest Guide's button is not covered
+
+local MM = { DEFAULT = DEFAULT }
+ns.MinimapButton = MM
+
+--- Anchors the button at its saved spot, or the default when none (or an unusable one) is saved.
+function MM.Apply(btn)
+	btn = btn or MM.button
+	if not btn then return end
+	local pos = ns.Prefs and ns.Prefs.MinimapPos()
+	btn:ClearAllPoints()
+	if pos then
+		btn:SetPoint(pos.point, UIParent, pos.rel, pos.x, pos.y)
+	else
+		btn:SetPoint(DEFAULT.point, Minimap, DEFAULT.rel, DEFAULT.x, DEFAULT.y)
+	end
+end
+
+--- Saves where a finished drag left the button. Returns true when something usable was stored.
+function MM.SavePosition(btn)
+	btn = btn or MM.button
+	if not btn then return false end
+	local ok, point, _, rel, x, y = pcall(btn.GetPoint, btn, 1)
+	if not ok or type(point) ~= "string" or type(x) ~= "number" or type(y) ~= "number" then return false end
+	ns.Prefs.SetMinimapPos({ point = point, rel = rel or point, x = x, y = y })
+	if not ns.Prefs.MinimapPos() then ns.Prefs.ClearMinimapPos() return false end   -- not something we could restore: keep the default
+	return true
+end
+
+--- Back to the default spot (the saved position is forgotten).
+function MM.Reset()
+	ns.Prefs.ClearMinimapPos()
+	MM.Apply()
+end
+
 local function build()
 	local btn = CreateFrame("Button", "ForeverCodexMinimapButton", Minimap)
 	btn:SetSize(28, 28)
-	btn:SetPoint("TOPLEFT", Minimap, "TOPRIGHT", 6, 0)
+	MM.button = btn
+	MM.Apply(btn)
 	btn:SetFrameStrata("MEDIUM")
 
 	btn.bg = btn:CreateTexture(nil, "BACKGROUND")
@@ -60,7 +107,25 @@ local function build()
 	btn.label:SetPoint("CENTER")
 	btn.label:SetText("C")
 
+	-- drag to move
+	btn:SetMovable(true)
+	btn:EnableMouse(true)
+	btn:RegisterForDrag("LeftButton")
+	ns.Safe(btn.SetClampedToScreen, btn, true)
+	local dragged = false
+	btn:SetScript("OnMouseDown", function() dragged = false end)
+	btn:SetScript("OnDragStart", function(self)
+		dragged = true
+		if GameTooltip then ns.Safe(GameTooltip.Hide, GameTooltip) end
+		ns.Safe(self.StartMoving, self)
+	end)
+	btn:SetScript("OnDragStop", function(self)
+		ns.Safe(self.StopMovingOrSizing, self)     -- always release the drag first, whatever happens next
+		ns.Safe(MM.SavePosition, self)
+	end)
+
 	btn:SetScript("OnClick", function()
+		if dragged then dragged = false return end     -- releasing a drag over the button is not a click
 		if ns.UI and ns.UI.Toggle then
 			ns.UI.Toggle()
 		end
@@ -71,7 +136,7 @@ local function build()
 			local ok = ns.Safe(GameTooltip.SetOwner, GameTooltip, self, "ANCHOR_LEFT")
 			if ok then
 				ns.Safe(GameTooltip.AddLine, GameTooltip, "Forever Codex")
-				ns.Safe(GameTooltip.AddLine, GameTooltip, "Click to open/close", 0.8, 0.8, 0.8)
+				ns.Safe(GameTooltip.AddLine, GameTooltip, "Click to open/close. Drag to move.", 0.8, 0.8, 0.8)
 				ns.Safe(GameTooltip.Show, GameTooltip)
 			end
 		end
@@ -85,4 +150,4 @@ local function build()
 	return btn
 end
 
-ns.MinimapButton = { Build = build }
+MM.Build = build
