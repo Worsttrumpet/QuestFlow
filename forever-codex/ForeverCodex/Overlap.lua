@@ -26,6 +26,7 @@ ns.Overlap = Ov
 Ov.MAX_QUESTS = 3
 Ov.ALSO_ACTION_YD = 300        -- a pickup is only 'also' when it is a short walk from the player; a hand-in is never listed here (READY TO TURN IN has it)
 Ov.OVERLAP_YD = 300
+Ov.NOW_HANDIN_YD = 150         -- when NOW is a hand-in this close, nearby unfinished objectives still count as 'also complete this'
 
 --- "here" / "nearby" / "350 yd": the short distance text of the tracker (nil when the distance is unknown or not on this continent).
 function Ov.ShortWhere(d)
@@ -89,12 +90,14 @@ function Ov.List(plan, ctx)
 	local P = ns.Prefs
 	local seen = {}
 	if now.quest then seen[now.quest] = true end
-	if now.kind == "OBJECTIVE" then
+	local nowD = now.kind == "TURN_IN" and distanceTo(now, ctx) or nil
+	if now.kind == "OBJECTIVE" or (nowD ~= nil and nowD <= Ov.NOW_HANDIN_YD) then
 		local loc = ctx and ctx.loc
 		local me = loc and loc.available and { map = loc.map, x = loc.x, y = loc.y, world = loc.world or false } or nil
 		local nowPos = Pl.Locate(now)
-		local ref = nowPos or me
-		local refMap = nowPos and nowPos.map or (me and me.map) or nil
+		-- a close hand-in is not where the work is: measure from the player
+		local ref = (now.kind == "TURN_IN" and me) or nowPos or me
+		local refMap = (now.kind == "TURN_IN" and me and me.map) or (nowPos and nowPos.map) or (me and me.map) or nil
 		local pool = {}
 		for _, a in ipairs(plan.objectives or {}) do
 			if a.kind == "OBJECTIVE" and a.quest and not seen[a.quest] and not (P and a.skipKey and P.IsSkipped(a.skipKey)) and not a.unknown then pool[#pool + 1] = a end

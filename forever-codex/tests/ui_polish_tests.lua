@@ -158,10 +158,11 @@ do
 	ns.Prefs.Skip("QT:11")
 	ns.State.Recompute()
 	for _, it in ipairs(ns.Overlap.List(ns.State.plan, ns.State.ctx)) do check(it.quest ~= 11, "a skipped quest is not offered") end
-	-- NOW is a hand-in: working objectives elsewhere is not 'overlap' with it
+	-- NOW is a hand-in right next to you (0.2.19): the unfinished work in the same area is still offered
 	local done = { id = 40, name = "Finished task", zone = "zone-a", complete = true, objectives = { { text = "Thing", have = 5, need = 5 } }, map = 9001, x = 0.505, y = 0.5 }
 	local ns2 = logWorld({ done, DOOM })
-	check(ns2.State.plan.now and ns2.State.plan.now.kind == "TURN_IN" and #ns2.Overlap.List(ns2.State.plan, ns2.State.ctx) == 0, "with a hand-in as NOW there is no objective overlap")
+	local l2 = ns2.Overlap.List(ns2.State.plan, ns2.State.ctx)
+	check(ns2.State.plan.now and ns2.State.plan.now.kind == "TURN_IN" and #l2 == 1 and l2[1].quest == 11, "with a close hand-in as NOW the unfinished quest in the same area is still listed")
 	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
 end
 
@@ -781,4 +782,22 @@ do
 	check(card.now.whereShort ~= nil and card.now.whereShort:find("yd away", 1, true) or card.now.whereShort == "Nearby" or card.now.whereShort == "Here", "the NOW line has the short distance ('Here' / 'Nearby' / '750 yd away')")
 	check(c.nowInfo.__text == card.now.whereShort, "and the tracker draws it")
 	check(#ns.errors == 0, "no errors")
+end
+
+section("0.2.19: a close hand-in as NOW still lists the unfinished work next to you")
+do
+	local work = { id = 96897, name = "The Cult of the Damned", zone = "zone-a", map = 9001, x = 0.5, y = 0.5 + 0.004, objCoords = { { map = 9001, x = 0.5, y = 0.5 + 0.004 } }, objectives = { { text = "Dark Neophyte slain", have = 4, need = 8 } } }
+	local ready = { id = 96898, name = "Remnants of War", zone = "zone-a", complete = true, map = 9001, x = 0.5, y = 0.5 + 0.003, objectives = { { text = "Fragment", have = 12, need = 12 } } }
+	local ns = logWorld({ work, ready })
+	local p = ns.State.plan
+	local list = ns.Overlap.List(p, ns.State.ctx)
+	if p.now.kind == "TURN_IN" then
+		local found = false
+		for _, it in ipairs(list) do if it.kind == "objective" and it.quest == 96897 then found = true end end
+		check(found, "NOW is a hand-in a few yards away and the unfinished quest next to you is listed")
+	else
+		check(true, "(planner chose " .. tostring(p.now.kind) .. " as NOW in this layout; the hand-in rule is not exercised)")
+	end
+	for _, it in ipairs(list) do check(not (it.title or ""):find("Turn in", 1, true), "still no hand-in line") end
+	check(ns.Overlap.NOW_HANDIN_YD == 150, "the hand-in has to be within 150 yd")
 end

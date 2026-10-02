@@ -286,3 +286,9 @@ Real report (0.2.16): NOW was "Finish The Cult of the Damned", ALSO COMPLETE THI
 Cause: the overlap list appended the planner's own ALSO DO as a plain row, and here that was a hand-in. It was drawn under the "complete this" label and duplicated READY TO TURN IN.
 Fix: a hand-in is never listed as an extra (READY TO TURN IN has it); a pickup is listed only within 300 yd (`Overlap.ALSO_ACTION_YD`). The NOW line also uses the short distance form ("Here", "Nearby", "750 yd away").
 Tested with the stub client only; not yet seen in the real client.
+
+## 35. Release 0.2.19: nearby unfinished work stays visible when NOW is a close hand-in
+
+Real report (0.2.18): NOW was "Turn in Remnants of War" (75 yd) while The Cult of the Damned (4/8, 6/8) was 71 yd away. Whether it showed under ALSO COMPLETE THIS depended on a planner tie-break (one report showed "nothing", a screenshot showed it).
+Fix: when NOW is a hand-in within 150 yd (`Overlap.NOW_HANDIN_YD`), unfinished objectives within 300 yd of the player are listed (measured from the player, not the NPC). A far hand-in still lists nothing. The report's old `NEARBY:` line is relabelled "old nearby list (not shown in the window)".
+Unverified: whether a `src=game` hand-in point is the real turn-in NPC (asked the user).

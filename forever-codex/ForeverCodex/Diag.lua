@@ -316,9 +316,9 @@ function D.PlaytestLines(snap, lines)
 		if card.thenLine then add("THEN: " .. tostring(card.thenLine)) end
 		local okN, near = pcall(ns.Nearby.List, plan, ctx)
 		if okN and #near > 0 then
-			for _, n in ipairs(near) do add(string.format("NEARBY: %s | %s | %s", tostring(n.title), tostring(n.detail), tostring(n.where))) end
+			for _, n in ipairs(near) do add(string.format("old nearby list (not shown in the window): %s | %s | %s", tostring(n.title), tostring(n.detail), tostring(n.where))) end
 		else
-			add("NEARBY: nothing")
+			add("old nearby list (not shown in the window): nothing")
 		end
 		if #card.reminders > 0 then add("In your log, not placed on the map: " .. table.concat(card.reminders, ", ")) end
 	end
