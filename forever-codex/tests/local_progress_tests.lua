@@ -774,3 +774,39 @@ do
 	local q = ns4.Registry.Quest(370)
 	check(q ~= nil, "(setup)")
 end
+
+section("work here: an objective right beside the player is done before running to another quest's objectives far away (real report: v0.2.16)")
+do
+	local function scenario()
+		local ns = boot({ char = { level = 11, class = "Paladin", classToken = "PALADIN", race = "Undead", raceToken = "Scourge", faction = "Horde" }, synthetic = true, loc = { map = 9001, x = 0.3, y = 0.5, zone = "Tirisfal" } })
+		local near = Q(369, "A New Plague", 9001, 0.27, 0.5, { zone = "zone-a", giverName = "Johaan", objCoords = { { map = 9001, x = 0.27, y = 0.5 } } })
+		local far1 = Q(96897, "The Cult of the Damned", 9001, 0.95, 0.5, { zone = "zone-a", giverName = "Someone", objCoords = { { map = 9001, x = 0.95, y = 0.5 } } })
+		local far2 = Q(96898, "Remnants of War", 9001, 0.951, 0.5, { zone = "zone-a", giverName = "Someone", objCoords = { { map = 9001, x = 0.951, y = 0.5 } } })
+		local done = Q(374, "Proof of Demise", 9001, 0.9, 0.5, { zone = "zone-a", giverName = "Burgess" })
+		local quests, log = { near, far1, far2, done }, { { questID = 369, title = "A New Plague" }, { questID = 96897, title = "The Cult of the Damned" }, { questID = 96898, title = "Remnants of War" }, { questID = 374, title = "Proof of Demise", complete = true } }
+		for i = 1, 4 do                                           -- more started quests whose objectives are in the same far place: a rich far stop
+			quests[#quests + 1] = Q(96900 + i, "Far extra " .. i, 9001, 0.952 + i * 0.0001, 0.5, { zone = "zone-a", giverName = "Someone", objCoords = { { map = 9001, x = 0.952 + i * 0.0001, y = 0.5 } } })
+			log[#log + 1] = { questID = 96900 + i, title = "Far extra " .. i }
+		end
+		H.attPack(ns, quests, ZONES)
+		local W = H.world()
+		W.log = log
+		W.objectives, W.completed = {}, {}
+		for i = 1, 4 do W.objectives[96900 + i] = { { text = "Thing", type = "monster", finished = false, numFulfilled = 1, numRequired = 6 } } end
+		W.objectives[369] = { { text = "Vicious Night Web Spider Venom", type = "item", finished = false, numFulfilled = 1, numRequired = 4 } }
+		W.objectives[96897] = { { text = "Dark Neophyte slain", type = "monster", finished = false, numFulfilled = 1, numRequired = 8 }, { text = "Dark Enforcer slain", type = "monster", finished = false, numFulfilled = 0, numRequired = 8 } }
+		W.objectives[96898] = { { text = "Necrotic Crystal Fragment", type = "item", finished = false, numFulfilled = 1, numRequired = 12 } }
+		ns.Prefs.FinishSetup()
+		return ns
+	end
+	local ns = scenario()
+	ns.Planner.DEPTH = 1          -- (single-stop plans, as when the nearby stop is not worth chaining: the real report's best plan from A New Plague was 130 s long)
+	ns.Planner.WORK_HERE = false
+	local before = plan(ns)
+	ns.Planner.WORK_HERE = true
+	local p = plan(ns)
+	check(p.now and p.now.quest == 369, "the objective 30 yd away is NOW, not the quests 750 yd away  [" .. tostring(p.now and p.now.id) .. "; without the rule: " .. tostring(before.now and before.now.id) .. "]")
+	check(before.now and before.now.quest ~= 369, "(proof the rule is what does it) without it the plan runs to the far quests  [" .. tostring(before.now and before.now.id) .. "]")
+	ns.Planner.DEPTH = 3
+	check(#ns.errors == 0, "no errors")
+end

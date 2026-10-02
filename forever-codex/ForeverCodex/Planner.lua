@@ -110,8 +110,9 @@ Pl.DEFER_TURN_INS = true
 Pl.DEFER_NEAR_YD = 150
 -- WORK HERE. Work the player has already started, within a short walk, is finished before leaving the area, in every route style: a higher
 -- price on time (the "fast" style) must not walk the player 1800 yd away from two started quests that are 40 yd away just because every local
--- option scores a little below a far pickup trip. It applies when the plan's first stop is more than WORK_LEAVE_YD away (or on another map) and
--- a stop with an objective of a quest in the log is within WORK_HERE_YD on the player's map; it never overrides a quest the player added or a
+-- option scores a little below a far pickup trip, or to run 750 yd to one quest's objectives while another started quest's objective is right
+-- beside them. It applies when the plan's first stop is more than WORK_LEAVE_YD away (or on another map) and a stop with an objective of a
+-- quest in the log is within WORK_HERE_YD on the player's map; it never overrides a quest the player added or a
 -- route zone the player chose, and Skip still gets out of it.
 -- Pl.WORK_HERE = false switches it off (tests).
 Pl.WORK_HERE = true
@@ -736,7 +737,7 @@ function Pl.Compute(ctx, c, opts)
 		local inChosenZone0 = env.routeMap ~= nil and first.pos.map == env.routeMap
 		local dFirst = E.Distance(ctx, S.player, first.pos)
 		local leaving = dFirst == nil or dFirst > Pl.WORK_LEAVE_YD or first.pos.map ~= S.player.map
-		if leaving and not inChosenZone0 and not hasKind(first, "OBJECTIVE") then
+		if leaving and not inChosenZone0 then
 			local alt
 			for f, seq in pairs(S.bestByFirst) do
 				local st = S.stops[f]
