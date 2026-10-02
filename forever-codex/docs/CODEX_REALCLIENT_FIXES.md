@@ -310,3 +310,9 @@ How: Codex asks the GAME for each quest's tag (`C_QuestLog.GetQuestTagInfo`, or 
 * Display only: the planner does not look at tags, so a dungeon quest can still be NOW (it is then labelled).
 * The report prints `quest tags (game, unverified on Forever)`: which API exists, how many logged quests came back tagged, and `[tag id name]` on each tagged quest in the QUEST LOG list.
 Unverified on the real client: whether the tag API exists, whether it answers for quests not in the log (so an Elite pickup may show no label), the tag ids (taken from the documented ids; the report prints the real ones), and whether the quest data's area gives the dungeon name.
+
+## 38. Release 0.4.2: the 0.4.1 tag report, and a doubled count in ALSO COMPLETE THIS
+
+First real report with tags (0.4.1, level 12): `C_QuestLog.GetQuestTagInfo` exists on Forever; 2 of 11 logged quests came back tagged: Rear Guard Patrol (Q:99156) tag 1 "Elite" and The Power to Destroy... (Q:5725) tag 81 "Dungeon", the latter named "Ragefire Chasm" by the game's area name (`C_Map.GetAreaInfo` is present). The window showed "Finish Rear Guard Patrol (Elite)" and a red DUNGEON QUESTS card with the "Ragefire Chasm" heading.
+Now verified on the real client: the tag API, tag ids 1 and 81, the area-name lookup for a dungeon quest, and the labels and card. Still unverified: tags for quests NOT in the log (an Elite pickup), and the other tag ids (Raid, Heroic, ...).
+Bug found in the same screenshot: ALSO COMPLETE THIS drew "0/1 Captain Vachon slain" with a second "0/1" bar count, because the game's objective text already carries the count and only NOW stripped it. The overlap list now cleans the label the same way (`Presenter.CleanObjective`). Test: `Overlap.Unfinished` strips "0/1 ..." and "...: 2/5".

@@ -863,3 +863,23 @@ do
 	check(ns3.Dungeons.Suffix(ns3.State.ctx, 601) == "" and #ns3.Dungeons.List(ns3.State.ctx) == 0, "when the client does not answer there is no tag and no dungeon card")
 	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
 end
+
+section("0.4.2: ALSO COMPLETE THIS rows do not repeat the game's own '0/1' count in the label")
+do
+	-- the real client's objective text already carries the count: "0/1 Captain Vachon slain"
+	local q = { id = 801, name = "At War", zone = "zone-a", objectives = { { text = "0/1 Captain Vachon slain", have = 0, need = 1 }, { text = "2/5 Scarlet Friar slain", have = 2, need = 5 } } }
+	local near = { id = 802, name = "Right here", zone = "zone-a", objectives = { { text = "Thing", have = 1, need = 9 } } }
+	local ns, W, c = logWorld({ q, near })
+	local list = ns.Overlap.List(ns.State.plan, ns.State.ctx)
+	local seen = 0
+	for _, it in ipairs(list) do
+		for _, o in ipairs(it.objectives or {}) do
+			seen = seen + 1
+			check(not o.text:find("%d+%s*/%s*%d+"), "the label carries no count of its own  [" .. o.text .. "]")
+		end
+	end
+	check(seen >= 1, "at least one objective was checked")
+	local direct = ns.Overlap.Unfinished({ objectiveState = { known = true, list = { { text = "0/1 Captain Vachon slain", finished = false, have = 0, need = 1 }, { text = "Scarlet Friar slain: 2/5", finished = false, have = 2, need = 5 } } } })
+	check(#direct == 2 and direct[1].text == "Captain Vachon slain" and direct[2].text == "Scarlet Friar slain", "the game's '0/1 ...' and '...: 2/5' count text is stripped from the label (the bar shows the count)")
+	check(#ns.errors == 0, "no errors")
+end

@@ -51,7 +51,7 @@ local function unfinishedOf(a)
 	local os = a.objectiveState
 	if not (os and os.known) then return out end
 	for _, o in ipairs(os.list) do
-		if not o.finished then out[#out + 1] = { text = o.text, have = o.have, need = o.need } end
+		if not o.finished then out[#out + 1] = { text = (ns.Presenter and ns.Presenter.CleanObjective(o.text)) or o.text, have = o.have, need = o.need } end
 	end
 	return out
 end
