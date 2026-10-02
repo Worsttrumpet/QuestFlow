@@ -11,7 +11,7 @@
 -- WHAT FOREVER ALLOWS IS NOT VERIFIED. Raid-target icons (SetRaidTarget / GetRaidTargetIndex) act on a UNIT, not on a
 -- map point, and nothing in this project's evidence says they work on Forever for an NPC you are not in a group with.
 -- So placement is OFF until `/codex markers probe` (target an NPC first) has succeeded on this client AND the player
--- turned markers on. Until then Codex only computes what it WOULD mark (shown in /codex diag). Markers can only be set
+-- turned markers on (a passing probe turns them on). Until then Codex only computes what it WOULD mark (shown in /codex diag). Markers can only be set
 -- on an NPC while it is your target or mouseover (that is when Codex sees its GUID); out-of-range markers are cleared the
 -- next time that NPC is seen. The index numbers (star 1, diamond 3, triangle 4, moon 5) are the classic raid-target
 -- indices and are part of what the probe checks.
@@ -91,57 +91,79 @@ function Mk.Enabled()
 	return P.MarkersOn() and pr ~= nil and pr.ok == true and Mk.api.available()
 end
 
---- /codex markers probe: with an NPC targeted, does SetRaidTarget work, and does it read back? Restores the target's mark.
--- Returns ok, message. The result is saved so the player does not have to repeat it.
+--- /codex markers probe: with an NPC (not a player) targeted, does SetRaidTarget exist, run, place the mark, and can it be cleared again?
+-- Restores whatever mark the NPC had. Returns ok, message. The result is saved. A passing probe also switches markers on (the player
+-- ran the test on purpose). WHAT THIS CANNOT SEE: taint. A protected-action popup is shown by the client, not returned to Lua, so the
+-- tester must watch for one while running it (the note says so).
 function Mk.Probe()
 	local function done(ok, msg)
-		P.Root().ui.markerProbe = { ok = ok, note = msg }
+		P.Root().ui.markerProbe = { ok = ok, note = msg, when = type(time) == "function" and time() or nil }
+		if ok then P.SetMarkers(true) end
 		return ok, msg
 	end
 	if not Mk.api.available() then return done(false, "this client has no SetRaidTarget / GetRaidTargetIndex / UnitGUID / UnitExists") end
 	if not Mk.api.exists("target") then return false, "target an NPC first, then run the probe again" end
+	if not creatureId(Mk.api.guid("target")) then return false, "target an NPC (not a player or pet), then run the probe again" end
 	local before = Mk.api.get("target")
+	if before and before ~= 0 then return false, "that NPC already has a raid mark that is not Codex's: target an unmarked NPC so nothing of yours is touched" end
 	local okSet = Mk.api.set("target", Mk.INDEX.star)
 	local read = Mk.api.get("target")
-	Mk.api.set("target", before or 0)
+	local okClear = Mk.api.set("target", 0)
+	local after = Mk.api.get("target")
 	if not okSet then return done(false, "SetRaidTarget was refused on this client (error)") end
 	if read ~= Mk.INDEX.star then return done(false, "SetRaidTarget ran but the mark did not read back (got " .. tostring(read) .. ")") end
-	return done(true, "SetRaidTarget works on an NPC target: markers can be turned on")
+	if not okClear or (after and after ~= 0) then return done(false, "the mark was placed but could not be cleared again, so markers stay off") end
+	return done(true, "SetRaidTarget placed and cleared a mark on an NPC. Markers are on. (If the game showed a blocked-action popup, tell us: Lua cannot see that.)")
 end
 
+-- OWNERSHIP. `applied[sym] = guid` means: CODEX placed that symbol on that unit. Codex never claims a mark it did not place, never
+-- replaces a mark of any other kind on a unit, never clears a mark that is not recorded as its own, and does not fight the player:
+-- if its own mark is gone when it next sees the unit, the player removed it and Codex yields until the plan for that symbol changes.
+local yielded = {}      -- [sym] = action id Codex stopped marking because the player removed its mark
+
 local function apply(unit)
-	if not Mk.Enabled() or not Mk.api.exists(unit) then return end
+	if not Mk.api.available() or not Mk.api.exists(unit) then return end
 	local guid = Mk.api.guid(unit)
 	local npc = creatureId(guid)
 	if not npc then return end
-	for sym, d in pairs(desired) do
-		if d.npc == npc then
-			if Mk.api.get(unit) ~= Mk.INDEX[sym] then Mk.api.set(unit, Mk.INDEX[sym]) end
-			applied[sym] = guid
+	local cur = Mk.api.get(unit)
+	for sym, g in pairs(pendingClear) do
+		if g == guid then
+			if cur == Mk.INDEX[sym] then Mk.api.set(unit, 0); cur = 0 end        -- only ever a mark recorded as Codex's own
 			pendingClear[sym] = nil
 		end
 	end
-	for sym, g in pairs(pendingClear) do
-		if g == guid then
-			if Mk.api.get(unit) == Mk.INDEX[sym] then Mk.api.set(unit, 0) end
-			pendingClear[sym] = nil
+	if not Mk.Enabled() then return end
+	for sym, d in pairs(desired) do
+		if d.npc == npc and yielded[sym] ~= d.action then
+			local idx = Mk.INDEX[sym]
+			if applied[sym] == guid then
+				if cur ~= idx then
+					yielded[sym] = d.action        -- ours is gone or changed by the player: leave it alone
+					applied[sym] = nil
+				end
+			elseif cur == nil or cur == 0 then
+				if Mk.api.set(unit, idx) then applied[sym] = guid end
+			end                                     -- any other mark (the player's, another addon's, even the same icon) is left strictly alone
 		end
 	end
 end
 
 --- After every recompute: remember what should be marked and queue the removal of marks that are no longer wanted.
 function Mk.OnPlan(plan)
+	local old = desired
 	desired = Mk.Desired(plan)
+	for sym, a in pairs(yielded) do
+		if not desired[sym] or desired[sym].action ~= a then yielded[sym] = nil end     -- a new plan for that symbol: try again
+	end
 	for sym, guid in pairs(applied) do
 		if not desired[sym] or creatureId(guid) ~= desired[sym].npc then
 			pendingClear[sym] = guid
 			applied[sym] = nil
 		end
 	end
-	if Mk.Enabled() then
-		apply("target")
-		apply("mouseover")
-	end
+	apply("target")
+	apply("mouseover")
 end
 
 --- PLAYER_TARGET_CHANGED / UPDATE_MOUSEOVER_UNIT
@@ -152,4 +174,4 @@ function Mk.Status()
 	return { enabled = Mk.Enabled(), wanted = P.MarkersOn(), probe = pr and (pr.ok and "passed" or "failed") or "not run", desired = desired, note = pr and pr.note or nil }
 end
 
-function Mk._Reset() desired, applied, pendingClear = {}, {}, {} end
+function Mk._Reset() desired, applied, pendingClear, yielded = {}, {}, {}, {} end

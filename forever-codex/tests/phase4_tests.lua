@@ -582,3 +582,168 @@ do
 	check(ns.State.plan.now.id == bare.now.id, "NOW equals the Planner alone")
 	check(true, "(the Phase 1 golden and Phase 2.5 baseline checks above are the regression proof)")
 end
+
+-- ================================================================ raid markers: ownership and lifecycle
+
+local function markerWorld()
+	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	local u = { exists = true, guid = "Creature-0-3-1-0-3143-00001ABC", mark = nil, calls = {}, fail = false }
+	_G.UnitExists = function() return u.exists end
+	_G.UnitGUID = function() return u.guid end
+	_G.GetRaidTargetIndex = function() return u.mark end
+	_G.SetRaidTarget = function(_, idx) if u.fail then error("blocked") end u.calls[#u.calls + 1] = idx; u.mark = idx ~= 0 and idx or nil end
+	return ns, u
+end
+
+local function mact(ns, id, kind, npc, o)
+	o = o or {}
+	local K = ns.Contract
+	local a = { id = id, type = "QUEST", kind = kind, quest = 1, name = "Q", title = id, lines = {}, reasons = {}, contract = 1,
+		targets = { K.Target({ role = o.role or "GIVER", entity = o.noNpc and { kind = "area" } or { kind = "npc", id = npc }, assumed = o.assumed,
+			where = K.Where("known", { { map = 9001, x = 0.5, y = 0.5 } }), prov = K.Prov("att") }) } }
+	return a
+end
+
+section("markers: assignment (star, diamond, one NPC one symbol, no spam)")
+do
+	local ns, u = markerWorld()
+	local Mk = ns.Markers
+	local A, B = mact(ns, "Q:1:ACCEPT", "ACCEPT", 3143), mact(ns, "Q:2:ACCEPT", "ACCEPT", 3145)
+	local d = Mk.Desired({ now = A, alsoDo = B })
+	check(d.star.npc == 3143 and d.diamond.npc == 3145 and d.triangle == nil and d.moon == nil, "NOW's NPC gets the star, ALSO DO's NPC the diamond; no triangle or moon")
+	check(Mk.Desired({ now = A, alsoDo = mact(ns, "Q:3:ACCEPT", "ACCEPT", 3143) }).diamond == nil, "the same NPC is never given two symbols")
+	local turnin = mact(ns, "Q:1:TURN_IN", "TURN_IN", 3150, { role = "TURN_IN" })
+	check(Mk.Desired({ now = turnin }).star.npc == 3150, "a turn-in NPC Codex positively knows is marked")
+	check(next(Mk.Desired({ now = mact(ns, "Q:1:TURN_IN", "TURN_IN", 3150, { role = "TURN_IN", assumed = true }) })) == nil, "a turn-in NPC that is only ASSUMED (the giver) is not marked")
+	check(next(Mk.Desired({ now = mact(ns, "Q:1:OBJECTIVE", "OBJECTIVE", nil, { role = "OBJECTIVE", noNpc = true }) })) == nil, "an objective area with no NPC gets no marker")
+	local n = 0
+	for _ in pairs(Mk.Desired({ now = A, alsoDo = B })) do n = n + 1 end
+	check(n <= 4 and Mk.INDEX.moon == 5 and Mk.Desired({ now = A, alsoDo = B }).moon == nil, "at most four symbols exist and the moon (inn) is never set: there is no inn data")
+	local moonSrc = H.readFile(H.addonDir .. "/Markers.lua"):gsub("%-%-[^\n]*", "")
+	check(not moonSrc:find('put%("moon"'), "no code path assigns the moon")
+end
+
+section("markers: probe and capability state")
+do
+	local ns, u = markerWorld()
+	local Mk = ns.Markers
+	check(Mk.Status().probe == "not run" and not Mk.Enabled(), "before the probe: 'not run', off")
+	u.calls = {}
+	Mk.OnPlan({ now = mact(ns, "Q:1:ACCEPT", "ACCEPT", 3143) })
+	Mk.OnUnit("target")
+	check(#u.calls == 0, "nothing is placed before the probe passed")
+	u.exists = false
+	local ok0, m0 = Mk.Probe()
+	check(not ok0 and m0:find("target an NPC first", 1, true) and Mk.Status().probe == "not run", "no target: asks for one, records nothing")
+	u.exists = true
+	u.guid = "Player-1-0000AAAA"
+	local okP, mP = Mk.Probe()
+	check(not okP and mP:find("not a player", 1, true) and #u.calls == 0, "a player target is refused and never marked")
+	u.guid = "Creature-0-3-1-0-3143-00001ABC"
+	u.mark = 7
+	local okM, mM = Mk.Probe()
+	check(not okM and mM:find("already has a raid mark", 1, true) and u.mark == 7 and #u.calls == 0, "an NPC that already carries someone's mark is not touched by the probe")
+	u.mark = nil
+	local ok, msg = Mk.Probe()
+	check(ok and u.mark == nil and #u.calls == 2 and u.calls[1] == 1 and u.calls[2] == 0, "a good probe places the star, reads it back, clears it, and leaves the NPC unmarked")
+	check(Mk.Status().probe == "passed" and Mk.Enabled() and msg:find("popup", 1, true), "it records 'passed', enables markers, and says Lua cannot see a taint popup")
+	local ns2, u2 = markerWorld()
+	u2.fail = true
+	local okF, mF = ns2.Markers.Probe()
+	check(not okF and mF:find("refused", 1, true) and ns2.Markers.Status().probe == "failed" and not ns2.Markers.Enabled() and not ns2.Prefs.MarkersOn(), "a refused call: 'failed', markers stay off, reason reported")
+	local ns3, u3 = markerWorld()
+	_G.SetRaidTarget = function(_, idx) if idx == 0 then return end u3.mark = idx end        -- places but cannot clear
+	local okC, mC = ns3.Markers.Probe()
+	check(not okC and mC:find("could not be cleared", 1, true) and not ns3.Markers.Enabled(), "a mark that cannot be cleared again keeps markers off")
+	local ns4 = markerWorld()
+	_G.SetRaidTarget = nil
+	check(not ns4.Markers.Probe() and ns4.Markers.Status().probe == "failed", "no SetRaidTarget at all: failed, reported")
+end
+
+section("markers: ownership, foreign marks, yielding to the player, clearing")
+do
+	local ns, u = markerWorld()
+	local Mk = ns.Markers
+	local A, B = mact(ns, "Q:1:ACCEPT", "ACCEPT", 3143), mact(ns, "Q:2:ACCEPT", "ACCEPT", 3145)
+	Mk.Probe()
+	u.calls = {}
+	Mk.OnPlan({ now = A })
+	check(u.mark == 1 and #u.calls == 1, "targeting the NOW NPC puts the star on it")
+	Mk.OnUnit("target"); Mk.OnUnit("mouseover")
+	check(#u.calls == 1, "already right: not set again")
+	-- the player removes it: Codex yields
+	u.mark = nil
+	Mk.OnUnit("target"); Mk.OnUnit("target")
+	check(u.mark == nil and #u.calls == 1, "when the player removes Codex's mark it is NOT put back")
+	Mk.OnPlan({ now = A })
+	Mk.OnUnit("target")
+	check(u.mark == nil, "not even when the same plan is recomputed")
+	Mk.OnPlan({ now = B })
+	Mk.OnPlan({ now = A })
+	Mk.OnUnit("target")
+	check(u.mark == 1, "but a changed plan for that symbol starts afresh")
+	-- another mark on the NPC is never replaced
+	local ns2, u2 = markerWorld()
+	ns2.Markers.Probe()
+	u2.calls = {}
+	u2.mark = 8
+	ns2.Markers.OnPlan({ now = mact(ns2, "Q:1:ACCEPT", "ACCEPT", 3143) })
+	ns2.Markers.OnUnit("target")
+	check(u2.mark == 8 and #u2.calls == 0, "a mark the player (or another addon) put on the NPC is never replaced")
+	u2.mark = 1                                   -- the very same icon, but not placed by Codex
+	ns2.Markers.OnUnit("target")
+	ns2.Markers.OnPlan({ now = nil })
+	ns2.Markers.OnUnit("target")
+	check(u2.mark == 1 and #u2.calls == 0, "an identical icon Codex did not place is not claimed, and not cleared when the plan ends")
+	-- clearing: only Codex's own
+	local ns3, u3 = markerWorld()
+	ns3.Markers.Probe()
+	u3.calls = {}
+	local A3 = mact(ns3, "Q:1:ACCEPT", "ACCEPT", 3143)
+	ns3.Markers.OnPlan({ now = A3 })
+	check(u3.mark == 1, "(setup) Codex placed the star")
+	ns3.Markers.OnPlan({ now = nil })
+	ns3.Markers.OnUnit("target")
+	check(u3.mark == nil, "when the action completes (no NOW) Codex's own star is cleared the next time the NPC is seen")
+	-- NOW moves to another NPC
+	ns3.Markers.OnPlan({ now = A3 })
+	check(u3.mark == 1, "(setup) star again")
+	u3.guid = "Creature-0-3-1-0-3145-00001DEF"; u3.mark = nil
+	ns3.Markers.OnPlan({ now = mact(ns3, "Q:2:ACCEPT", "ACCEPT", 3145) })
+	check(u3.mark == 1, "NOW changing to another NPC marks that NPC")
+	u3.guid = "Creature-0-3-1-0-3143-00001ABC"; u3.mark = 1
+	ns3.Markers.OnUnit("target")
+	check(u3.mark == nil, "and the old NPC's star (recorded as Codex's) is removed when it is next seen")
+	-- an NPC that is not the planned one
+	u3.guid = "Creature-0-3-1-0-9999-00001ABC"; u3.mark = nil
+	ns3.Markers.OnUnit("target"); ns3.Markers.OnUnit("mouseover")
+	check(u3.mark == nil, "no other NPC is ever marked")
+	-- markers switched off: own marks still cleaned, foreign untouched
+	ns3, u3 = markerWorld()
+	ns3.Markers.Probe()
+	ns3.Markers.OnPlan({ now = mact(ns3, "Q:2:ACCEPT", "ACCEPT", 3145) })
+	u3.guid = "Creature-0-3-1-0-3145-00001DEF"
+	ns3.Markers.OnUnit("target")
+	check(u3.mark == 1, "(setup) marked")
+	ns3.Prefs.SetMarkers(false)
+	ns3.Markers.OnPlan({ now = nil })
+	ns3.Markers.OnUnit("target")
+	check(u3.mark == nil, "with markers off and no plan, Codex's own mark is still cleaned up")
+	u3.mark = 5
+	ns3.Markers.OnUnit("target")
+	check(u3.mark == 5, "and a foreign mark is left alone")
+	local src = H.readFile(H.addonDir .. "/Markers.lua"):gsub("%-%-[^\n]*", "")
+	check(not src:find("hooksecurefunc", 1, true) and not src:find("Secure", 1, true) and not src:find("combat", 1, true), "Markers.lua has no hooks, no secure frames, no combat-log use")
+	check(#ns.errors == 0 and #ns3.errors == 0, "no caught errors")
+	do   -- the plan ends, but before Codex sees the NPC again the player put a DIFFERENT mark on it
+		local nsX, uX = markerWorld()
+		nsX.Markers.Probe()
+		nsX.Markers.OnPlan({ now = mact(nsX, "Q:1:ACCEPT", "ACCEPT", 3143) })
+		uX.exists = false                        -- the NPC is out of sight when the plan changes
+		nsX.Markers.OnPlan({ now = nil })
+		uX.exists = true
+		uX.mark = 5
+		nsX.Markers.OnUnit("target")
+		check(uX.mark == 5, "a different mark put there after Codex's own is never cleared")
+	end
+end

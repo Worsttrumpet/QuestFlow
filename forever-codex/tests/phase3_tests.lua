@@ -530,13 +530,14 @@ do
 	Mk.OnUnit("target")
 	check(#calls == 0 and not Mk.Enabled() and Mk.Status().probe == "not run", "off by default: no marker call is ever made before the test")
 	local ok, msg = Mk.Probe()
-	check(ok and msg:find("works", 1, true) and Mk.Status().probe == "passed" and unit.mark == nil, "/codex markers probe sets and reads back a mark, then restores the target")
+	check(ok and msg:find("placed and cleared", 1, true) and Mk.Status().probe == "passed" and unit.mark == nil, "/codex markers probe sets and reads back a mark, then restores the target")
 	Mk.OnUnit("target")
 	check(#calls == 2 or #calls == 0 or true, "(the probe itself touched the target)")
 	calls = {}
-	check(not Mk.Enabled(), "a passed test alone does not switch markers on: the player decides")
+	check(Mk.Enabled() and ns.Prefs.MarkersOn(), "a passing probe switches markers on (the player ran it on purpose)")
+	ns.Prefs.SetMarkers(false)
+	check(not Mk.Enabled(), "and the player can still switch them off")
 	ns.Prefs.SetMarkers(true)
-	check(Mk.Enabled(), "markers are on once tested and switched on")
 	Mk.OnPlan({ now = A, alsoDo = B })
 	check(unit.mark == 1, "targeting the NOW NPC puts the star on it")
 	calls = {}

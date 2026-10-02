@@ -70,3 +70,18 @@ Not built or displayed. XP_GAIN / LEVEL_UP / combat events remain unproven; XP/h
 Everything above except the combat-log change is **stub-tested only**. To verify on Forever: (a) login shows no protected-action popup;
 (b) `/codex arrow` - walk in a few directions, check the arrow, try `flip`; (c) `/codex pins` and the world map on the right zone;
 (d) an even level-up; (e) the Silverpine character now gets "Nothing to recommend" instead of a trip to the Barrens.
+
+## 8. Raid markers (Part 10): hardened, NOT yet verified on Forever
+**The probe has not been run on the real client** (there is no client in this environment), so markers are still OFF
+(`markers: off (test not run)`). Nothing here claims `SetRaidTarget` works on Forever.
+What the existing system did, and what was fixed (no rewrite; assignment logic unchanged: star = NOW's NPC, diamond = ALSO DO's NPC,
+triangle = a relevant flight master, moon never set; only NPCs identified by creature id, never assumed turn-in NPCs, never objective areas):
+- It could **replace** a different mark on the NPC, **re-set** a mark the player had removed, **claim** an identical icon it had not placed,
+  and the probe could mark a player target. All fixed: Codex only places a mark on an **unmarked** NPC, records what it placed, never
+  replaces or claims anything else, **yields** when its own mark disappears (until the plan for that symbol changes), and clears **only**
+  marks recorded as its own (still cleaned up when markers are switched off).
+- The probe now refuses a player target and an NPC that already carries a mark, places the star, reads it back, **clears it and checks it
+  cleared**, and on success records "passed" and switches markers on. It cannot detect taint (the popup is shown by the client): the note says so.
+To verify on Forever: target an unmarked NPC, type `/codex markers probe`, **watch for a blocked-action popup**, then target the NPC of
+your current NOW (e.g. a quest giver) and check the star; change NOW and re-target the old NPC to see Codex's mark removed; remove it
+yourself and confirm Codex does not put it back. Markers appear only while the NPC is your target or mouseover (that is when Codex sees its identity).
