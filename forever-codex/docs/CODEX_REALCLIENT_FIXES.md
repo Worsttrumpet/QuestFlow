@@ -293,7 +293,9 @@ Real report (0.2.18): NOW was "Turn in Remnants of War" (75 yd) while The Cult o
 Fix: when NOW is a hand-in within 150 yd (`Overlap.NOW_HANDIN_YD`), unfinished objectives within 300 yd of the player are listed (measured from the player, not the NPC). A far hand-in still lists nothing. The report's old `NEARBY:` line is relabelled "old nearby list (not shown in the window)".
 Unverified: whether a `src=game` hand-in point is the real turn-in NPC (asked the user).
 
-## 36. Release 0.2.20: a taller tracker
+## 36. Release 0.4.0 (first numbered 0.2.20): a taller tracker
 
 Real screenshot (0.2.19): READY TO TURN IN showed five hand-ins and "+ 1 more" with a lot of empty screen below. The window already grows to fit its content, so only the row caps limited it: READY TO TURN IN now draws up to 12 hand-ins (was 5) and a card draws up to 8 objective rows (was 6). Beyond that the "+ N more" line still appears.
 Not changed: the window's width, and the planner (see the open note on deferred hand-ins in the 0.2.19 report analysis: a deferral that pushes near hand-ins behind a farther objective is awaiting a decision).
+
+Version numbering changed with this release: the patch number runs 0-9 and then the next number up begins at 0 (see `RELEASING.md`). Older sections keep the numbers they shipped under (0.2.10 to 0.2.19 count as 0.3.0 to 0.3.9).

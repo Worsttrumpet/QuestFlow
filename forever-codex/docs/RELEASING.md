@@ -1,6 +1,6 @@
 # Releasing a Forever Codex build
 
-Every code change that gets packaged for WoW gets a **new patch version** (`0.2.1`, `0.2.2`, `0.2.3`, ...). A zip name is never reused, so an old build can never be installed by accident.
+Every code change that gets packaged for WoW gets a **new patch version** (`0.2.1`, `0.2.2`, `0.2.3`, ...). The patch number only runs 0-9: after `0.3.9` comes `0.4.0`, after `0.4.9` comes `0.5.0`, and so on. A zip name is never reused, so an old build can never be installed by accident.
 
 ## Bump and package
 1. Set the new version in **both** places (they must match; the packager refuses to run otherwise):
@@ -20,3 +20,13 @@ Unzip `ForeverCodex-<version>.zip` into `World of Warcraft/_classic_/Interface/A
 * the minimap button tooltip (top right: `v0.2.2`)
 * `/codex diag` (first line)
 * the AddOns list (the version column)
+
+## Renumbering note (builds before 0.4.0)
+Builds 0.2.10 to 0.2.20 were numbered before the 0-9 rule. In the new numbering they are:
+
+| shipped as | counts as |
+|---|---|
+| 0.2.10 ... 0.2.19 | 0.3.0 ... 0.3.9 |
+| 0.2.20 | 0.4.0 (the build packaged as `ForeverCodex-0.4.0.zip`; there is no 0.2.20 zip) |
+
+The older zips in `dist/` keep their original names and `docs/CODEX_REALCLIENT_FIXES.md` keeps the numbers it was written with.
