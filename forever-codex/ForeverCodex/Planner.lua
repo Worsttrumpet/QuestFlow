@@ -76,6 +76,28 @@ local PER_STRATEGY = {
 }
 Pl.STRATEGY_KEYS = { "completionist", "efficient", "fast", "questing_only" }
 
+-- LOCAL PROGRESSION. A leveling guide asks "is there still something useful for this player to do HERE?" before "what is the best quest
+-- anywhere?". The player's own map is the local area (no zone list: it works for any starting zone, faction, class or level):
+--   1. when the player's map has located work worth doing (net value above LOCAL_MIN_NET after paying for its own time), only that map's stops
+--      are sequenced; things elsewhere can still be an ALSO DO if they fit in cheaply. (The same mechanism a chosen route zone uses.)
+--   2. when it has none, but the player has a quest IN PROGRESS in this area whose exact objective spot is not known, finishing it is
+--      NOW (without a map location), rather than sending the player somewhere else; a distant trip waits until that work is done or skipped.
+-- Never overrides a route zone the player chose or a quest they added. Pl.LOCAL_FIRST = false switches both off (tests).
+Pl.LOCAL_FIRST = true
+Pl.LOCAL_MIN_NET = 0
+
+-- QUEST-STATE PRIORITY. What the player has already earned comes before new work: (1) a FINISHED quest that can be handed in, (2) objectives of
+-- quests in progress, (3) new pickups, (4) farther, new progression. Priced by the real walking time, never forced:
+--   * inside one stop the order is by state (hand-in, then objectives, then pickups), not by policy value, and a remembered NOW does not hold
+--     an older pickup in front of a hand-in that has just become possible;
+--   * across stops, when the best plan contains a hand-in, the same stops visited hand-in first win if that costs no more than TURN_IN_FIRST_SECONDS
+--     of extra walking (a hand-in 300+ yd out of the way does not pre-empt a pickup beside you; one a few steps away does). A hand-in the best plan
+--     does not include is never forced in. Unmeasurable legs never qualify.
+--     (objectives in progress keep the planner's own rule: a hand-in waits while objectives right here are done first, so the trip is batched)
+-- Pl.TURN_IN_FIRST = false switches both off (tests).
+Pl.TURN_IN_FIRST = true
+Pl.TURN_IN_FIRST_SECONDS = 45
+
 local function merge(into, over)
 	for k, v in pairs(over or {}) do
 		if type(v) == "table" and type(into[k]) == "table" then
@@ -224,10 +246,21 @@ end
 
 local function byId(x, y) return x.id < y.id end
 
+local STATE_TIER = { TURN_IN = 1, OBJECTIVE = 2, ACCEPT = 3 }       -- (4: everything else: flight hints and so on)
+local function tierOf(it) return Pl.TURN_IN_FIRST and STATE_TIER[it.a.kind] or 4 end
+
 local function itemOrder(x, y)
+	local tx, ty = tierOf(x), tierOf(y)
+	if tx ~= ty then return tx < ty end
 	if x.val ~= y.val then return x.val > y.val end
 	return x.id < y.id
 end
+
+local function hasKind(stop, kind)
+	for _, it in ipairs(stop.items) do if it.a.kind == kind then return true end end
+	return false
+end
+local function hasHandIn(stop) return hasKind(stop, "TURN_IN") end
 
 --- Better sequence? Fewer unknown legs first, then higher net value, then the smaller key (determinism).
 local function better(x, y)
@@ -279,7 +312,30 @@ local function gather(S, c)
 	table.sort(items, byId)
 	table.sort(extras, byId)
 	table.sort(reminders, byId)
-	S.items, S.extras, S.reminders = items, extras, reminders
+	-- in-progress quests in the player's area whose exact objective spot is unknown: current local work (most progress first, then id)
+	local localWork = {}
+	if S.player and S.player.map then
+		for _, a in ipairs(reminders) do
+			if a.kind == "OBJECTIVE" and a.areaMap and a.areaMap == S.player.map and not a.unknown then localWork[#localWork + 1] = a end
+		end
+		local function done(a)                         -- how far along: the average of each objective's have / need (counts the quest log reported)
+			local os, n, d = a.objectiveState, 0, 0
+			if os and os.known then
+				for _, o in ipairs(os.list) do
+					n = n + 1
+					if o.finished then d = d + 1
+					elseif type(o.have) == "number" and type(o.need) == "number" and o.need > 0 then d = d + math.min(1, o.have / o.need) end
+				end
+			end
+			return n > 0 and d / n or 0
+		end
+		table.sort(localWork, function(x, y)
+			local dx, dy = done(x), done(y)
+			if dx ~= dy then return dx > dy end
+			return x.id < y.id
+		end)
+	end
+	S.items, S.extras, S.reminders, S.localWork = items, extras, reminders, localWork
 	diag.candidates, diag.optional, diag.unlocated = #items, #extras, #reminders
 end
 
@@ -353,6 +409,23 @@ local function rankStops(S)
 		if v == false then return nil end
 		return v
 	end
+	-- local progression: with no route zone chosen, the player's own map is the implicit one when it has located work worth doing
+	if Pl.LOCAL_FIRST and not env.routeMap and S.player and S.player.map then
+		local here, anyUseful = {}, false
+		for i, s in ipairs(stops) do
+			if s.pos.map == S.player.map or s.pinned then
+				here[#here + 1] = s
+				if s.pos.map == S.player.map and not s.pinned then
+					local t = S.leg(0, i)
+					if t ~= nil and s.val - lam * (t + s.dwell) > Pl.LOCAL_MIN_NET then anyUseful = true end
+				end
+			end
+		end
+		if anyUseful and #here < #candidatesStops then
+			candidatesStops = here
+			diag.localOnly = true
+		end
+	end
 	local ranked, allowed = {}, {}
 	for _, s in ipairs(candidatesStops) do allowed[s] = true end
 	for i, s in ipairs(stops) do
@@ -382,7 +455,13 @@ local function searchSequences(S, prevId)
 	local stops, top, lam, leg, trace = S.stops, S.top, S.lam, S.leg, S.trace
 	local best, bestPrev, evaluated = nil, nil, 0
 	local bestByFirst, allSeqs = {}, {}
+	local handInFirst = {}                              -- stop-set key -> the best sequence over that SAME set of stops that starts at a hand-in
 	local chosen, used = {}, {}
+	local function setKey(list)
+		local ks = { unpack(list) }
+		table.sort(ks)
+		return table.concat(ks, ",")
+	end
 	-- a quest the player ADDED is the player's call: when one is in reach, the sequence starts at it
 	local pinnedFirst = false
 	for _, i in ipairs(top) do if stops[i].pinned then pinnedFirst = true end end
@@ -399,6 +478,10 @@ local function searchSequences(S, prevId)
 				evaluated = evaluated + 1
 				seq.stops = { unpack(chosen) }
 				if trace then allSeqs[#allSeqs + 1] = seq end
+				if Pl.TURN_IN_FIRST and hasHandIn(stops[chosen[1]]) then
+					local k = setKey(chosen)
+					if better(seq, handInFirst[k]) then handInFirst[k] = seq end
+				end
 				if better(seq, best) then best = seq end
 				local f = chosen[1]
 				if better(seq, bestByFirst[f]) then bestByFirst[f] = seq end
@@ -420,9 +503,22 @@ local function searchSequences(S, prevId)
 	S.diag.sequences = evaluated
 	S.bestByFirst, S.allSeqs = bestByFirst, allSeqs
 
+	-- quest-state priority: when the best sequence starts with a NEW PICKUP (not a hand-in, and not objectives in progress, which keep their
+	-- own batching rule), a sequence that starts at a hand-in beats it if it costs little extra walking
+	local first = best and stops[best.stops[1]]
+	if Pl.TURN_IN_FIRST and first and not hasHandIn(first) and not hasKind(first, "OBJECTIVE") then
+		-- only a re-ordering of the SAME stops is compared (so the extra cost is just the walking), and only within the margin
+		local margin = lam * Pl.TURN_IN_FIRST_SECONDS
+		local cand = handInFirst[setKey(best.stops)]
+		if cand and cand.unknown <= best.unknown and cand.net >= best.net - margin then
+			best = cand
+			S.diag.turnInFirst = true
+		end
+	end
+
 	-- stability: keep the previous NOW unless something else is better by more than `stickiness`
 	local pick = best
-	if bestPrev and bestPrev ~= best and bestPrev.unknown <= best.unknown and bestPrev.net >= best.net - S.par.stickiness then
+	if bestPrev and bestPrev ~= best and not S.diag.turnInFirst and bestPrev.unknown <= best.unknown and bestPrev.net >= best.net - S.par.stickiness then
 		pick = bestPrev
 		S.diag.stuck = true
 	end
@@ -435,7 +531,10 @@ local function bestOf(stop, preferId)
 	for _, it in ipairs(stop.items) do list[#list + 1] = it end
 	table.sort(list, itemOrder)
 	if preferId then
-		for _, it in ipairs(list) do if it.id == preferId then return it, list end end
+		for _, it in ipairs(list) do
+			-- (the previous NOW is kept for stability, but not in front of a hand-in / objective that has just become the better state)
+			if it.id == preferId and tierOf(it) <= tierOf(list[1]) then return it, list end
+		end
 	end
 	return list[1], list
 end
@@ -508,6 +607,7 @@ local function addReasons(S, seqStops, firstList, nowIt, thenIt, also, alsoCost)
 	if #firstList > 1 then add(nowIt.id, "SAME_STOP", { count = #firstList }) end
 	if nowIt.comps.chain then add(nowIt.id, "CHAIN_UNLOCK", {}) end
 	if diag.routeZoneOnly then add(nowIt.id, "ROUTE_ZONE", {}) end
+	if diag.localOnly then add(nowIt.id, "LOCAL_PROGRESS", {}) end
 	if nowIt.comps.pinned then add(nowIt.id, "PLAYER_ADDED", {}) end
 	if nowIt.comps.levelFit and nowIt.comps.levelFit >= 4 then add(nowIt.id, "LEVEL_FIT", {}) end
 	if nowIt.a.kind ~= "TURN_IN" then
@@ -567,6 +667,17 @@ local function summarize(S, pick)
 	end
 end
 
+--- NOW = a quest the player already has in this area, with no map location: "finish it here". No sequence, no ALSO DO, no THEN.
+function Pl.StayLocal(S, plan, a)
+	local diag = S.diag
+	diag.reason, diag.localWork, diag.sequence = "LOCAL_WORK", true, {}
+	diag.net, diag.seconds, diag.unknownLegs = 0, 0, 0
+	diag.reasons[a.id] = { { code = "LOCAL_PROGRESS" } }
+	diag.nowId = a.id
+	plan.now = a
+	return plan
+end
+
 --- plan = Planner.Compute(ctx, c, opts)
 --   c    the result of Engine.Candidates(ctx): { env, candidates, inProgress, hints }
 --   opts { prevNowId = string }  the previous plan's NOW, so a near-tie does not flip it
@@ -588,11 +699,17 @@ function Pl.Compute(ctx, c, opts)
 	makeStops(S)
 	if S.trace then recordTrace(S) end
 	if #S.stops == 0 then
+		if Pl.LOCAL_FIRST and S.localWork[1] then return Pl.StayLocal(S, plan, S.localWork[1]) end
 		diag.reason = #S.reminders > 0 and "NO_LOCATED_ACTION" or "NO_CANDIDATES"
 		return plan
 	end
 	rankStops(S)
 	local pick = searchSequences(S, opts.prevNowId)
+	-- work already underway in this area comes before a trip somewhere else (a route zone the player chose, or a quest they added, still wins)
+	if Pl.LOCAL_FIRST and S.localWork[1] and not diag.pinnedFirst and S.player and S.stops[pick.stops[1]].pos.map ~= S.player.map
+		and not (env.routeMap ~= nil and S.stops[pick.stops[1]].pos.map == env.routeMap) then
+		return Pl.StayLocal(S, plan, S.localWork[1])
+	end
 	-- Reachable only through a leg we cannot measure, and not worth its (charged) time: do not send the player there on the
 	-- strength of data that may be unverified. A route zone the player chose, or a quest they added, is their call and stays.
 	local inChosenZone = env.routeMap ~= nil and S.stops[pick.stops[1]].pos.map == env.routeMap

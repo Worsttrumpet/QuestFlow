@@ -320,8 +320,10 @@ do
 	for _, beta in ipairs({ 0, math.pi / 2, math.pi, 3 * math.pi / 2, 0.8, 2.4 }) do st.x, st.y = 0.5, 0.5; st.facing = f(beta); ns.Arrow.Update(ns.State.ctx); walk(ns, st, f, beta, 3) end
 	local saved = ForeverCodexDB
 	check(saved.ui.arrowCal and saved.ui.arrowCal.s == -1 and ns.Prefs.IsSavedVariablesSafe(saved), "the learned convention is saved, SavedVariables-safe")
-	ns.Arrow.Frame().GetPoint = function() return "TOP", nil, "TOP", 10, -200 end
-	ns.Arrow.Frame().__scripts.OnDragStop(ns.Arrow.Frame())
+	local af = ns.Arrow.Frame()
+	af.GetPoint = function() return "TOP", nil, "TOP", 10, -200 end
+	af.__scripts.OnDragStart(af)
+	af.__scripts.OnDragStop(af)
 	check(saved.ui.arrowPos and saved.ui.arrowPos.y == -200, "dragging the arrow saves its place")
 end
 
@@ -425,7 +427,15 @@ end
 
 -- ================================================================ NEW FOR YOU
 
-local function nfyWorld(level)
+-- A test double standing in for a future, VERIFIED class-ability provider (none ships). It answers only for levels 6 and 8.
+local function abilityDouble(ctx, from, to)
+	local out = {}
+	if from < 6 and to >= 6 then out[#out + 1] = { title = "New ability: Test Spell", detail = "Visit your class trainer." } end
+	if from < 8 and to >= 8 then out[#out + 1] = { title = "New ability: Test Spell Two" } end
+	return out
+end
+
+local function nfyWorld(level, noProvider)
 	local ns, W = world(level or 5, {
 		Q(10, "Seen on Forever", 100, 0, { req = 6 }),               -- ATT record; the observed layer below confirms the quest exists
 		Q(11, "Unseen quest", 110, 0, { req = 6 }),
@@ -435,11 +445,12 @@ local function nfyWorld(level)
 	ForeverCodex.RegisterPack("quests", "observed:nfy", { meta = { src = "observed", verified = true, priority = 100, label = "test" }, zones = {},
 		quests = { [10] = { id = 10, name = "Seen on Forever" }, [12] = { id = 12, name = "Level eight" }, [13] = { id = 13, name = "Level seven" } } })
 	ns.NewForYou._Reset()
+	if not noProvider then ns.NewForYou.Register("test-abilities", abilityDouble) end
 	ns.State.Recompute()           -- baseline at this level
 	return ns, W
 end
 
-section("NEW FOR YOU: only at even levels, only with something real, exactly one minute")
+section("NEW FOR YOU: new class abilities only; no provider ships, so a level-up never shows a quest; even levels, one minute")
 do
 	local ns, W = nfyWorld(5)
 	local N = ns.NewForYou
@@ -447,7 +458,7 @@ do
 	W.char.level = 6
 	ns.State.Recompute()
 	local a = N.Active()
-	check(a and a.level == 6 and #a.items == 1 and a.items[1].title == "New quest: Seen on Forever", "reaching level 6: the quest Forever's own data shows that just opened up (an ATT-only one is not shown)")
+	check(a and a.level == 6 and #a.items == 1 and a.items[1].title == "New ability: Test Spell" and a.items[1].detail == "Visit your class trainer.", "reaching level 6: what a registered ability provider reports")
 	check(N.DURATION == 60, "it lasts one minute")
 	W.now = W.now + 59
 	check(N.Active() ~= nil, "still there at 59 seconds")
@@ -459,7 +470,7 @@ do
 	check(ns2.NewForYou.Active() == nil, "an odd level never triggers")
 	W2.char.level = 8
 	ns2.State.Recompute()
-	check(ns2.NewForYou.Active() and ns2.NewForYou.Active().items[1].title == "New quest: Level eight", "an even level does")
+	check(ns2.NewForYou.Active() and ns2.NewForYou.Active().items[1].title == "New ability: Test Spell Two", "an even level does")
 	local ns3, W3 = nfyWorld(2)
 	W3.char.level = 4
 	ns3.State.Recompute()
@@ -468,15 +479,21 @@ do
 	W4.char.level = 6
 	ns4.State.Recompute()
 	check(ns4.NewForYou.Active() and ns4.NewForYou.Active().level == 6, "a jump over an even level is evaluated for the levels crossed")
-	local ns5, W5 = nfyWorld(5)
-	W5.log = { { questID = 10, title = "Seen on Forever", complete = false } }
-	W5.char.level = 6
-	ns5.State.Recompute()
-	check(ns5.NewForYou.Active() == nil, "a quest you already have is not new")
+	-- REGRESSION: a level-up must never turn an available quest into a NEW FOR YOU card (it is not a quest list). The fixture has quests
+	-- that open at levels 6 and 8 (one confirmed by observed data); with no ability provider the card stays empty at every level.
+	local ns5, W5 = nfyWorld(5, true)
+	check(#ns5.NewForYou.Providers() == 0, "no provider ships: nothing registers itself")
+	for lvl = 6, 12 do
+		W5.char.level = lvl
+		ns5.State.Recompute()
+		check(ns5.NewForYou.Active() == nil, "level " .. lvl .. ": no card, and in particular no quest (Seen on Forever / Level eight / Level seven)")
+	end
+	check(ns5.State.plan ~= nil and #ns5.errors == 0, "(the plan is unaffected)")
+	local src5 = H.readFile(H.addonDir .. "/NewForYou.lua"):gsub("%-%-[^\n]*", "")
+	check(not src5:find("Registry", 1, true) and not src5:find("Contract", 1, true) and not src5:lower():find("quest", 1, true), "NewForYou.lua reads no quest data at all")
 	-- providers
-	local ns6, W6 = nfyWorld(5)
+	local ns6, W6 = nfyWorld(5, true)
 	ns6.NewForYou.Register("test", function(ctx, from, to) return { { title = "New ability: Test", detail = "Learn it from your trainer." }, { title = "B" }, { title = "C" }, { title = "D" } } end)
-	ns6.NewForYou.Unregister("quests")
 	W6.char.level = 6
 	ns6.State.Recompute()
 	local c6 = ns6.NewForYou.Active()
@@ -518,7 +535,7 @@ do
 	check(not c.nfyBox.__shown, "and NEW FOR YOU is not shown")
 	W.char.level = 6
 	ns.State.Recompute()
-	check(c.nfyBox.__shown and c.nfyLevel.__text == "Level 6" and c.nfyRows[1].__text:find("New quest: Seen on Forever", 1, true), "reaching an even level with something real shows NEW FOR YOU on the right")
+	check(c.nfyBox.__shown and c.nfyLevel.__text == "Level 6" and c.nfyRows[1].__text:find("New ability: Test Spell", 1, true), "reaching an even level with something real shows NEW FOR YOU on the right")
 	check(c.nowBox.__w == 304 and c.nearBox.__w == 304 and c.nfyBox.__w == 192, "NOW and NEARBY stack on the left; the card on the right is narrower than NOW")
 	check(c.nfyBox.__h < c.nowBox.__h + c.nearBox.__h + 8, "it fits its content instead of spanning NOW + NEARBY (was: a full-height panel)")
 	check(c.nowBox.__points[5] == -22 and c.nearBox.__points[5] < c.nowBox.__points[5] and c.nfyBox.__points[5] == c.nowBox.__points[5], "NOW is on top, NEARBY under it, NEW FOR YOU level with NOW")
@@ -528,7 +545,7 @@ do
 	check(#H.world().chat >= 0, "(no input needed)")
 	local bad = {}
 	for _, t in ipairs(allTexts(W)) do
-		for _, w in ipairs({ "ATT", "unverified", "Source:", "Show on Map", "Skip", "Add quest", "Refresh" }) do if t:find(w, 1, true) then bad[#bad + 1] = t end end
+		for _, w in ipairs({ "ATT", "unverified", "Source:", "Show on Map", "Add quest", "Refresh" }) do if t:find(w, 1, true) then bad[#bad + 1] = t end end
 	end
 	check(#bad == 0, "still no engineering words in the player window" .. (#bad > 0 and (": " .. bad[1]) or ""))
 end

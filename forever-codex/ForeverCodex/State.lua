@@ -84,6 +84,18 @@ function S.Recompute()
 end
 
 --- Called every frame by Boot's OnUpdate.
+--- Skips the current NOW (the player's veto on a recommendation that is wrong or unavailable) and recomputes. Returns the skipped action, or nil
+-- when there was nothing to skip. `/codex unskip` brings skipped items back. The same call backs `/codex skip` and the Skip button on the NOW card.
+function S.SkipCurrent()
+	local plan = S.plan or S.Recompute()
+	local a = plan and (plan.now or plan.next)
+	if a and ns.Prefs.Skip(a.skipKey) then
+		S.Recompute()
+		return a
+	end
+	return nil
+end
+
 function S.Tick(elapsed)
 	sinceCompute = sinceCompute + (elapsed or 0)
 	if dirty and sinceCompute >= DIRTY_DELAY then

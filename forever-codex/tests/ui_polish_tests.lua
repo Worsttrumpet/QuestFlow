@@ -221,3 +221,158 @@ do
 	check(bar:Set(1, 2) and bar.fraction == 0.5, "the progress bar is reusable too")
 	check(#ns.errors == 0, "no errors")
 end
+
+section("NOW: a Skip control is the player's way out of a wrong or unavailable recommendation")
+do
+	local ns, W, c = uiWorld({ Q(1, "Wrong Place", 60, 0, { giverName = "A" }), Q(2, "Right Place", 200, 0, { giverName = "B" }) }, {})
+	local first = ns.State.plan.now and ns.State.plan.now.quest
+	check(first and c.nowSkip and c.nowSkip.__shown, "the NOW card has a Skip button while there is a recommendation")
+	W.chat = {}
+	c.nowSkip.__scripts.OnClick(c.nowSkip)
+	check(ns.Prefs.IsSkipped("Q:" .. first), "clicking it skips the current recommendation")
+	check(ns.State.plan.now and ns.State.plan.now.quest ~= first, "and NOW moves on to something else")
+	local said = table.concat(W.chat, "\n")
+	check(said:find("Skipped:", 1, true) ~= nil and said:find("/codex unskip", 1, true) ~= nil, "and says how to bring it back")
+	H.slash("unskip")
+	check(ns.State.plan.now.quest == first, "/codex unskip restores it")
+	local nsE, WE, cE = uiWorld({}, {})
+	check(not cE.nowSkip.__shown, "there is no Skip button when there is nothing to recommend")
+	check(ns.State.SkipCurrent ~= nil and H.readFile(H.addonDir .. "/Slash.lua"):find("State.SkipCurrent", 1, true) ~= nil, "/codex skip and the button share one function")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("arrow: drag moves it, Shift-drag resizes it, they cannot trigger each other, size persists, tooltip only on hover")
+do
+	local shift = false
+	local cur = { x = 500, y = 500 }
+	_G.IsShiftKeyDown = function() return shift end
+	_G.GetCursorPosition = function() return cur.x, cur.y end
+	local function arrow(savedVars)
+		local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" }, savedVars = savedVars })
+		H.attPack(ns, QUEST, nil)
+		ns.Prefs.FinishSetup()
+		ns.State.Recompute()
+		ns.Arrow.Demo(10)
+		ns.Arrow.Update(ns.State.ctx)
+		local f = ns.Arrow.Frame()
+		local spy = { start = 0, stop = 0 }
+		f.StartMoving = function() spy.start = spy.start + 1 end
+		f.StopMovingOrSizing = function() spy.stop = spy.stop + 1 end
+		f.GetCenter = function() return 500, 500 end
+		f.GetEffectiveScale = function() return 1 end
+		f.GetPoint = function() return "TOP", nil, "TOP", 10, -200 end
+		return ns, f, spy
+	end
+	local ns, f, spy = arrow()
+	local A = ns.Arrow
+	check(A.SIZE_MIN == 24 and A.SIZE_DEFAULT == 40 and A.SIZE_MAX == 120 and A.Size() == 40, "sensible limits (24 to 120 px) and the default is the old size")
+	check(f.tex.__w == 40 and f.__w == 64 and f.__h == 70, "(the default arrow is exactly the size it always was)")
+
+	-- plain drag: moves, never resizes
+	shift = false
+	f.__scripts.OnDragStart(f)
+	check(spy.start == 1 and A._Drag().mode == "move" and f.__scripts.OnUpdate == nil, "a plain drag starts moving the arrow and installs no resize")
+	cur.x = 900                                                  -- the mouse goes far away: a move must not resize
+	f.__scripts.OnDragStop(f)
+	check(spy.stop == 1 and ForeverCodexDB.ui.arrowPos and ForeverCodexDB.ui.arrowPos.y == -200 and ForeverCodexDB.ui.arrowSize == nil and f.tex.__w == 40, "it stops, saves the position and leaves the size alone")
+
+	-- Shift-drag: resizes visibly while dragging, never moves
+	cur.x, cur.y = 600, 500                                      -- 100 px from the arrow's centre when the drag starts
+	shift = true
+	ForeverCodexDB.ui.arrowPos = nil
+	f.__scripts.OnDragStart(f)
+	check(A._Drag().mode == "resize" and spy.start == 1 and type(f.__scripts.OnUpdate) == "function", "a Shift-drag starts a resize and does NOT start moving")
+	cur.x = 650; f.__scripts.OnUpdate(f)                         -- 50 px further out
+	check(f.tex.__w == 90 and f.__w == 114 and f.__h == 120, "dragging away makes it bigger, visibly, during the drag (40 -> 90)")
+	cur.x = 560; f.__scripts.OnUpdate(f)                         -- 40 px from the centre: 60 closer than the start
+	check(f.tex.__w == 24, "dragging toward it makes it smaller, down to the minimum (24)")
+	cur.x = 5000; f.__scripts.OnUpdate(f)
+	check(f.tex.__w == 120, "and never past the maximum (120)")
+	cur.x = 650; f.__scripts.OnUpdate(f)
+	f.__scripts.OnDragStop(f)
+	check(ForeverCodexDB.ui.arrowSize == 90 and A.Size() == 90 and f.__scripts.OnUpdate == nil, "releasing saves the size and removes the resize hook")
+	check(spy.stop == 1 and ForeverCodexDB.ui.arrowPos == nil and spy.start == 1, "a Shift-drag never moved the arrow or saved a position")
+	check(ns.Prefs.IsSavedVariablesSafe(ForeverCodexDB), "the size is SavedVariables-safe")
+
+	-- the mode is fixed when the drag starts: pressing or releasing Shift mid-drag cannot switch it
+	shift = false
+	f.__scripts.OnDragStart(f)
+	shift = true; cur.x = 900
+	f.__scripts.OnDragStop(f)
+	check(ForeverCodexDB.ui.arrowSize == 90 and f.tex.__w == 90 and ForeverCodexDB.ui.arrowPos ~= nil, "a move stays a move even if Shift is pressed during it (size untouched)")
+	ForeverCodexDB.ui.arrowPos = nil
+	shift = true; cur.x, cur.y = 600, 500
+	f.__scripts.OnDragStart(f)
+	shift = false; cur.x = 700; f.__scripts.OnUpdate(f)
+	local stopsBefore = spy.stop
+	f.__scripts.OnDragStop(f)
+	check(spy.stop == stopsBefore and ForeverCodexDB.ui.arrowPos == nil and ForeverCodexDB.ui.arrowSize ~= 90, "a resize stays a resize even if Shift is released during it (no move, no position saved)")
+	check(A._Drag() == nil, "and nothing is left in progress")
+	-- a stop with no start does nothing
+	f.__scripts.OnDragStop(f)
+	check(ForeverCodexDB.ui.arrowPos == nil, "a stray stop saves nothing")
+
+	-- if the cursor cannot be measured a Shift-drag does nothing (it must not move the arrow by accident)
+	local keep = _G.GetCursorPosition
+	_G.GetCursorPosition = nil
+	ForeverCodexDB.ui.arrowSize = 90
+	shift = true
+	f.__scripts.OnDragStart(f)
+	local startsBefore = spy.start
+	f.__scripts.OnDragStop(f)
+	check(spy.start == startsBefore and ForeverCodexDB.ui.arrowPos == nil and ForeverCodexDB.ui.arrowSize == 90, "no cursor reading: a Shift-drag does nothing at all")
+	_G.GetCursorPosition = keep
+	shift = false
+
+	-- persistence across a reload, and bad saved values
+	local saved = {}
+	for k, v in pairs(ForeverCodexDB) do saved[k] = v end
+	ForeverCodexDB.ui.arrowSize = 90
+	local ns2, f2 = arrow(ForeverCodexDB)
+	check(ns2.Arrow.Size() == 90 and f2.tex.__w == 90 and f2.__h == 120, "after a reload the arrow is the size it was left at")
+	for bad, want in pairs({ [5] = 24, [1e9] = 120 }) do
+		ForeverCodexDB.ui.arrowSize = bad
+		local nsB = arrow(ForeverCodexDB)
+		check(nsB.Arrow.Size() == want, "a saved size of " .. tostring(bad) .. " is clamped to " .. want)
+	end
+	for _, bad in ipairs({ "big", 0 / 0, true }) do
+		ForeverCodexDB.ui.arrowSize = bad
+		local nsB = arrow(ForeverCodexDB)
+		check(nsB.Arrow.Size() == 40, "an unusable saved size falls back to the default")
+	end
+	ForeverCodexDB.ui.arrowSize = nil
+
+	-- the tooltip: only on hover, short, in the minimap tooltip's style
+	local ns3, f3 = arrow()
+	local tip = { double = {}, single = {}, shown = 0, hidden = 0 }
+	local GT = _G.GameTooltip
+	GT.SetOwner = function(_, owner, anchor) tip.owner, tip.anchor = owner, anchor end
+	GT.AddDoubleLine = function(_, l, r, lr, lg, lb, rr, rg, rb) tip.double[#tip.double + 1] = { l = l, r = r, lc = { lr, lg, lb }, rc = { rr, rg, rb } } end
+	GT.AddLine = function(_, text) tip.single[#tip.single + 1] = text end
+	GT.Show = function() tip.shown = tip.shown + 1 end
+	GT.Hide = function() tip.hidden = tip.hidden + 1 end
+	check(tip.shown == 0 and #tip.double == 0, "nothing is shown until the mouse is over the arrow")
+	f3.__scripts.OnEnter(f3)
+	local d = tip.double
+	check(tip.owner == f3 and tip.shown == 1 and #d == 4, "hovering shows the tooltip: a title and three rows")
+	check(d[1].l == "Forever Codex" and d[1].lc[1] == 1 and d[1].lc[2] == 0.82 and d[1].lc[3] == 0, "a gold Forever Codex title, as on the minimap button")
+	check(d[2].l == "Drag" and d[2].r == "Move arrow" and d[3].l == "Shift + Drag" and d[3].r == "Resize arrow" and d[4].l == "/codex arrow flip" and d[4].r == "Flip arrow direction", "rows: Drag, Shift + Drag and /codex arrow flip")
+	check(d[2].lc[3] > d[2].lc[1] and d[2].rc[1] == 1 and d[2].rc[2] == 1 and d[2].rc[3] == 1 and tip.single[1] == " ", "inputs in blue, actions in white, a blank line under the title (the minimap tooltip's style)")
+	check(d[1].r == "", "no version or technical detail on it")
+	f3.__scripts.OnLeave(f3)
+	check(tip.hidden == 1, "leaving the arrow hides it")
+	f3.__scripts.OnDragStart(f3)
+	check(tip.hidden == 2, "starting a drag hides it")
+	local shownBefore = tip.shown
+	f3.__scripts.OnEnter(f3)
+	check(tip.shown == shownBefore, "and it is not shown again while a drag is in progress")
+	f3.__scripts.OnDragStop(f3)
+	-- /codex arrow flip is unchanged and no new command was added for sizing
+	local before = ns3.Prefs.ArrowFlip()
+	H.slash("arrow flip")
+	check(ns3.Prefs.ArrowFlip() ~= before, "/codex arrow flip still works")
+	local slashSrc = H.readFile(H.addonDir .. "/Slash.lua")
+	check(not slashSrc:find('restLower == "size"', 1, true) and not slashSrc:find("resize", 1, true), "no command was added for arrow sizing")
+	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
+	_G.IsShiftKeyDown, _G.GetCursorPosition = nil, nil
+end

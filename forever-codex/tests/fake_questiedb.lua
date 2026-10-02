@@ -12,9 +12,9 @@
 local F = {}
 
 local QUEST_FIELDS = { "name", "startedBy", "finishedBy", "requiredLevel", "questLevel", "requiredClasses", "requiredRaces",
-	"objectivesText", "preQuestGroup", "preQuestSingle", "specialFlags", "breadcrumbForQuestId" }
+	"objectivesText", "preQuestGroup", "preQuestSingle", "specialFlags", "breadcrumbForQuestId", "zoneOrSort" }
 local QUEST_TYPE = { name = "string", startedBy = "table", finishedBy = "table", requiredLevel = "number", questLevel = "number", requiredClasses = "number",
-	requiredRaces = "number", objectivesText = "table", preQuestGroup = "table", preQuestSingle = "table", specialFlags = "number", breadcrumbForQuestId = "number" }
+	requiredRaces = "number", objectivesText = "table", preQuestGroup = "table", preQuestSingle = "table", specialFlags = "number", breadcrumbForQuestId = "number", zoneOrSort = "number" }
 local NEVER_NIL_TABLE = { startedBy = true, finishedBy = true, objectives = true }
 local NPC_TYPE = { name = "string", spawns = "table", zoneID = "number", friendlyToFaction = "string" }
 

@@ -221,6 +221,25 @@ function W.Stack(card, width, justify)
 	return st
 end
 
+--- The Codex tooltip: a gold title (with an optional grey version on the right), a blank line, then one row per action with the input
+-- on the left in blue and what it does on the right in white. t = { title, version, rows = { { input, action }, ... } }. Shared by the minimap
+-- button and the arrow so they look the same. AddDoubleLine is what Questie's tooltip uses on this client; if it is ever missing each row falls
+-- back to one plain line. Shown only while the mouse is over the owner (the caller hides it on leave).
+local TIP_TITLE, TIP_VERSION, TIP_KEY, TIP_ACTION = { 1, 0.82, 0 }, { 0.6, 0.6, 0.6 }, { 0.25, 0.65, 0.95 }, { 1, 1, 1 }
+function W.ShowTooltip(owner, anchor, t)
+	local tip = rawget(_G, "GameTooltip")
+	if not tip then return end
+	if not ns.Safe(tip.SetOwner, tip, owner, anchor or "ANCHOR_LEFT") then return end
+	local function double(left, right, lc, rc)
+		local ok = ns.Safe(tip.AddDoubleLine, tip, left, right, lc[1], lc[2], lc[3], rc[1], rc[2], rc[3])
+		if not ok then ns.Safe(tip.AddLine, tip, left .. (right ~= "" and (": " .. right) or ""), lc[1], lc[2], lc[3]) end
+	end
+	double(t.title, t.version or "", TIP_TITLE, TIP_VERSION)
+	ns.Safe(tip.AddLine, tip, " ")
+	for _, row in ipairs(t.rows) do double(row[1], row[2], TIP_KEY, TIP_ACTION) end
+	ns.Safe(tip.Show, tip)
+end
+
 --- A flat progress bar: a dark track with a muted fill and "have / need" beside it. Set(have, need) shows it; Clear() hides it.
 -- It never invents numbers: Set needs real counts, and anything else hides the bar.
 function W.Progress(parent, width, height)

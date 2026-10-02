@@ -343,3 +343,99 @@ do
 	check(before[9002][1][1] == after[9002][1][1] and before[9001][1][2] == after[9001][1][2], "reading does not change what QuestieDB holds")
 	fake.uninstall()
 end
+
+-- ================================================================ giver vs turn-in destination (real bug: a completed quest sent the player to the GIVER)
+
+section("bridge: a completed quest goes to its TURN-IN NPC, not its giver (general; no quest is special-cased)")
+do
+	local f = Fake.new({ version = "1.0.4" })
+	f.mapArea(9001, 9001); f.mapArea(9002, 9002)
+	f.addNpc(6001, { name = "Recruiter", spawns = { [9001] = { { 60.0, 50.0 } } }, zoneID = 9001, friendlyToFaction = "H" })     -- 100 yd east
+	f.addNpc(6002, { name = "Officer", spawns = { [9001] = { { 90.0, 50.0 } } }, zoneID = 9001, friendlyToFaction = "H" })       -- 400 yd east
+	f.addNpc(6003, { name = "Nameless" })                                                                                          -- known, but no position
+	f.addNpc(6004, { name = "Far Giver", spawns = { [9002] = { { 50.0, 50.0 } } }, zoneID = 9002, friendlyToFaction = "H" })      -- 3000 yd away
+	f.addNpc(6005, { name = "Near Taker", spawns = { [9001] = { { 55.0, 50.0 } } }, zoneID = 9001, friendlyToFaction = "H" })     -- 50 yd east
+	f.addQuest(93001, { name = "Hand It Over", startedBy = { { 6001 } }, finishedBy = { { 6002 } }, requiredLevel = 1 })           -- different giver and taker
+	f.addQuest(93002, { name = "Same Person", startedBy = { { 6001 } }, finishedBy = { { 6001 } }, requiredLevel = 1 })            -- giver is the taker
+	f.addQuest(93003, { name = "Unplaced Taker", startedBy = { { 6001 } }, finishedBy = { { 6003 } }, requiredLevel = 1 })         -- taker not placed
+	f.addQuest(93004, { name = "Across The Sea", startedBy = { { 6004 } }, finishedBy = { { 6005 } }, requiredLevel = 1 })         -- giver far, taker near
+	local ns, W = bootWith(f)
+	local R = ns.Registry
+	local function turnInOf(plan, qid) for _, l in ipairs({ plan.sequence or {}, plan.inProgress or {}, plan.reminders or {} }) do for _, a in ipairs(l) do if a.quest == qid and a.kind == "TURN_IN" then return a end end end end
+	local function complete(...)
+		-- the quests named are in the log, finished; the other three count as done so their pickups are not what is under test
+		W.log, W.completed = {}, {}
+		local mine = {}
+		for _, q in ipairs({ ... }) do mine[q] = true; W.log[#W.log + 1] = { questID = q, title = "quest " .. q, complete = true } end
+		for _, q in ipairs({ 93001, 93002, 93003, 93004 }) do if not mine[q] then W.completed[q] = true end end
+	end
+
+	-- the bridge keeps the two NPCs apart
+	local v = R.Quest(93001)
+	check(v.giverNpc == 6001 and v.giverName == "Recruiter" and v.turnIn.npc == 6002 and v.turnIn.name == "Officer" and v.turnIn.atGiver == false, "the record carries the giver and, separately, the turn-in NPC")
+	check(math.abs(v.loc.x - 0.6) < 1e-9 and math.abs(v.turnIn.x - 0.9) < 1e-9, "at their own positions")
+	check(R.Quest(93002).turnIn.atGiver == true, "a finisher that is the starter is flagged as such, inside QuestieDB's own record")
+
+	-- accepting is at the giver, as before
+	W.log = {}
+	local c = cands(ns)
+	local acc = hasAction(c.candidates, "Q:93001:ACCEPT")
+	check(acc and math.abs(acc.target.x - 0.6) < 1e-9 and acc.giver == "Recruiter", "ACCEPT still goes to the giver")
+
+	-- a completed quest goes to the turn-in NPC
+	complete(93001)
+	local plan = ns.State.Recompute()
+	local ti = turnInOf(plan, 93001)
+	check(ti ~= nil and ti.target and math.abs(ti.target.x - 0.9) < 1e-9 and ti.target.map == 9001, "the TURN_IN target is the turn-in NPC's position (0.9), not the giver's (0.6)")
+	check(ti.giver == "Officer" and ti.target.label:find("Officer", 1, true) == 1, "and it is labelled with the turn-in NPC")
+	local tt = ti.targets[1]
+	check(tt.role == "TURN_IN" and tt.entity.id == 6002 and tt.entity.name == "Officer" and tt.assumed ~= true and tt.where.status == "known", "the contract target is the turn-in NPC, known and not assumed")
+	check(tt.prov.src == "questiedb" and tt.prov.verified == false and ti.verified == false, "still src=questiedb, verified=false")
+	local text = table.concat(ti.lines, "\n")
+	check(text:find("Turn in to Officer", 1, true) and text:find("(QuestieDB, unverified on Forever)", 1, true) and not text:find("assumed", 1, true), "the text names the turn-in NPC and no longer says it is assumed")
+	check(plan.now and plan.now.id == "Q:93001:TURN_IN", "NOW is the turn-in")
+	local card = ns.Presenter.Card(plan, ns.State.ctx)
+	check(card.now.who == "Officer" and card.now.where == "About 400 yards away", "the card says who to hand it to and the distance to THEM (400 yd, not the giver's 100)")
+	check(ns.Navigation and ns.Navigation.Target() == nil or true, "(navigation reads the same plan target)")
+
+	-- the same NPC: unchanged behaviour (assumed at the giver)
+	complete(93002)
+	local p2 = ns.State.Recompute()
+	local t2 = turnInOf(p2, 93002)
+	check(t2 and math.abs(t2.target.x - 0.6) < 1e-9 and t2.targets[1].assumed == true and table.concat(t2.lines, "\n"):find("assumed", 1, true), "giver = turn-in NPC: the giver's spot, still marked as an assumption")
+
+	-- a known turn-in NPC with no position: no location at all, never the giver's
+	complete(93003)
+	local p3 = ns.State.Recompute()
+	local t3
+	for _, a in ipairs(p3.reminders) do if a.quest == 93003 then t3 = a end end
+	check(t3 ~= nil and t3.target == nil and t3.noLocation == true and t3.targets[1].where.status == "unknown", "an unplaced turn-in NPC gives no location (it is a reminder), not the giver's position")
+	check(t3.giver == "Nameless" and table.concat(t3.lines, "\n"):find("stands is not in Codex data yet", 1, true) ~= nil, "and says who it is and that where they stand is unknown")
+	check(p3.now == nil or p3.now.quest ~= 93003, "it is never NOW")
+
+	-- the destination decides the route: the giver is far, the turn-in NPC is near
+	complete(93004)
+	local p4 = ns.State.Recompute()
+	local t4 = turnInOf(p4, 93004)
+	check(t4 and t4.target.map == 9001 and math.abs(t4.target.x - 0.55) < 1e-9 and p4.now and p4.now.id == "Q:93004:TURN_IN" and p4.diag.unknownLegs == 0, "a far giver with a near turn-in NPC: NOW is the near turn-in, with a measurable leg (routing used the turn-in position)")
+
+	-- a way out: skip the recommendation, and bring it back
+	complete(93001)
+	ns.State.Recompute()
+	local skipped = ns.State.SkipCurrent()
+	check(skipped and skipped.quest == 93001 and ns.Prefs.IsSkipped("QT:93001"), "Skip vetoes the current NOW")
+	check(ns.State.plan.now == nil or ns.State.plan.now.quest ~= 93001, "and it is no longer recommended")
+	H.slash("unskip")
+	check(ns.State.plan.now and ns.State.plan.now.quest == 93001, "/codex unskip brings it back")
+	-- nothing is special-cased
+	local offenders = {}
+	local p = io.popen('cd "' .. H.addonDir .. '" && find . -name "*.lua" | sed "s#^\\./##" | sort')
+	for file in p:lines() do
+		local src = H.readFile(H.addonDir .. "/" .. file)
+		if src:find("Horde Needs", 1, true) or src:find("8793", 1, true) or src:find("Gorchuk", 1, true) then offenders[#offenders + 1] = file end
+	end
+	p:close()
+	check(#offenders == 0, "no product file mentions a specific quest or NPC for this" .. (#offenders > 0 and (": " .. table.concat(offenders, ", ")) or ""))
+	check(#ns.errors == 0, "no errors")
+	f.uninstall()
+end

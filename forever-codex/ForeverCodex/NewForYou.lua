@@ -1,4 +1,6 @@
--- ForeverCodex.NewForYou: a temporary card for MEANINGFUL progression that just opened up. Event-driven, never a standing list.
+-- ForeverCodex.NewForYou: a temporary card for NEW CLASS ABILITIES (spells, abilities) the player can learn at their current level
+-- ("New abilities available: ... Visit your class trainer."). It is NOT a quest list: quests belong to NOW and NEARBY. Event-driven,
+-- never a standing list.
 --
 --   * Checked only when the character's level rises to an EVEN level (2, 4, 6, ...), for every even level crossed.
 --   * Asks each registered provider "is there something real and reliably known?". No items = no card (an even level alone
@@ -6,14 +8,12 @@
 --   * When there is something: visible for exactly DURATION seconds (60), then gone. No dismissal, nothing persisted.
 --   * The first context after login is only a baseline (logging in at level 20 is not "reaching" level 20).
 --
--- Providers are plain functions registered here; later systems (class abilities, professions, pet skills, travel) add theirs.
--- WHAT EXISTS TODAY: one provider, "quests": quests the game's own data shows on Forever (an observed record) whose required
--- level (ATT) has just been met and that the character can take. No spell, trainer, recipe or pet provider ships: Forever's spell and
--- trainer APIs are unverified, and Codex does not invent progression. A new quest never changes NOW (the Planner decides).
+-- Providers are plain functions registered here; a class-ability provider (and later professions, pet skills, travel) adds its own.
+-- WHAT EXISTS TODAY: NO provider. Forever's spell and trainer APIs are unverified, and Codex does not invent progression or assume that
+-- Classic spell availability is identical on Forever, so the card simply stays hidden until a provider that can be verified exists. (There
+-- used to be a "quests" provider here; it was wrong for this card and was removed rather than made smarter.) A level-up never shows a quest.
 
 local addonName, ns = ...
-local R = ns.Registry
-local K = ns.Contract
 
 local N = {}
 ns.NewForYou = N
@@ -37,18 +37,12 @@ function N.Unregister(key)
 	for i, k in ipairs(order) do if k == key then table.remove(order, i) break end end
 end
 
-N.Register("quests", function(ctx, from, to)
+--- The registered provider keys (none ships today).
+function N.Providers()
 	local out = {}
-	for _, id in ipairs(R.QuestIds()) do
-		local v = R.Quest(id)
-		if v and v.hasObserved and v.req and v.req > from and v.req <= to and not v.repeatable and not ctx.log[id] then
-			local st = K.QuestState(id, v, ctx)
-			if st.state == "AVAILABLE" then out[#out + 1] = { title = "New quest: " .. (v.name or "a quest"), id = id } end
-		end
-	end
-	table.sort(out, function(a, b) if a.title ~= b.title then return a.title < b.title end return a.id < b.id end)
+	for i, k in ipairs(order) do out[i] = k end
 	return out
-end)
+end
 
 --- Called with every fresh Context.
 function N.OnContext(ctx)

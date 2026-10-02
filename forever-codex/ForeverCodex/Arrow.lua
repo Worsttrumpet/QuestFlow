@@ -165,6 +165,91 @@ end
 
 local frame
 
+-- ---------------------------------------------------------------- size, moving and resizing (the mouse only: no commands, no settings page)
+--   left-drag          moves the arrow (position saved)
+--   Shift + left-drag  resizes it: drag AWAY from the arrow to make it bigger, TOWARD it to make it smaller (size saved)
+-- Which of the two a drag is, is decided ONCE when the drag starts (is Shift down?) and kept until it ends, so they can never trigger each
+-- other, even if Shift is pressed or released mid-drag. If the cursor cannot be measured a Shift-drag does nothing (it never moves the arrow by accident).
+
+A.SIZE_DEFAULT, A.SIZE_MIN, A.SIZE_MAX = 40, 24, 120          -- the side of the arrow picture, in pixels
+
+--- The saved arrow size, clamped to the allowed range; the default when none (or something unusable) is saved.
+function A.Size()
+	local v = P.Root().ui.arrowSize
+	if type(v) ~= "number" or v ~= v then return A.SIZE_DEFAULT end
+	return math.max(A.SIZE_MIN, math.min(A.SIZE_MAX, math.floor(v + 0.5)))
+end
+
+local function applySize(size)
+	frame.tex:SetSize(size, size)
+	frame:SetSize(math.max(64, size + 24), size + 30)           -- room for the label under the picture
+end
+
+-- shown only while the mouse is over the arrow
+A.TOOLTIP_ROWS = {
+	{ "Drag", "Move arrow" },
+	{ "Shift + Drag", "Resize arrow" },
+	{ "/codex arrow flip", "Flip arrow direction" },
+}
+function A.TooltipLines() return { title = "Forever Codex", rows = A.TOOLTIP_ROWS } end
+
+local drag                                                      -- nil, or { mode = "move" | "resize" | "none", ... } for the drag in progress
+
+local function shiftDown() return type(IsShiftKeyDown) == "function" and IsShiftKeyDown() and true or false end
+
+--- The cursor and the arrow's centre in the same units, or nil when either cannot be read.
+local function cursorAndCentre(self)
+	if type(GetCursorPosition) ~= "function" then return nil end
+	local okC, cx, cy = pcall(GetCursorPosition)
+	local okM, mx, my = pcall(self.GetCenter, self)
+	local okS, scale = pcall(self.GetEffectiveScale, self)
+	if not (okC and okM and okS) or type(cx) ~= "number" or type(cy) ~= "number" or type(mx) ~= "number" or type(my) ~= "number" then return nil end
+	if type(scale) ~= "number" or scale <= 0 then scale = 1 end
+	return cx / scale, cy / scale, mx, my
+end
+
+local function resizeStep(self)
+	if not drag or drag.mode ~= "resize" then return end
+	local cx, cy = cursorAndCentre(self)
+	if not cx then return end
+	local d = math.sqrt((cx - drag.mx) ^ 2 + (cy - drag.my) ^ 2)
+	local size = math.max(A.SIZE_MIN, math.min(A.SIZE_MAX, math.floor(drag.size + (d - drag.d0) + 0.5)))
+	drag.current = size
+	applySize(size)
+end
+
+local function hideTip() local t = rawget(_G, "GameTooltip"); if t then pcall(t.Hide, t) end end
+
+local function startDrag(self)
+	if drag then return end
+	hideTip()
+	if shiftDown() then
+		local cx, cy, mx, my = cursorAndCentre(self)
+		if not cx then drag = { mode = "none" } return end
+		drag = { mode = "resize", size = A.Size(), mx = mx, my = my, d0 = math.sqrt((cx - mx) ^ 2 + (cy - my) ^ 2) }
+		self:SetScript("OnUpdate", resizeStep)
+	else
+		drag = { mode = "move" }
+		self:StartMoving()
+	end
+end
+
+local function stopDrag(self)
+	local d = drag
+	drag = nil
+	if not d then return end
+	if d.mode == "move" then
+		self:StopMovingOrSizing()
+		local ok, point, _, rel, x, y = pcall(self.GetPoint, self, 1)
+		if ok and type(x) == "number" then P.Root().ui.arrowPos = { point = point, rel = rel or point, x = x, y = y } end
+	elseif d.mode == "resize" then
+		self:SetScript("OnUpdate", nil)
+		P.Root().ui.arrowSize = d.current or d.size
+	end
+end
+
+function A._Drag() return drag end                              -- test seam
+
 local function build()
 	frame = CreateFrame("Frame", "ForeverCodexArrow", UIParent)
 	frame:SetSize(64, 70)
@@ -172,19 +257,20 @@ local function build()
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
 	frame:RegisterForDrag("LeftButton")
-	frame:SetScript("OnDragStart", frame.StartMoving)
-	frame:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		local ok, point, _, rel, x, y = pcall(self.GetPoint, self, 1)
-		if ok and type(x) == "number" then P.Root().ui.arrowPos = { point = point, rel = rel or point, x = x, y = y } end
+	frame:SetScript("OnDragStart", startDrag)
+	frame:SetScript("OnDragStop", stopDrag)
+	frame:SetScript("OnEnter", function(self)
+		if drag then return end
+		if ns.Widgets and ns.Widgets.ShowTooltip then ns.Widgets.ShowTooltip(self, "ANCHOR_RIGHT", A.TooltipLines()) end
 	end)
+	frame:SetScript("OnLeave", hideTip)
 	ns.Safe(frame.SetClampedToScreen, frame, true)
 	local pos = P.Root().ui.arrowPos
 	frame:ClearAllPoints()
 	if type(pos) == "table" and pos.point then frame:SetPoint(pos.point, UIParent, pos.rel or pos.point, pos.x, pos.y) else frame:SetPoint("TOP", UIParent, "TOP", 0, -140) end
 	frame.tex = frame:CreateTexture(nil, "ARTWORK")
-	frame.tex:SetSize(40, 40)
 	frame.tex:SetPoint("TOP", frame, "TOP", 0, 0)
+	applySize(A.Size())
 	ns.Safe(frame.tex.SetTexture, frame.tex, A.TEXTURE)
 	ns.Safe(frame.tex.SetVertexColor, frame.tex, 1, 0.82, 0)
 	ns.Safe(frame.tex.SetAlpha, frame.tex, 0.9)

@@ -18,7 +18,8 @@ local function allTexts(W)
 	return out
 end
 
-local FORBIDDEN = { "Show on Map", "Skip", "Add quest", "Refresh", "ATT", "verified", "unverified", "waiting", "Source:", "Status:", "policy", "confidence",
+-- ("Skip" is allowed: the NOW card has a Skip button, the player's way out of a wrong or unavailable recommendation; the other old buttons stay banned)
+local FORBIDDEN = { "Show on Map", "Add quest", "Refresh", "ATT", "verified", "unverified", "waiting", "Source:", "Status:", "policy", "confidence",
 	"score", "interruption", "AllTheThings", "observed on Forever" }
 local function leaks(W)
 	local bad = {}
@@ -170,10 +171,10 @@ do
 	for _, key in ipairs({ "codex", "world", "journey", "appendices" }) do ns.UI.ShowPage(key) end
 	for _, sub in ipairs({ "quests", "knowledge", "settings", "help", "party", "menu" }) do ns.UI.main.app.sub = sub; ns.UI.ShowPage("appendices") end
 	local bad = leaks(W)
-	check(#bad == 0, "no 'Show on Map', Skip, Add quest, Refresh, source, provenance, id or coordinate appears anywhere in the player window" .. (#bad > 0 and (": " .. bad[1]) or ""))
+	check(#bad == 0, "no 'Show on Map', Add quest, Refresh, source, provenance, id or coordinate appears anywhere in the player window" .. (#bad > 0 and (": " .. bad[1]) or ""))
 	local btnLabels = {}
 	for _, f in ipairs(W.frames) do if f.__kind == "Button" and f.text then btnLabels[f.text.__text] = true end end
-	check(not btnLabels["Show on Map"] and not btnLabels["Skip"] and not btnLabels["Add quest..."] and not btnLabels["Refresh"], "none of the old buttons exist")
+	check(not btnLabels["Show on Map"] and not btnLabels["Add quest..."] and not btnLabels["Refresh"], "none of the old buttons exist (Skip is the NOW card's own control)")
 	check(ns.UI.frame.__scripts.OnDragStart ~= nil and ns.UI.frame.__scripts.OnDragStop ~= nil, "the window is movable")
 	check(#ns.errors == 0, "no caught errors" .. (#ns.errors > 0 and (": " .. ns.errors[1]) or ""))
 end

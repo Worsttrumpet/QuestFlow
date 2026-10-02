@@ -186,7 +186,7 @@ Selected stops:
 
 Planner diagnostics:
   Candidates: 90 located (+6 optional hints, 0 without a location)
-  Stops: 38   Considered: 8   Sequences scored: 400   Selected stops: 3
+  Stops: 38   Considered: 6   Sequences scored: 156   Selected stops: 3
   Estimated sequence time: 102s (about 42s walking + 60s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 56.7   ALSO DO interruption: 0s   Unknown legs: 0
 
@@ -472,14 +472,14 @@ Scenario:  J Confidence and provenance   [DETERMINISTIC]
            Four candidates 100 yd apart in different directions: an observed, exact location; an approximate area; an assumed turn-in; an ATT-only pickup.
 Character: Level 6 Orc Warrior (Horde) | strategy efficient | route zone auto | position map 9001 (50.0, 50.0)
 
-NOW       Accept: Observed, exact   [ACCEPT, 100 yd from you, known]
+NOW       Turn in: Assumed turn-in   [TURN_IN, 100 yd from you, approx, assumed]
 ALSO DO   Continue: Approximate objective area   [OBJECTIVE, 100 yd from you, approx]
 THEN      Accept: ATT-only pickup   [ACCEPT, 100 yd from you, known]
 
 Selected stops:
-  1. Accept: Observed, exact   (100 yd)
+  1. Turn in: Assumed turn-in   (100 yd)
   2. Accept: ATT-only pickup   (141 yd)
-  3. Turn in: Assumed turn-in   (141 yd)
+  3. Accept: Observed, exact   (141 yd)
 
 Planner diagnostics:
   Candidates: 4 located (+0 optional hints, 0 without a location)
@@ -489,10 +489,9 @@ Planner diagnostics:
 
 Reason summary:
   - ALSO DO costs a 20s detour
-  - a turn-in is ready but waits: starting with a turn-in would score 40.1 (this plan 40.1) and take 100s
   - the first stop is on the way to the second (20s detour)
 
-Runners-up as the first step: Turn in: Assumed turn-in (0.0 lower); Accept: ATT-only pickup (2.5 lower); Continue: Approximate objective area (3.5 lower)
+Runners-up as the first step: Accept: Observed, exact (0.0 lower); Accept: ATT-only pickup (2.5 lower); Continue: Approximate objective area (3.5 lower)
 
 (constants in force: timeValue 0.30/s, detour limit 30s, ALSO DO floor 5, stop radius 60 yd, chain share 0.25; none changed by this harness)
 ------------------------------------------------------------------------------
@@ -512,7 +511,7 @@ Selected stops:
 
 Planner diagnostics:
   Candidates: 3 located (+0 optional hints, 0 without a location)
-  Stops: 3   Considered: 3   Sequences scored: 15   Selected stops: 2
+  Stops: 3   Considered: 2   Sequences scored: 4   Selected stops: 2
   Estimated sequence time: 45s (about 15s walking + 30s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 22.6   ALSO DO interruption: -   Unknown legs: 0
 
@@ -520,7 +519,7 @@ Reason summary:
   - nothing cleared the ALSO DO bar (silence is the default)
   - the first stop is on the way to the second (8s detour)
 
-Runners-up as the first step: Accept: Local pickup two (0.6 lower); Accept: Far pickup (137.7 lower)
+Runners-up as the first step: Accept: Local pickup two (0.6 lower)
 Rejected as ALSO DO: Accept: Far pickup [TOO_FAR 434s]
 
 (constants in force: timeValue 0.30/s, detour limit 30s, ALSO DO floor 5, stop radius 60 yd, chain share 0.25; none changed by this harness)
@@ -679,5 +678,5 @@ SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objective
   bridge equivalence: 22 scenarios layered, 9 as the only source (13 need ATT-only data the bridge does not read: objective areas, race lists)
 == planner evaluation: the Phase 2.5 baseline is unchanged ==
 
-1475 passed, 0 failed
+1604 passed, 0 failed
 ```

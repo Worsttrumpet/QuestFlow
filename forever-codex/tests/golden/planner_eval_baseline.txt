@@ -14,7 +14,7 @@ G Same-name quests | NOW=Turn in: Simple Parchment | ALSO DO=Accept: Simple Parc
 I1 Skip: Q:<id> on an unaccepted quest | NOW=Accept: Other pickup | ALSO DO=(none) | THEN=(none) | seq=Q:2:ACCEPT | net=10.9286 | secs=23.57 | stops=1 | reminders=0
 I2 Skip: QT:<id> (the key the old engine used for quests already in the log) | NOW=Accept: Other pickup | ALSO DO=(none) | THEN=(none) | seq=Q:2:ACCEPT | net=10.9286 | secs=23.57 | stops=1 | reminders=0
 I3 Skip + Add, and a skipped quest already in the log | NOW=Accept: Added after skipping | ALSO DO=Accept: Plain | THEN=(none) | seq=Q:1:ACCEPT | net=205.2857 | secs=35.71 | stops=1 | reminders=0
-J Confidence and provenance | NOW=Accept: Observed, exact | ALSO DO=Continue: Approximate objective area | THEN=Accept: ATT-only pickup | seq=Q:1:ACCEPT>Q:4:ACCEPT>Q:3:TURN_IN | net=40.0925 | secs=99.69 | stops=4 | reminders=0
+J Confidence and provenance | NOW=Turn in: Assumed turn-in | ALSO DO=Continue: Approximate objective area | THEN=Accept: ATT-only pickup | seq=Q:3:TURN_IN>Q:4:ACCEPT>Q:1:ACCEPT | net=40.0925 | secs=99.69 | stops=4 | reminders=0
 K1 Far quest: local work + a quest about 3000 yd away | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=Accept: Local pickup two | seq=Q:1:ACCEPT>Q:2:ACCEPT | net=22.5942 | secs=44.69 | stops=3 | reminders=0
 K2 Far quest: the same, with the far zone chosen as the route zone | NOW=Accept: Far pickup | ALSO DO=Accept: Local pickup one | THEN=(none) | seq=Q:3:ACCEPT | net=-115.0714 | secs=443.57 | stops=3 | reminders=0
 L Only one clearly useful action | NOW=Turn in: The only quest | ALSO DO=(none) | THEN=(none) | seq=Q:1:TURN_IN | net=24.9286 | secs=23.57 | stops=1 | reminders=0

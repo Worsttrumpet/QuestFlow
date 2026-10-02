@@ -94,8 +94,6 @@ MM.TOOLTIP_ROWS = {
 	{ "Drag", "Move this button" },
 }
 
-local TIP_TITLE, TIP_VERSION, TIP_KEY, TIP_ACTION = { 1, 0.82, 0 }, { 0.6, 0.6, 0.6 }, { 0.25, 0.65, 0.95 }, { 1, 1, 1 }
-
 --- The tooltip as data: { title, version, rows = { { input, action }, ... } }. Pure, so it can be tested without a tooltip frame.
 function MM.TooltipLines()
 	local v = tostring(ForeverCodex and ForeverCodex.VERSION or "")
@@ -103,18 +101,7 @@ function MM.TooltipLines()
 end
 
 function MM.ShowTooltip(owner)
-	if not GameTooltip then return end
-	if not ns.Safe(GameTooltip.SetOwner, GameTooltip, owner, "ANCHOR_LEFT") then return end
-	local t = MM.TooltipLines()
-	local function double(left, right, lc, rc)
-		-- AddDoubleLine is what Questie's tooltip uses on this client; if it is ever missing, fall back to one plain line
-		local ok = ns.Safe(GameTooltip.AddDoubleLine, GameTooltip, left, right, lc[1], lc[2], lc[3], rc[1], rc[2], rc[3])
-		if not ok then ns.Safe(GameTooltip.AddLine, GameTooltip, left .. (right ~= "" and (": " .. right) or ""), lc[1], lc[2], lc[3]) end
-	end
-	double(t.title, t.version, TIP_TITLE, TIP_VERSION)
-	ns.Safe(GameTooltip.AddLine, GameTooltip, " ")
-	for _, row in ipairs(t.rows) do double(row[1], row[2], TIP_KEY, TIP_ACTION) end
-	ns.Safe(GameTooltip.Show, GameTooltip)
+	if ns.Widgets and ns.Widgets.ShowTooltip then ns.Widgets.ShowTooltip(owner, "ANCHOR_LEFT", MM.TooltipLines()) end
 end
 
 local function build()

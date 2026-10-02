@@ -140,3 +140,25 @@ A visual pass over the Codex page and the window shell. Nothing that decides or 
 
 ## 13. Party chat announcements removed (0.2.1)
 Questie already announces quest completion and similar status, so Codex no longer writes anything to party chat (or any chat channel): the `party` and `both` modes, the "Codex: Quest complete / Objective done / Turned in" lines and the chat rate limit are gone. Kept: the quest/objective detection and telemetry, the planner, and the **invisible** addon message plus the Party card (what other Codex users in your party finished), which are not chat. Party news is now `off` or `ui` (default `ui`); a saved `party` or `both` is read as `ui`. No replacement message was added. `/codex party off|ui|log`.
+
+## 14. Release 0.2.2: planner and arrow fixes from the first 1-20 run
+
+Install `forever-codex/dist/ForeverCodex-0.2.2.zip` (0.2.1 stays in `dist/`).
+
+- **Turn-in destination.** A quest that completes instantly (shown as TURN_IN) used to be routed to its GIVER. The provider now routes to the
+  turn-in NPC when the data names a different one with a position; with no position it is a reminder with no location; only a
+  same-NPC / no-data quest is "assumed" at the giver. Giver, turn-in and objective places stay separate.
+- **Skip on NOW.** A small Skip button on the NOW card (same as `/codex skip`); `/codex unskip` brings items back. NOW can no longer leave you stuck.
+- **Local progression.** The planner prefers level-appropriate work in the player's current area before distant quests (`Pl.LOCAL_FIRST`);
+  in-progress objectives here make a location-less NOW ("Finish X") rather than a trip elsewhere. Nothing is tied to a zone, level or class.
+- **Turn-in before pickup.** A finished quest's hand-in outranks a new pickup at the same stop, or at a stop that costs little extra walking
+  (`Pl.TURN_IN_FIRST`, 45 s margin, priced with real travel costs; far or unmeasurable hand-ins are never forced; objectives in progress keep
+  their own batching rule). Tier order at one spot: hand-in, objectives, pickups. Stickiness does not override this.
+- **NEW FOR YOU** is no longer a quest list. It shows only new class abilities verified from the Forever client; with no verified source none ships and the card stays hidden.
+- **Arrow.** Plain left-drag moves it, Shift+left-drag resizes it (24-120, saved in SavedVariables), hover shows a tooltip (Drag / Shift + Drag / `/codex arrow flip`).
+- **Direction only (not implemented): dungeon awareness.** A future "DUNGEON READY" card (N/M relevant dungeon quests) is a planner direction,
+  built from existing quest knowledge and provenance, never a replacement for NOW. Future card order: NOW, NEARBY, NEW FOR YOU, DUNGEON READY.
+
+Planner baseline: only scenario J changed (the hand-in now leads at the shared stop; identical net and time).
+
+Real-client checks still owed: Shift-drag/tooltip on the arrow, the Skip button, local-first and turn-in-first on a fresh character, the turn-in route for a quest that completes instantly.

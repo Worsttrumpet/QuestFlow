@@ -22,6 +22,7 @@ local TEXT = {
 	SAME_STOP = function(r) return r.count and (r.count .. " things to do here") or "Can be done at the same stop" end,
 	CHAIN_UNLOCK = function() return "Unlocks a follow-up quest nearby" end,
 	ROUTE_ZONE = function() return "In your route zone" end,
+	LOCAL_PROGRESS = function() return "Keeps you progressing where you are" end,
 	PLAYER_ADDED = function() return "You added this" end,
 	LEVEL_FIT = function() return "Fits your level" end,
 	TURN_IN_WAITS = function() return "A turn-in can wait: this saves a trip" end,

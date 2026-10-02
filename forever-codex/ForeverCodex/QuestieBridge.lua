@@ -46,7 +46,7 @@ QB.PRIORITY = 50            -- observed 100 > QuestieDB 50 > ATT 10 (temporary f
 
 -- indexes into the packed values of Quest.GetAll(id, QUEST_KEYS)
 local QUEST_KEYS = { "name", "startedBy", "finishedBy", "requiredLevel", "questLevel", "requiredClasses", "requiredRaces",
-	"objectivesText", "preQuestGroup", "preQuestSingle", "specialFlags", "breadcrumbForQuestId" }
+	"objectivesText", "preQuestGroup", "preQuestSingle", "specialFlags", "breadcrumbForQuestId", "zoneOrSort" }
 local K = {}
 for i, k in ipairs(QUEST_KEYS) do K[k] = i end
 local NPC_KEYS = { "name", "spawns", "zoneID", "friendlyToFaction" }
@@ -216,6 +216,13 @@ function QB.Record(id)
 			if #list > 0 and cm < 2 ^ #CLASS_TOKENS then r.classes = list end
 		end
 		if type(v[K.requiredRaces]) == "number" and v[K.requiredRaces] > 0 then r.raceMask = v[K.requiredRaces] end
+		-- the broad area the quest belongs to (a positive zoneOrSort is an AreaID; a negative one is a category, not a place): lets the planner
+		-- tell that an in-progress quest is "around here" even when its exact objective spot is not known
+		local zs = v[K.zoneOrSort]
+		if type(zs) == "number" and zs > 0 then
+			local zm = areaToMap(zs)
+			if zm then r.zoneMap = zm end
+		end
 		-- who gives it (and where they stand); who takes it back
 		local giver = npcInfo(N, firstNpc(v[K.startedBy]))
 		if giver then
@@ -225,7 +232,8 @@ function QB.Record(id)
 		end
 		local taker = npcInfo(N, firstNpc(v[K.finishedBy]))
 		if taker then
-			r.turnIn = { npc = taker.id, name = taker.name }
+			-- atGiver: decided inside QuestieDB's own record (its finisher IS its starter), so a merged giver from another layer cannot confuse it
+			r.turnIn = { npc = taker.id, name = taker.name, atGiver = giver ~= nil and giver.id == taker.id }
 			if taker.loc then r.turnIn.map, r.turnIn.x, r.turnIn.y = taker.loc.map, taker.loc.x, taker.loc.y end
 		end
 		return r

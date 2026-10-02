@@ -237,11 +237,9 @@ local function handle(msg)
 			ns.State.Recompute()
 		end
 	elseif cmd == "skip" then
-		local plan = ns.State.plan or ns.State.Recompute()
-		local a = plan and plan.next
-		if a and P.Skip(a.skipKey) then
+		local a = ns.State.SkipCurrent()
+		if a then
 			say("skipped: " .. a.title)
-			ns.State.Recompute()
 		else
 			say("nothing to skip.")
 		end

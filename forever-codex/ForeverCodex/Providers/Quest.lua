@@ -80,10 +80,35 @@ end
 local SRC_NAMES = { att = "ATT", questiedb = "QuestieDB" }
 local function srcName(src) return SRC_NAMES[src] or tostring(src or "unknown source") end
 
+--- The map a quest broadly belongs to (QuestieDB's zone for it, else the zone of an ATT record), or nil. Not a destination: only "around here or not".
+local function areaMapOf(view)
+	if not view then return nil end
+	if view.zoneMap then return view.zoneMap end
+	local z = view.zone and R.ZoneByKey(view.zone)
+	return z and z.map or nil
+end
+
+--- Where a COMPLETED quest is handed in, kept separate from where it was given. The giver and the turn-in NPC are different
+-- things and are often in different places (a recruiter in one city sends you to an officer in another):
+--   "known"     QuestieDB names a turn-in NPC that is not the giver and says where it stands: route to THAT place
+--   "unplaced"  the turn-in NPC is known and is not the giver, but its position is not: no location at all (the giver's spot would be wrong)
+--   "assumed"   no turn-in data, or the turn-in NPC is the giver: the giver's location, as before (an assumption, trusted less)
+local function turnInPlace(view)
+	local ti = view and view.turnIn                        -- (a quest in the log that no pack knows has no view at all)
+	if type(ti) ~= "table" or not (ti.npc or ti.name) then return "assumed" end
+	if ti.atGiver or (ti.atGiver == nil and ti.npc and view.giverNpc and ti.npc == view.giverNpc) then return "assumed" end
+	local name = ti.name or ("NPC #" .. tostring(ti.npc))
+	if type(ti.map) == "number" and type(ti.x) == "number" and type(ti.y) == "number" then
+		return "known", { npc = ti.npc, name = name, loc = { map = ti.map, x = ti.x, y = ti.y, src = (view.prov and view.prov.turnIn) or "questiedb", verified = false, kind = "turn_in" } }
+	end
+	return "unplaced", { npc = ti.npc, name = name }
+end
+
 --- Provenance wording shown to the player. Third-party data is "unverified"; nothing here says "confirmed" about it.
-local function provenanceLines(view)
+-- `loc` is the location to describe (default: the giver's); false = none.
+local function provenanceLines(view, loc)
 	local lines = {}
-	local loc = view.loc
+	if loc == nil then loc = view.loc end
 	if loc then
 		if loc.src == "observed" then
 			lines[#lines + 1] = "Location: approx " .. coordText(loc) .. " (player position seen on Forever, not the NPC)"
@@ -145,7 +170,13 @@ local function questTargets(a, view, t)
 	if a.kind == "ACCEPT" then
 		return { K.FromLegacyTarget(t, "GIVER", { entity = giverEntity(view) }) }
 	elseif a.kind == "TURN_IN" then
-		-- ATT has no turn-in NPC: the turn-in is ASSUMED to be at the giver, so it is at best approximate
+		local kind, place = turnInPlace(view)
+		if kind == "known" then
+			return { K.FromLegacyTarget(t, "TURN_IN", { entity = { kind = "npc", id = place.npc, name = place.name, prov = view.prov and view.prov.turnIn or nil } }) }
+		elseif kind == "unplaced" then
+			return { K.FromLegacyTarget(nil, "TURN_IN", { entity = { kind = "npc", id = place.npc, name = place.name, prov = view.prov and view.prov.turnIn or nil } }) }
+		end
+		-- no turn-in data (or the turn-in NPC is the giver): the turn-in is ASSUMED to be at the giver, so it is at best approximate
 		return { K.FromLegacyTarget(t, "TURN_IN", { entity = giverEntity(view), assumed = true, status = t and "approx" or nil, kind = "assumed_giver" }) }
 	end
 	-- OBJECTIVE: every known objective coordinate, as ONE area target. ATT's coordinate list is not indexed by
@@ -197,11 +228,26 @@ local function progressAction(view, entry, pinned, ctx)
 	local label = placeLabel(view)
 	local lines = {}
 	local t
+	local who = view.giverName                          -- who the player hands it to (shown by the Presenter)
 	if complete then
-		lines[1] = "Objectives complete. Turn in to " .. label
-		for _, l in ipairs(provenanceLines(view)) do lines[#lines + 1] = l end
-		lines[#lines + 1] = "Turn-in location is assumed to be the giver's (no turn-in data)."
-		t = target(view, label)
+		local kind, place = turnInPlace(view)
+		if kind == "known" then
+			label = place.name .. " (" .. R.MapLabel(place.loc.map) .. ")"
+			lines[1] = "Objectives complete. Turn in to " .. label
+			for _, l in ipairs(provenanceLines(view, place.loc)) do lines[#lines + 1] = l end
+			t = target({ loc = place.loc }, label)
+			who = place.name
+		elseif kind == "unplaced" then
+			lines[1] = "Objectives complete. Turn in to " .. place.name .. "."
+			for _, l in ipairs(provenanceLines(view, false)) do lines[#lines + 1] = l end
+			lines[#lines + 1] = "Where " .. place.name .. " stands is not in Codex data yet."
+			who = place.name
+		else
+			lines[1] = "Objectives complete. Turn in to " .. label
+			for _, l in ipairs(provenanceLines(view)) do lines[#lines + 1] = l end
+			lines[#lines + 1] = "Turn-in location is assumed to be the giver's (no turn-in data)."
+			t = target(view, label)
+		end
 	else
 		describeObjectives(view, lines)
 		if #lines == 0 then lines[1] = "In your quest log. Objective details are not in Codex data." end
@@ -215,8 +261,8 @@ local function progressAction(view, entry, pinned, ctx)
 		id = "Q:" .. view.id .. (complete and ":TURN_IN" or ":OBJECTIVE"), type = "QUEST", kind = complete and "TURN_IN" or "OBJECTIVE",
 		quest = view.id, skipKey = "QT:" .. view.id, name = view.name or entry.title, title = (complete and "Turn in: " or "Continue: ") .. name,
 		level = view.level, reqLevel = view.req, target = t, pinned = pinned or false, lines = lines,
-		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name, giver = view.giverName,
-		noLocation = t == nil,
+		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name, giver = who,
+		noLocation = t == nil, areaMap = (not complete) and areaMapOf(view) or nil,
 	}), view.id, view, ctx, t)
 end
 

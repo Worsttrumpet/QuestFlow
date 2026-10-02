@@ -39,6 +39,12 @@ local function build(page)
 	c.nowBox = W.Card(page, LEFT_NARROW, NOW_MIN, W.STYLE_NOW)
 	c.nowIcon = UI.Icon(c.nowBox, "star")
 	c.nowIcon:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX, -PAD)
+	-- a way out of a recommendation that is wrong or unavailable: skips it (the same as /codex skip; /codex unskip brings it back)
+	c.nowSkip = W.Button(c.nowBox, 40, 16, "Skip", function()
+		local a = ns.State.SkipCurrent()
+		if a then ns.Say("Skipped: " .. tostring(a.title) .. ". (/codex unskip brings skipped items back.)") end
+	end)
+	c.nowSkip:SetPoint("TOPRIGHT", c.nowBox, "TOPRIGHT", -PAD, -PAD + 1)
 	c.nowLabel = W.Label(c.nowBox, "NOW", W.STYLE_NOW.label)
 	c.nowLabel:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX + 20, -PAD - 1)
 	c.nowTitle = W.Line(c.nowBox, 16, W.WARM_GOLD, "CENTER", true)
@@ -121,6 +127,7 @@ local function drawNow(c, card, leftW)
 		c.nowWhy:SetText("")
 	end
 	W.SetColor(c.nowTitle, n and W.WARM_GOLD or W.DIM)
+	if n then c.nowSkip:Show() else c.nowSkip:Hide() end
 	c.thenFS:SetText(card.thenLine and ("Then: " .. card.thenLine) or "")
 	st:Skip(18)                                       -- the NOW label row
 	st:Add(c.nowTitle, 4)
