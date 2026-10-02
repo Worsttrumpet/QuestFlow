@@ -83,6 +83,40 @@ function MM.Reset()
 	MM.Apply()
 end
 
+-- ---------------------------------------------------------------- tooltip
+--
+-- A two-column tooltip in the style of Questie's minimap button (seen working on the Forever client): the title with the version on the
+-- right, then one row per action, the input on the left in blue and what it does on the right in white. To add an action later, add a row
+-- to MM.TOOLTIP_ROWS: only inputs that really do something belong here.
+
+MM.TOOLTIP_ROWS = {
+	{ "Left Click", "Open / close Codex" },
+	{ "Drag", "Move this button" },
+}
+
+local TIP_TITLE, TIP_VERSION, TIP_KEY, TIP_ACTION = { 1, 0.82, 0 }, { 0.6, 0.6, 0.6 }, { 0.25, 0.65, 0.95 }, { 1, 1, 1 }
+
+--- The tooltip as data: { title, version, rows = { { input, action }, ... } }. Pure, so it can be tested without a tooltip frame.
+function MM.TooltipLines()
+	local v = tostring(ForeverCodex and ForeverCodex.VERSION or ""):gsub("^codex%-", "")
+	return { title = "Forever Codex", version = v ~= "" and ("v" .. v) or "", rows = MM.TOOLTIP_ROWS }
+end
+
+function MM.ShowTooltip(owner)
+	if not GameTooltip then return end
+	if not ns.Safe(GameTooltip.SetOwner, GameTooltip, owner, "ANCHOR_LEFT") then return end
+	local t = MM.TooltipLines()
+	local function double(left, right, lc, rc)
+		-- AddDoubleLine is what Questie's tooltip uses on this client; if it is ever missing, fall back to one plain line
+		local ok = ns.Safe(GameTooltip.AddDoubleLine, GameTooltip, left, right, lc[1], lc[2], lc[3], rc[1], rc[2], rc[3])
+		if not ok then ns.Safe(GameTooltip.AddLine, GameTooltip, left .. (right ~= "" and (": " .. right) or ""), lc[1], lc[2], lc[3]) end
+	end
+	double(t.title, t.version, TIP_TITLE, TIP_VERSION)
+	ns.Safe(GameTooltip.AddLine, GameTooltip, " ")
+	for _, row in ipairs(t.rows) do double(row[1], row[2], TIP_KEY, TIP_ACTION) end
+	ns.Safe(GameTooltip.Show, GameTooltip)
+end
+
 local function build()
 	local btn = CreateFrame("Button", "ForeverCodexMinimapButton", Minimap)
 	btn:SetSize(28, 28)
@@ -132,14 +166,7 @@ local function build()
 	end)
 
 	btn:SetScript("OnEnter", function(self)
-		if GameTooltip then
-			local ok = ns.Safe(GameTooltip.SetOwner, GameTooltip, self, "ANCHOR_LEFT")
-			if ok then
-				ns.Safe(GameTooltip.AddLine, GameTooltip, "Forever Codex")
-				ns.Safe(GameTooltip.AddLine, GameTooltip, "Click to open/close. Drag to move.", 0.8, 0.8, 0.8)
-				ns.Safe(GameTooltip.Show, GameTooltip)
-			end
-		end
+		MM.ShowTooltip(self)
 	end)
 	btn:SetScript("OnLeave", function()
 		if GameTooltip then

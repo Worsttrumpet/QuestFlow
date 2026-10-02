@@ -1098,3 +1098,42 @@ do
 	local boot_src = H.readFile(H.addonDir .. "/Boot.lua"):gsub("%-%-[^\n]*", "")
 	check(not boot_src:find('SetPoint("TOPLEFT", Minimap', 1, true), "Boot no longer re-anchors the button")
 end
+
+section("minimap button: a Questie-style tooltip (title + version, then input / action rows)")
+do
+	local ns = boot({ char = { level = 10 } })
+	local mm
+	for _, f in ipairs(H.world().frames) do if f.__name == "ForeverCodexMinimapButton" then mm = f end end
+	local tip = { double = {}, single = {}, shown = 0 }
+	local GT = _G.GameTooltip
+	GT.SetOwner = function(_, owner, anchor) tip.owner, tip.anchor = owner, anchor end
+	GT.AddDoubleLine = function(_, l, r, lr, lg, lb, rr, rg, rb) tip.double[#tip.double + 1] = { l = l, r = r, lc = { lr, lg, lb }, rc = { rr, rg, rb } } end
+	GT.AddLine = function(_, text) tip.single[#tip.single + 1] = text end
+	GT.Show = function() tip.shown = tip.shown + 1 end
+	mm.__scripts.OnEnter(mm)
+	local d = tip.double
+	check(tip.owner == mm and tip.shown == 1, "hovering the button shows a tooltip owned by it")
+	check(d[1] and d[1].l == "Forever Codex" and d[1].r == "v0.2-alpha", "the title is on the left and the version on the right")
+	check(d[1] and d[1].lc[1] == 1 and d[1].lc[2] == 0.82 and d[1].rc[1] == 0.6, "the title is gold and the version grey")
+	check(tip.single[1] == " ", "a blank line separates the title from the rows")
+	check(d[2] and d[2].l == "Left Click" and d[2].r == "Open / close Codex", "row: Left Click opens and closes Codex")
+	check(d[3] and d[3].l == "Drag" and d[3].r == "Move this button", "row: Drag moves the button")
+	check(d[2] and d[2].lc[3] > d[2].lc[1] and d[2].rc[1] == 1 and d[2].rc[2] == 1 and d[2].rc[3] == 1, "inputs are blue, actions are white")
+	check(#d == 3, "only actions that really exist are listed")
+	local data = ns.MinimapButton.TooltipLines()
+	check(data.title == "Forever Codex" and #data.rows == 2, "the tooltip is data (title, version, rows) so a row can be added in one place")
+	for _, row in ipairs(data.rows) do check(not (row[1] .. row[2]):find("[^\32-\126]"), "tooltip text is plain ASCII: " .. row[1]) end
+	-- if AddDoubleLine is ever missing, each row falls back to one plain line instead of failing
+	local errsBefore = #ns.errors
+	tip.single, tip.double = {}, {}
+	GT.AddDoubleLine = function() error("no AddDoubleLine") end
+	mm.__scripts.OnEnter(mm)
+	local joined = table.concat(tip.single, "|")
+	check(joined:find("Left Click: Open / close Codex", 1, true) ~= nil and joined:find("Drag: Move this button", 1, true) ~= nil, "without AddDoubleLine the rows still show, as single lines")
+	check(#ns.errors > errsBefore and pcall(mm.__scripts.OnEnter, mm), "and nothing escapes (the failure is recorded for /codex diag)")
+	-- leaving hides it
+	local hidden = 0
+	GT.Hide = function() hidden = hidden + 1 end
+	mm.__scripts.OnLeave(mm)
+	check(hidden == 1, "leaving the button hides the tooltip")
+end
