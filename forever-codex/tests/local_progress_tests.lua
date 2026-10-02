@@ -641,3 +641,27 @@ do
 	check(not np:find("Q:50 ", 1, true) and not np:find("Q:51 ", 1, true), "placed quests are not in the NOT PLACED list")
 	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
 end
+
+section("real report (v0.2.10, Crusader Outpost): next to two unfinished quests, a hand-in 600 yd away does not pull the player back")
+do
+	local ns = boot({ char = { level = 10, class = "Paladin", classToken = "PALADIN", race = "Undead", raceToken = "Scourge", faction = "Horde" }, synthetic = true, loc = { map = 9001, x = 0.2, y = 0.5, zone = "Tirisfal" } })
+	local war, warLog = unplaced(370, "At War With The Scarlet Crusade", 0, 3)
+	local proof, proofLog = unplaced(374, "Proof of Demise", 0, 10)
+	local rear = Q(356, "Rear Guard Patrol", 9001, 0.8, 0.5, { giverName = "Deathguard Linnea" })
+	H.attPack(ns, { war, proof, rear }, ZONES)
+	local W = H.world()
+	W.log, W.objectives, W.completed = { { questID = 370, title = "At War With The Scarlet Crusade" }, { questID = 374, title = "Proof of Demise" }, { questID = 356, title = "Rear Guard Patrol", complete = true } }, {}, {}
+	W.objectives[370] = { { text = "Scarlet Zealot slain", type = "monster", finished = false, numFulfilled = 0, numRequired = 3 } }
+	W.objectives[374] = { { text = "Scarlet Insignia Ring", type = "item", finished = false, numFulfilled = 0, numRequired = 10 } }
+	W.questPoints = { [9001] = { { questID = 370, x = 0.22, y = 0.5 }, { questID = 374, x = 0.221, y = 0.5 } } }
+	ns.Prefs.FinishSetup()
+	local p = plan(ns)
+	check(p.now and p.now.kind == "OBJECTIVE" and (p.now.quest == 370 or p.now.quest == 374), "NOW is one of the two quests right here, not the hand-in 600 yd away  [" .. tostring(p.now and p.now.id) .. "]")
+	local card = ns.Presenter.Card(p, ns.State.ctx)
+	check(#card.ready == 1 and card.ready[1].title == "Rear Guard Patrol", "the finished quest waits under READY TO TURN IN")
+	local titles = {}
+	for _, it in ipairs(card.also) do titles[#titles + 1] = it.title end
+	check(table.concat(titles, ","):find("Proof of Demise", 1, true) or table.concat(titles, ","):find("At War", 1, true), "and the other quest next to it is offered under ALSO COMPLETE THIS  [" .. table.concat(titles, ",") .. "]")
+	check(ns.Navigation.Target() ~= nil and math.abs(ns.Navigation.Target().x - 0.22) < 0.01, "the arrow points at the objective area beside you")
+	check(#ns.errors == 0, "no errors")
+end
