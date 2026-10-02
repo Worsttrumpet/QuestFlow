@@ -37,6 +37,17 @@ function S.Recompute()
 		ns.RecordError("context", ctx)
 		return S.plan
 	end
+	-- Observers of the CONTEXT alone (quest-log progress for the party and the journey, level-based cards) must not depend on the
+	-- planner succeeding: a planner error must never hide that an objective was finished.
+	local function observeCtx(name, mod, fn)
+		if mod and mod[fn] then
+			local okO, errO = pcall(mod[fn], ctx)
+			if not okO then ns.RecordError(name, errO) end
+		end
+	end
+	observeCtx("journey", ns.Journey, "OnContext")
+	observeCtx("party", ns.Party, "OnContext")
+	observeCtx("newforyou", ns.NewForYou, "OnContext")
 	local okE, plan
 	if S.mode == "planner" then
 		okE, plan = pcall(ns.PlanAdapter.Compute, ctx, { prevNowId = S.plan and S.plan.now and S.plan.now.id or nil })
@@ -62,9 +73,6 @@ function S.Recompute()
 			if not okO then ns.RecordError(name, errO) end
 		end
 	end
-	observe("journey", ns.Journey, "OnContext", ctx)
-	observe("party", ns.Party, "OnContext", ctx)
-	observe("newforyou", ns.NewForYou, "OnContext", ctx)
 	observe("navigation", ns.Navigation, "OnPlan", plan, ctx)
 	observe("pins", ns.Pins, "OnPlan", plan)
 	observe("markers", ns.Markers, "OnPlan", plan, ctx)

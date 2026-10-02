@@ -20,6 +20,7 @@
 --   MOB_KILL       UNAVAILABLE on Forever: the combat log cannot be registered by addons (see WATCHED_EVENTS). Never recorded.
 --   LEVEL_UP       lvl, src
 --   QUEST_ACCEPT   q, w
+--   QUEST_OBJECTIVE q, i (objective index), have, need: one objective of a quest in the log became finished (quest-log diff).
 --   QUEST_COMPLETE q, dur (wall seconds since accept, only if the accept was seen).  = OBJECTIVES complete (log diff), not turn-in.
 --   QUEST_TURNIN   q, xp, money (from QUEST_TURNED_IN, verified), dur
 --   PLAYER_MOVE    one movement SEGMENT: dur, dist (yards), map, x0,y0,x1,y1 (map fractions), approx (distance estimated from map
@@ -62,6 +63,8 @@ T.EVENT_DEFS = {
 	{ type = "QUEST_TURNIN", sources = { "QUEST_TURNED_IN" }, verified = true, evidence = "M8.8: (questID, xp, money), XP matched the client's line" },
 	{ type = "PLAYER_MOVE", sources = { "C_Map.GetPlayerMapPosition (1 Hz sampling)" }, verified = true,
 		evidence = "M8.10: position + world conversion proven on Forever; the segmenting logic is Codex's own and untested on the client" },
+	{ type = "QUEST_OBJECTIVE", sources = { "UNIT_QUEST_LOG_CHANGED", "QUEST_LOG_UPDATE", "C_QuestLog.GetQuestObjectives" }, verified = true,
+		evidence = "M8.9: objective progress (item and kill counts) was read from the quest log at UNIT_QUEST_LOG_CHANGED in 15/15 changes; Codex's diff of it is untested on the client" },
 	{ type = "XP_GAIN", sources = { "PLAYER_XP_UPDATE", "UnitXP/UnitXPMax (poll)" }, verified = false, evidence = "never probed on Forever" },
 	{ type = "LEVEL_UP", sources = { "PLAYER_LEVEL_UP", "UnitLevel (poll)" }, verified = false, evidence = "UnitLevel is proven on Forever; PLAYER_LEVEL_UP and the XP wrap are not" },
 	{ type = "MOB_KILL", sources = { "COMBAT_LOG_EVENT_UNFILTERED / PARTY_KILL" }, verified = false, unavailable = true,
@@ -141,6 +144,16 @@ T.reader = {
 	xpMax = function() return pcallValue(UnitXPMax, "player") end,
 	position = defaultPosition,
 	questLog = defaultQuestLog,
+	objectives = function(id)         -- { { have, need, finished }, ... } from C_QuestLog.GetQuestObjectives (proven M8.9), or nil
+		if type(C_QuestLog) ~= "table" or type(C_QuestLog.GetQuestObjectives) ~= "function" then return nil end
+		local objs = pcallValue(C_QuestLog.GetQuestObjectives, id)
+		if type(objs) ~= "table" then return nil end
+		local out = {}
+		for i, o in ipairs(objs) do
+			if type(o) == "table" then out[i] = { have = o.numFulfilled, need = o.numRequired, finished = o.finished == true } end
+		end
+		return out
+	end,
 }
 
 -- ---------------------------------------------------------------- state
@@ -154,6 +167,7 @@ local combatStart = nil
 local xpState = {}              -- lvl, cur, max, pendingDrop, anomalies
 local moveState = {}            -- last = last sample, seg = open segment, still = consecutive still samples
 local logPrev = nil             -- questID -> complete at the previous diff
+local logObj = nil              -- questID -> objectives at the previous diff
 local logDirty = false
 local sinceTick = 0
 T.anomalies = 0                 -- XP decreases without a level change, teleports skipped, etc. (diagnostic only)
@@ -327,8 +341,26 @@ local function diffQuestLog()
 	if not cur then return end
 	if logPrev == nil then
 		logPrev = cur
+		logObj = {}
+		for id in pairs(cur) do logObj[id] = T.reader.objectives and T.reader.objectives(id) or nil end
 		return
 	end
+	-- objectives that FINISHED since the last diff (one event each: the quest log's own state, not a kill/loot counter)
+	local nowObj = {}
+	for id in pairs(cur) do
+		local objs = T.reader.objectives and T.reader.objectives(id)
+		if objs then
+			nowObj[id] = objs
+			local before = logObj and logObj[id]
+			if before then
+				for i, o in ipairs(objs) do
+					local b = before[i]
+					if o.finished and b and not b.finished then T.Record("QUEST_OBJECTIVE", { q = id, i = i, have = o.have, need = o.need }) end
+				end
+			end
+		end
+	end
+	logObj = nowObj
 	for id, complete in pairs(cur) do
 		local was = logPrev[id]
 		local becameComplete = complete and (was == false or (was == nil and s.accepted[id] ~= nil))
@@ -437,7 +469,7 @@ local function beginSession()
 	moveState = {}
 	combatStart, lastKillT = nil, nil
 	xpState = {}
-	logPrev = nil
+	logPrev, logObj = nil, nil
 	local r = T.reader
 	local lvl, cur, max = r.level(), r.xp(), r.xpMax()
 	local _, build = pcallValue(GetBuildInfo)

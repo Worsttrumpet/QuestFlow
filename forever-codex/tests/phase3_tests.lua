@@ -601,7 +601,7 @@ do
 	ns.Prefs.SetPartyNotify("party")
 	W.now = W.now + 20
 	Pt.OnTurnedIn(1, ns.State.ctx)
-	check(#sentChat == 1 and sentChat[1] == "Codex: I turned in Sting of the Scorpid." and #sentAddon == n, "'Party chat': one plain line in party chat, no addon message")
+	check(#sentChat == 1 and sentChat[1] == "Codex: Turned in: Sting of the Scorpid" and #sentAddon == n, "'Party chat': one plain line in party chat, no addon message")
 	W.now = W.now + 20
 	ns.Prefs.SetPartyNotify("both")
 	Pt.OnTurnedIn(1, ns.State.ctx)

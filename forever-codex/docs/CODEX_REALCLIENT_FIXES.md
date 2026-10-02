@@ -85,3 +85,20 @@ triangle = a relevant flight master, moon never set; only NPCs identified by cre
 To verify on Forever: target an unmarked NPC, type `/codex markers probe`, **watch for a blocked-action popup**, then target the NPC of
 your current NOW (e.g. a quest giver) and check the star; change NOW and re-target the old NPC to see Codex's mark removed; remove it
 yourself and confirm Codex does not put it back. Markers appear only while the NPC is your target or mouseover (that is when Codex sees its identity).
+
+## 9. "The Weaver": looting Ataeric's Staff was not announced (Part 11)
+**Diagnosis from the code (the real log of that session was not available, so the exact loss on the client is NOT yet proven):**
+| Stage | Finding |
+|---|---|
+| WoW state | Item objectives are read with `C_QuestLog.GetQuestObjectives` (`numFulfilled/numRequired/finished`); M8.9 proved this is current at `UNIT_QUEST_LOG_CHANGED("player")` for item objectives (14 of 15 steps were items). No combat log is involved. |
+| Observation | Boot marks the state dirty on `UNIT_QUEST_LOG_CHANGED("player")` and `QUEST_LOG_UPDATE`; the next Recompute rebuilds the context and diffs it. Both events were already wired (not accept/turn-in only). |
+| Telemetry | Recorded only `QUEST_COMPLETE`; **no per-objective event existed** (now `QUEST_OBJECTIVE`). |
+| Party | Detection by diff existed. **Default mode is `ui`, which sends only an invisible addon message and never writes in /party**: the most likely reason no /party line appeared. Chat text also carried no objective detail, and the quest name came only from ATT data ("a quest" for a quest the data lacks, as The Weaver may be). A planner error also skipped the party observer. |
+| Unknown | whether the client reported the group (`GetNumGroupMembers/IsInGroup` are unprobed) and whether the objective really read 1/1 at that moment. |
+**Changes (narrow):** the party line is now `Codex: Quest complete: The Weaver - 1/1 Ataeric's Staff` (all objectives listed; names from the quest log when the
+data lacks them); a finished objective of a multi-objective quest says `Codex: Objective done: <quest> - 6/6 <objective>`; turn-in uses the last snapshot's name.
+Party chat still needs mode `party` or `both` (Appendices > Settings > Party news): chat is never on by default. Context-only observers (party, journey,
+new-for-you) now run before the planner, so a planner error cannot hide a finished objective. Telemetry gains `QUEST_OBJECTIVE` (one event when an objective finishes),
+labelled proven only for what M8.9 proved (reading objectives); its diff is stated as untested on the client.
+**`/codex party log`** prints the last decisions: what was seen, whether you were in a group, the mode, whether the addon message and chat were sent, and why not.
+**To settle it on Forever:** set Party news to *Party chat* or *Both*, loot a quest item objective in a party, then `/codex party log` and `/codex telemetry events`.

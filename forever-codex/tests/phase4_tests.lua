@@ -747,3 +747,173 @@ do
 		check(uX.mark == 5, "a different mark put there after Codex's own is never cleared")
 	end
 end
+
+-- ================================================================ quest objective -> party announcement (The Weaver)
+
+local function weaver(opts)
+	opts = opts or {}
+	local ns = boot({ char = { level = 21, class = "Hunter", classToken = "HUNTER", race = "Skyborne", raceToken = "Skyborne" }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	H.attPack(ns, {}, nil)                                   -- the quest is NOT in the data: its name must come from the quest log
+	local W = H.world()
+	W.group = opts.group or 3
+	W.log = { { questID = 1900, title = "The Weaver", complete = false } }
+	W.objectives = { [1900] = { { text = "0/1 Ataeric's Staff", type = "item", finished = false, numFulfilled = 0, numRequired = 1 } } }
+	ns.Prefs.FinishSetup()
+	ns.Prefs.SetPartyNotify(opts.mode or "both")
+	local sent = { addon = {}, chat = {} }
+	ns.Party._Reset()
+	ns.Party.api.sendAddon = function(t) sent.addon[#sent.addon + 1] = t; return true end
+	ns.Party.api.sendChat = function(t) sent.chat[#sent.chat + 1] = t; return true end
+	ns.State.Recompute()                                     -- baseline: quest in the log, objective 0/1
+	W.now = W.now + 5
+	ns._selftest.telemetry.onEvent("QUEST_LOG_UPDATE")       -- telemetry's own baseline diff
+	ns._selftest.telemetry.tick(2)
+	return ns, W, sent
+end
+
+--- What the client does when an objective changes: the quest log changes and UNIT_QUEST_LOG_CHANGED("player") then QUEST_LOG_UPDATE fire.
+local function logChanged(ns, W, dt)
+	W.now = W.now + (dt or 10)
+	ns._selftest.boot.onEvent(nil, "UNIT_QUEST_LOG_CHANGED", "player")
+	ns._selftest.boot.onEvent(nil, "QUEST_LOG_UPDATE")
+	ns._selftest.telemetry.onEvent("UNIT_QUEST_LOG_CHANGED", "player")
+	ns._selftest.telemetry.tick(2)
+	ns.State.Tick(1)                                         -- the throttled recompute the game loop would run
+end
+
+section("party: looting Ataeric's Staff (0/1 -> 1/1) is seen and announced automatically")
+do
+	local ns, W, sent = weaver()
+	W.objectives[1900][1].numFulfilled, W.objectives[1900][1].finished = 1, true
+	W.log[1].complete = true
+	logChanged(ns, W)
+	check(ns.State.ctx.log[1900].objectives[1].numFulfilled == 1 and ns.State.ctx.log[1900].complete, "Codex's context sees the objective at 1/1 and the quest complete (quest-log API only)")
+	check(#sent.chat == 1 and sent.chat[1] == "Codex: Quest complete: The Weaver - 1/1 Ataeric's Staff", "party chat says: " .. tostring(sent.chat[1]))
+	check(#sent.addon == 1 and sent.addon[1] == "v1|DONE|1900", "and the quiet addon message for other Codex users is sent too")
+	W.log[1].complete = false; W.objectives[1900][1].finished = false; W.objectives[1900][1].numFulfilled = 0     -- the turn-in reset trap (M8.9)
+	logChanged(ns, W, 0.5)
+	W.log[1].complete = true; W.objectives[1900][1].finished = true; W.objectives[1900][1].numFulfilled = 1
+	logChanged(ns, W, 0.5)
+	check(#sent.chat == 1, "a momentary un-done reading followed by 1/1 again inside the duplicate window is not announced twice")
+	logChanged(ns, W); logChanged(ns, W)
+	check(#sent.chat == 1 and #sent.addon == 1, "later recomputes of the same state do not repeat it")
+	local tr = ns.Party.Trace()
+	check(tr[1] and tr[1].why and tr[1].why:find("duplicate", 1, true), "/codex party log records the suppressed duplicate with its reason")
+	local sentEntry
+	for _, e in ipairs(tr) do if e.chat == true then sentEntry = e end end
+	check(sentEntry and sentEntry.kind == "DONE" and sentEntry.quest == 1900 and sentEntry.name == "The Weaver" and sentEntry.inGroup, "/codex party log records what was seen and that chat was sent")
+	W.chat = {}
+	H.slash("party log")
+	check(table.concat(W.chat, "\n"):find("DONE 1900 The Weaver", 1, true) ~= nil, "/codex party log prints it")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("party: the same event through each path, and no dependence on the combat log")
+do
+	for _, ev in ipairs({ "UNIT_QUEST_LOG_CHANGED", "QUEST_LOG_UPDATE" }) do
+		local ns, W, sent = weaver()
+		W.objectives[1900][1].numFulfilled, W.objectives[1900][1].finished = 1, true
+		W.log[1].complete = true
+		W.now = W.now + 10
+		ns._selftest.boot.onEvent(nil, ev, "player")
+		ns.State.Tick(1)
+		check(#sent.chat == 1, ev .. " alone is enough to see it")
+	end
+	for _, f in ipairs({ "Party.lua", "Context.lua", "State.lua", "Boot.lua" }) do
+		check(not H.readFile(H.addonDir .. "/" .. f):gsub("%-%-[^\n]*", ""):find("COMBAT_LOG", 1, true), f .. " does not use the combat log")
+	end
+	local W = H.world()
+	local n = 0
+	for _, e in ipairs(W.registeredEvents or {}) do if e == "COMBAT_LOG_EVENT_UNFILTERED" then n = n + 1 end end
+	check(n == 0, "nothing registers COMBAT_LOG_EVENT_UNFILTERED")
+end
+
+section("party: modes, no party, duplicates, and why nothing was sent")
+do
+	local ns, W, sent = weaver({ mode = "off" })
+	W.objectives[1900][1].numFulfilled, W.objectives[1900][1].finished = 1, true; W.log[1].complete = true
+	logChanged(ns, W)
+	check(#sent.chat == 0 and #sent.addon == 0 and ns.Party.Trace()[1].why == "party news is off", "party news off: nothing is sent, and the log says why")
+	local ns2, W2, sent2 = weaver({ group = 1 })
+	W2.objectives[1900][1].numFulfilled, W2.objectives[1900][1].finished = 1, true; W2.log[1].complete = true
+	logChanged(ns2, W2)
+	check(#sent2.chat == 0 and #sent2.addon == 0 and ns2.Party.Trace()[1].why == "not in a group" and ns2.Party.Trace()[1].inGroup == false, "not in a group: nothing is sent, and the log says why")
+	local ns3, W3, sent3 = weaver({ mode = "ui" })
+	W3.objectives[1900][1].numFulfilled, W3.objectives[1900][1].finished = 1, true; W3.log[1].complete = true
+	logChanged(ns3, W3)
+	check(#sent3.chat == 0 and #sent3.addon == 1 and ns3.Party.Trace()[1].why:find("not party chat", 1, true), "the default 'ui' mode sends no party chat, and the log says that is why")
+	local ns4, W4, sent4 = weaver({ mode = "both" })
+	W4.objectives[1900][1].numFulfilled, W4.objectives[1900][1].finished = 1, true; W4.log[1].complete = true
+	logChanged(ns4, W4)
+	check(#sent4.chat == 1 and #sent4.addon == 1, "'both' sends both")
+	local ns5, W5, sent5 = weaver()
+	ns5.Party.api.sendChat = function() return false end
+	W5.objectives[1900][1].numFulfilled, W5.objectives[1900][1].finished = 1, true; W5.log[1].complete = true
+	logChanged(ns5, W5)
+	check(ns5.Party.Trace()[1].chat == false, "a chat call that fails is recorded as not sent")
+end
+
+section("party: partial progress, several objectives, quests accepted later")
+do
+	local ns, W, sent = weaver()
+	W.log = { { questID = 1901, title = "Training", complete = false } }
+	W.objectives = { [1901] = {
+		{ text = "3/6 Training Weapon", type = "item", finished = false, numFulfilled = 3, numRequired = 6 },
+		{ text = "0/2 Scorpid Tail", type = "item", finished = false, numFulfilled = 0, numRequired = 2 } } }
+	ns.Party._Reset()
+	ns.State.Recompute()
+	W.objectives[1901][1].numFulfilled = 5
+	logChanged(ns, W)
+	check(#sent.chat == 0 and #sent.addon == 0, "progress that is not complete (3/6 -> 5/6) announces nothing")
+	W.objectives[1901][1].numFulfilled, W.objectives[1901][1].finished = 6, true
+	logChanged(ns, W)
+	check(#sent.chat == 1 and sent.chat[1] == "Codex: Objective done: Training - 6/6 Training Weapon" and sent.addon[1] == "v1|OBJ|1901|6|6", "one objective of two finishing is announced as an objective, with its counts")
+	W.objectives[1901][2].numFulfilled, W.objectives[1901][2].finished = 2, true
+	W.log[1].complete = true
+	logChanged(ns, W)
+	check(#sent.chat == 2 and sent.chat[2] == "Codex: Quest complete: Training - 6/6 Training Weapon, 2/2 Scorpid Tail", "the quest completing lists every objective")
+	-- a quest accepted after the baseline, then progressed while active
+	W.log[#W.log + 1] = { questID = 1902, title = "Fresh", complete = false }
+	W.objectives[1902] = { { text = "0/4 Boar", type = "monster", finished = false, numFulfilled = 0, numRequired = 4 } }
+	logChanged(ns, W)
+	check(#sent.chat == 2, "accepting a quest announces nothing")
+	W.objectives[1902][1].numFulfilled = 4; W.objectives[1902][1].finished = true; W.log[2].complete = true
+	logChanged(ns, W)
+	check(#sent.chat == 3 and sent.chat[3] == "Codex: Quest complete: Fresh - 4/4 Boar", "and finishing it while it is active is seen")
+	local before = #sent.chat
+	W.now = W.now + 10
+	ns.Party.OnTurnedIn(1902, ns.State.ctx)
+	check(sent.chat[#sent.chat] == "Codex: Turned in: Fresh" and #sent.chat == before + 1, "the turn-in names the quest from the last snapshot (it has left the log)")
+end
+
+section("party: a planner failure never hides a finished objective")
+do
+	local ns, W, sent = weaver()
+	ns.Planner.Compute = function() error("boom") end
+	W.objectives[1900][1].numFulfilled, W.objectives[1900][1].finished = 1, true; W.log[1].complete = true
+	logChanged(ns, W)
+	check(#sent.chat == 1 and #ns.errors >= 1, "the announcement still happens (the planner error is recorded separately)")
+end
+
+section("telemetry: objective transitions are recorded (observation only; proof comes from the real client)")
+do
+	local ns, W = weaver()
+	local T = ns.Telemetry
+	W.objectives[1900][1].numFulfilled, W.objectives[1900][1].finished = 1, true; W.log[1].complete = true
+	logChanged(ns, W)
+	local evs = {}
+	for _, e in ipairs(T.Events()) do if e.e == "QUEST_OBJECTIVE" then evs[#evs + 1] = e end end
+	check(#evs == 1 and evs[1].q == 1900 and evs[1].i == 1 and evs[1].have == 1 and evs[1].need == 1, "the finished objective is recorded once: quest, index, have, need")
+	local qc = 0
+	for _, e in ipairs(T.Events()) do if e.e == "QUEST_COMPLETE" and e.q == 1900 then qc = qc + 1 end end
+	check(qc == 1, "alongside the existing QUEST_COMPLETE")
+	logChanged(ns, W)
+	local again = 0
+	for _, e in ipairs(T.Events()) do if e.e == "QUEST_OBJECTIVE" then again = again + 1 end end
+	check(again == 1, "and not repeated")
+	local def
+	for _, d in ipairs(T.EVENT_DEFS) do if d.type == "QUEST_OBJECTIVE" then def = d end end
+	check(def and def.evidence:find("M8.9", 1, true) and def.evidence:find("untested on the client", 1, true), "its 'proven' status rests on the M8.9 real-client evidence for reading objectives; the diff itself is labelled untested")
+	check(not def.sources[1]:find("COMBAT") and not def.sources[2]:find("COMBAT") and not def.sources[3]:find("COMBAT"), "no combat-log source")
+	check(table.concat(ns.HelpCodex.Learned(), "|"):find("Quest objectives you finished: 1", 1, true) ~= nil, "Help Improve Codex counts it")
+end
