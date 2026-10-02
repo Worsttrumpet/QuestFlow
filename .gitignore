@@ -1,0 +1,19 @@
+# Generated Python / tooling artifacts: recreated by running the tests and generators, never committed
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Intentionally NOT ignored: forever-codex/dist/*.zip (versioned release builds), _backup/, _superseded/, archives/, research/ and the
+# generated dataset outputs under m6-dataset-baseline/out/ (kept on purpose). forever-db/.gitignore adds its own data rules.
