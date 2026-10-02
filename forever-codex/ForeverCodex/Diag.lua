@@ -170,6 +170,10 @@ function D.Lines(s)
 			L[#L + 1] = string.format("  arrow: %s (%s), calibrated %s, flip %s", p.arrow.on and "on" or "off", tostring(p.arrow.reason),
 				tostring(p.arrow.calibrated), tostring(p.arrow.flip))
 		end
+		if ns.BlizzardTracker then
+			local b = ns.BlizzardTracker.Status()
+			L[#L + 1] = string.format("  game quest tracker: Codex hides it = %s | frame %s | state %s%s (UNVERIFIED on Forever)", b.setting and "on" or "off", tostring(b.frame or "not found"), tostring(b.state), b.hooked and ", re-hide hook installed" or "")
+		end
 		if p.party then
 			L[#L + 1] = string.format("  party news: %s | addon messages %s | party chat %s | shared items this session %d", p.party.mode,
 				p.party.addonMessages and "available" or "UNAVAILABLE", p.party.chat and "available" or "UNAVAILABLE", p.party.feed)

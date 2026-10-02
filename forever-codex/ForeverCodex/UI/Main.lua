@@ -18,7 +18,7 @@ local UI = {}
 ns.UI = UI
 
 UI.WIDTH, UI.HEIGHT = 520, 430       -- the full-size window (Setup, World, Journey, Appendices)
-UI.COMPACT_WIDTH = 270               -- the Codex page: a compact right-side tracker, about as wide as a quest tracker
+UI.COMPACT_WIDTH = 330               -- the Codex page: a right-side tracker about as wide as the game's own (readable, not a panel)
 UI.HEIGHT_MIN = 150          -- the Codex page shrinks the window to its content, never below this; other pages use UI.HEIGHT
 UI.pageDefs = {}            -- registration order = tab order
 UI.pages = {}               -- key -> { frame, refresh }
@@ -147,7 +147,7 @@ local function build()
 	bg:SetColorTexture(0.04, 0.04, 0.05, 0.94)
 	local title = W.Line(frame, 10, W.DIM, "LEFT")
 	title:SetPoint("TOPLEFT", frame, "TOPLEFT", 116, -11)
-	title:SetWidth(134)
+	title:SetWidth(170)
 	title:SetText("FOREVER CODEX v" .. tostring(ForeverCodex and ForeverCodex.VERSION or "?"))
 	local sep = frame:CreateTexture(nil, "ARTWORK")
 	sep:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -33)

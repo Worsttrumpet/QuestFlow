@@ -54,6 +54,7 @@ local function onLogin()
 	end
 	if ns.Navigation then ns.Safe(ns.Navigation.Restore) end
 	if ns.Party then ns.Safe(ns.Party.Register) end
+	if ns.BlizzardTracker then ns.Safe(ns.BlizzardTracker.Apply) end
 	ns.State.Recompute()
 	-- the player-facing build stays quiet: the engineering summary (data counts, provenance, the plan) is /codex diag
 	if not P.SetupDone() then ns.Say("Welcome! Type /codex to set up Forever Codex.") end

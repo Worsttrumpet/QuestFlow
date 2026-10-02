@@ -292,14 +292,14 @@ function W.Divider(card, color)
 	return d
 end
 
---- A compact progress row: a label on the left, "have/need" on the right and a thin bar under both (about 20 px tall).
+--- A compact progress row: a label on the left, "have/need" on the right and a thin bar under both (about 23 px tall).
 -- It never invents numbers: without real counts the label is shown alone and the bar stays hidden.
 -- row:Set(label, have, need) shows it; row:Place(card, x, y, width) puts it at an offset inside a card; row:Clear() hides it.
-W.ROW_H = 20
+W.ROW_H = 23
 function W.ProgressRow(parent)
 	local r = CreateFrame("Frame", nil, parent)
-	r.label = W.Line(r, 11, W.TEXT, "LEFT")
-	r.count = W.Line(r, 11, W.DIM, "RIGHT")
+	r.label = W.Line(r, 12, W.TEXT, "LEFT")
+	r.count = W.Line(r, 12, W.DIM, "RIGHT")
 	r.track = tex(r, "BORDER", { 0.05, 0.05, 0.05, 0.95 })
 	r.fill = tex(r, "ARTWORK", { 0.50, 0.68, 0.34, 0.95 })
 	function r:Place(card, x, y, width)
@@ -309,15 +309,15 @@ function W.ProgressRow(parent)
 		self.width = width
 		self.label:ClearAllPoints()
 		self.label:SetPoint("TOPLEFT", self, "TOPLEFT", 0, 0)
-		self.label:SetWidth(width - 40)
+		self.label:SetWidth(width - 44)
 		self.count:ClearAllPoints()
 		self.count:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, 0)
-		self.count:SetWidth(40)
+		self.count:SetWidth(44)
 		self.track:ClearAllPoints()
-		self.track:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -15)
-		self.track:SetSize(width, 4)
+		self.track:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -17)
+		self.track:SetSize(width, 5)
 		self.fill:ClearAllPoints()
-		self.fill:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -15)
+		self.fill:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -17)
 		self:Set(self.cur and self.cur[1], self.cur and self.cur[2], self.cur and self.cur[3])
 	end
 	function r:Set(label, have, need)
@@ -328,7 +328,7 @@ function W.ProgressRow(parent)
 			self.fraction = frac
 			self.count:SetText(string.format("%d/%d", have, need))
 			local fw = math.floor((self.width or 100) * frac + 0.5)
-			self.fill:SetSize(math.max(1, fw), 4)
+			self.fill:SetSize(math.max(1, fw), 5)
 			if fw <= 0 then self.fill:Hide() else self.fill:Show() end
 			self.track:Show()
 		else

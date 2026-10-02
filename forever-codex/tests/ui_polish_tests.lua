@@ -181,7 +181,7 @@ section("window: a small movable companion panel, a new default place, nothing e
 do
 	local ns, W, c = logWorld({ GRAVE, DOOM })
 	local UI = ns.UI
-	check(UI.COMPACT_WIDTH >= 250 and UI.COMPACT_WIDTH <= 300 and UI.frame.__w == UI.COMPACT_WIDTH, "the Codex window is a narrow panel  [" .. tostring(UI.frame.__w) .. " px]")
+	check(UI.COMPACT_WIDTH >= 280 and UI.COMPACT_WIDTH <= 360 and UI.frame.__w == UI.COMPACT_WIDTH, "the Codex window is a tracker-width panel  [" .. tostring(UI.frame.__w) .. " px]")
 	check(c.nowBox.__w == UI.COMPACT_WIDTH - 16 and c.alsoBox.__w == UI.COMPACT_WIDTH - 16, "its cards fill that width")
 	check(UI.frame.__h < UI.HEIGHT, "and its height fits the content")
 	check(UI.frame.__movable == true and UI.frame.__drag and UI.frame.__drag[1] == "LeftButton", "it can be dragged")
@@ -196,13 +196,13 @@ do
 	local nsOld = boot({ char = { level = 6 }, synthetic = true, savedVars = saved })
 	nsOld.UI._Build()
 	check(saved.ui.windowLayout == 3 and saved.ui.window == nil, "a position saved by the old big window is forgotten once")
-	local saved2 = { version = 1, ui = { windowLayout = 3, window = { point = "TOPLEFT", rel = "TOPLEFT", x = 50, y = -60, h = 300, w = 270 } }, chars = {}, diag = {} }
+	local saved2 = { version = 1, ui = { windowLayout = 3, window = { point = "TOPLEFT", rel = "TOPLEFT", x = 50, y = -60, h = 300, w = 330 } }, chars = {}, diag = {} }
 	local nsNew = boot({ char = { level = 6 }, synthetic = true, savedVars = saved2 })
 	nsNew.Prefs.FinishSetup()
 	nsNew.UI._Build()
 	nsNew.State.Recompute()
 	local pt = nsNew.UI.frame.__points
-	check(pt[1] == "TOPLEFT" and pt[4] == 50 and pt[5] == -60 and nsNew.UI.frame.__w == 270, "a position saved by the new layout is remembered")
+	check(pt[1] == "TOPLEFT" and pt[4] == 50 and pt[5] == -60 and nsNew.UI.frame.__w == 330, "a position saved by the new layout is remembered")
 	check(#ns.errors == 0 and #nsOld.errors == 0 and #nsNew.errors == 0, "no errors")
 end
 
@@ -473,4 +473,37 @@ do
 	check(captured and not captured:find("[\128-\255]"), "it is plain ASCII")
 	check((ns.State.plan.now and ns.State.plan.now.id) == before, "building it does not change the live plan")
 	check(#ns.errors == 0, "no errors")
+end
+
+section("game quest tracker: an opt-in switch that only hides / shows the tracker's top frame (unverified on Forever), off by default")
+do
+	local shown, hooks, hookFn = true, 0, nil
+	local frame = { Hide = function() shown = false end, Show = function() shown = true end }
+	_G.ObjectiveTrackerFrame = frame
+	_G.hooksecurefunc = function(f, name, fn) if f == frame and name == "Show" then hooks = hooks + 1; hookFn = fn; local orig = f.Show; f.Show = function(...) orig(...); fn(...) end end end
+	local ns = boot({ char = { level = 6 }, synthetic = true })
+	check(not ns.Prefs.HideBlizzardTracker() and shown, "off by default: the game's tracker is left alone")
+	H.slash("tracker on")
+	check(ns.Prefs.HideBlizzardTracker() and not shown and ns.BlizzardTracker.Status().state == "hidden" and ns.BlizzardTracker.Status().frame == "ObjectiveTrackerFrame", "/codex tracker on hides it")
+	frame.Show()
+	check(not shown and hooks == 1, "if the game shows it again it is hidden again (one post-hook, installed once)")
+	ns.BlizzardTracker.Apply()
+	check(hooks == 1, "applying twice does not stack hooks")
+	H.slash("tracker off")
+	check(shown and not ns.Prefs.HideBlizzardTracker() and ns.BlizzardTracker.Status().state == "off", "/codex tracker off brings it back at once")
+	frame.Show()
+	check(shown, "and once off the hook leaves it alone")
+	local W = H.world()
+	W.chat = {}
+	H.slash("diag")
+	check(table.concat(W.chat, "\n"):find("game quest tracker:", 1, true) ~= nil, "/codex diag reports its state")
+	-- no such frame on this client: said plainly, nothing raised
+	_G.ObjectiveTrackerFrame = nil
+	W.chat = {}
+	H.slash("tracker on")
+	check(table.concat(W.chat, "\n"):find("was not found", 1, true) ~= nil and #ns.errors == 0, "no tracker frame found: it says so and nothing breaks")
+	H.slash("tracker off")
+	local src = H.readFile(H.addonDir .. "/BlizzardTracker.lua"):gsub("%-%-[^\n]*", "")
+	check(not src:find("SetParent", 1, true) and not src:find("UnregisterAllEvents", 1, true) and not src:find("SetAlpha", 1, true) and not src:find("EnableMouse", 1, true), "it never reparents, unregisters events or touches anything but Hide / Show")
+	_G.hooksecurefunc = nil
 end

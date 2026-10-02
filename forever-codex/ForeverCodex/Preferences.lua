@@ -100,6 +100,9 @@ end
 
 function P.NavigationOn() return P.Char().navigation == true end
 function P.SetNavigation(on) P.Char().navigation = on == true end
+--- Hides the game's own quest tracker so the Codex tracker can take its place (off by default; see BlizzardTracker.lua).
+function P.HideBlizzardTracker() return root().ui.hideBlizzardTracker == true end
+function P.SetHideBlizzardTracker(on) root().ui.hideBlizzardTracker = on == true end
 function P.ArrowOn() return P.Char().arrow ~= false end
 function P.SetArrow(on) P.Char().arrow = on == true end
 function P.ArrowFlip() return root().ui.arrowFlip == true end

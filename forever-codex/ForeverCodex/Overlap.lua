@@ -134,7 +134,9 @@ function Ov.Ready(plan, ctx)
 				d = E.Distance(ctx, { map = loc.map, x = loc.x, y = loc.y, world = loc.world or false }, pos)
 				if d and d >= E.DIFFERENT_CONTINENT then d = nil end
 			end
-			out[#out + 1] = { title = questName(a), who = a.giver, where = ns.Presenter.Where(a, ctx), quest = a.quest, dist = d }
+			local short
+			if d then short = d < 30 and "here" or (d < 150 and "nearby" or string.format("%d yd", math.floor(d / 50 + 0.5) * 50)) end
+			out[#out + 1] = { title = questName(a), who = a.giver, where = short, quest = a.quest, dist = d }
 		end
 	end
 	table.sort(out, function(x, y)

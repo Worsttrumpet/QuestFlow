@@ -121,6 +121,8 @@ function UI.BuildSetup(parent, mode)
 		y = y - 22
 		w.arrow = toggle(f, y, function() P.SetArrow(not P.ArrowOn()) end)
 		y = y - 22
+		w.blizz = toggle(f, y, function() P.SetHideBlizzardTracker(not P.HideBlizzardTracker()); ns.BlizzardTracker.Apply() end)
+		y = y - 22
 		w.hardcore = toggle(f, y, function() P.SetHardcore(not P.IsHardcore()); recompute() end)
 		y = y - 26
 		w.party = picker(f, y, "Party news", function(dir) P.SetPartyNotify(step(P.PARTY_MODES, P.PartyNotify(), dir)) end)
@@ -138,6 +140,7 @@ function UI.BuildSetup(parent, mode)
 		if not isSetup then
 			w.nav.text:SetText(box(P.NavigationOn(), "Waypoint follows what Codex recommends"))
 			w.arrow.text:SetText(box(P.ArrowOn(), "Small direction arrow"))
+			w.blizz.text:SetText(box(P.HideBlizzardTracker(), "Hide the game's quest tracker"))
 			w.hardcore.text:SetText(box(P.IsHardcore(), "This is a Hardcore character"))
 			w.party:SetText(PARTY_LABEL[P.PartyNotify()] or P.PartyNotify())
 		end

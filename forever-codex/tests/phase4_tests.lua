@@ -438,7 +438,7 @@ do
 	ns.State.Recompute()
 	check(c.nfyBox.__shown and c.nfyLevel.__text == "Level 6" and c.nfyRows[1].__text:find("New ability: Test Spell", 1, true), "reaching an even level with something real shows NEW FOR YOU on the right")
 	check(c.nowBox.__w == ns.UI.COMPACT_WIDTH - 16 and c.nfyBox.__w == ns.UI.COMPACT_WIDTH - 16, "NEW FOR YOU is a full-width card in the compact panel")
-	check(c.nowBox.__points[5] == -20 and c.nfyBox.__points[5] < c.nowBox.__points[5], "NOW is on top and NEW FOR YOU is under it")
+	check(c.nowBox.__points[5] == -22 and c.nfyBox.__points[5] < c.nowBox.__points[5], "NOW is on top and NEW FOR YOU is under it")
 	W.now = W.now + 61
 	ns.UI.frame.__scripts.OnUpdate(ns.UI.frame, 1)
 	check(not c.nfyBox.__shown, "after one minute the card disappears by itself and the layout closes up")

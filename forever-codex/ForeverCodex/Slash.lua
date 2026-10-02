@@ -12,6 +12,7 @@ local function helpLines()
 	say("  /codex                 open / close the Codex window;  /codex world | journey | appendices opens that tab")
 	say("  /codex setup           run the first-time setup again;  /codex dev = the developer window")
 	say("  /codex arrow [on|off|flip|reset|test]   Codex's own small direction arrow")
+	say("  /codex tracker [on|off]   hide the game's quest tracker so Codex's replaces it")
 	say("  /codex nav [on|off]    the waypoint that follows what Codex recommends")
 	say("  /codex party [off|ui|log]   the Party card (what other Codex users in your party finished); log = what Codex saw and why it did or did not share")
 	say("  /codex next            print the recommended next action")
@@ -121,6 +122,21 @@ local function handle(msg)
 			P.SetNavigation(on)
 			say("Waypoint following " .. (on and "on." or "off. Codex clears its own waypoint and leaves yours alone."))
 			ns.State.Recompute()
+		end
+	elseif cmd == "tracker" then
+		local on = onOff(restLower)
+		local st = ns.BlizzardTracker.Status()
+		if on == nil then
+			say(string.format("The game's own quest tracker is %s by Codex (setting %s; frame: %s). Usage: /codex tracker on|off   (on hides the game's tracker so Codex's can replace it; /reload always restores it)",
+				st.state == "hidden" and "hidden" or "left alone", st.setting and "on" or "off", tostring(st.frame or "not found")))
+		else
+			P.SetHideBlizzardTracker(on)
+			local r = ns.BlizzardTracker.Apply()
+			if on and r.state == "not found" then
+				say("The game's quest tracker frame was not found on this client, so nothing was hidden.")
+			else
+				say(on and "The game's quest tracker is hidden." or "The game's quest tracker is back.")
+			end
 		end
 	elseif cmd == "arrow" then
 		if restLower == "flip" then

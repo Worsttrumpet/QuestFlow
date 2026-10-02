@@ -17,7 +17,7 @@ local UI = ns.UI
 
 local FULL = UI.COMPACT_WIDTH - 16  -- page width
 local GAP, PAD = W.GAP, W.PAD
-local TOP = 20                      -- below the character line
+local TOP = 22                      -- below the character line
 local NOW_MIN = 56                  -- a card never gets smaller than this
 local MAX_ROWS = 6                  -- objective rows drawn in one card (the rest are summarised in one line)
 
@@ -31,7 +31,7 @@ end
 local function build(page)
 	local c = { page = page }
 	UI.main.codex = c
-	c.header = W.Line(page, 11, W.DIM, "LEFT")
+	c.header = W.Line(page, 12, W.DIM, "LEFT")
 	W.Place(c.header, page, 0, -2, FULL)
 
 	-- NOW: the strongest card
@@ -46,32 +46,32 @@ local function build(page)
 	c.nowSkip:SetPoint("TOPRIGHT", c.nowBox, "TOPRIGHT", -PAD + 4, -PAD + 3)
 	c.nowLabel = W.Label(c.nowBox, "NOW", W.STYLE_NOW.label)
 	c.nowLabel:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX + 20, -PAD)
-	c.nowTitle = W.Line(c.nowBox, 14, W.WARM_GOLD, "LEFT", true)
-	c.nowWho = W.Line(c.nowBox, 11, W.TEXT, "LEFT")
-	c.nowDetail = W.Line(c.nowBox, 10, W.DIM, "LEFT", true)
+	c.nowTitle = W.Line(c.nowBox, 16, W.WARM_GOLD, "LEFT", true)
+	c.nowWho = W.Line(c.nowBox, 12, W.TEXT, "LEFT")
+	c.nowDetail = W.Line(c.nowBox, 11, W.DIM, "LEFT", true)
 	c.nowRows = {}
 	for i = 1, MAX_ROWS do c.nowRows[i] = W.ProgressRow(c.nowBox) end
-	c.nowMore = W.Line(c.nowBox, 10, W.DIM, "LEFT")
-	c.nowInfo = W.Line(c.nowBox, 10, W.SOFT_GREEN, "LEFT")
+	c.nowMore = W.Line(c.nowBox, 11, W.DIM, "LEFT")
+	c.nowInfo = W.Line(c.nowBox, 11, W.SOFT_GREEN, "LEFT")
 	c.nowDivider = W.Divider(c.nowBox)
-	c.thenFS = W.Line(c.nowBox, 10, W.DIM, "LEFT")
+	c.thenFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")
 
 	-- ALSO COMPLETE THIS: supporting, cooler and smaller; present only when there is something to say
 	c.alsoBox = W.Card(page, FULL, 40, W.STYLE_NEAR)
 	c.alsoLabel = W.Label(c.alsoBox, "ALSO COMPLETE THIS", W.STYLE_NEAR.label)
 	c.alsoLabel:SetPoint("TOPLEFT", c.alsoBox, "TOPLEFT", c.alsoBox.insetX, -PAD + 2)
 	c.alsoHeads, c.alsoRows = {}, {}
-	for i = 1, 4 do c.alsoHeads[i] = W.Line(c.alsoBox, 11, W.TEXT, "LEFT") end
+	for i = 1, 4 do c.alsoHeads[i] = W.Line(c.alsoBox, 12, W.TEXT, "LEFT") end
 	for i = 1, MAX_ROWS do c.alsoRows[i] = W.ProgressRow(c.alsoBox) end
-	c.alsoMore = W.Line(c.alsoBox, 10, W.DIM, "LEFT")
+	c.alsoMore = W.Line(c.alsoBox, 11, W.DIM, "LEFT")
 
 	-- READY TO TURN IN: finished quests, a quiet green card; present only when there are some
 	c.readyBox = W.Card(page, FULL, 40, W.STYLE_READY)
 	c.readyLabel = W.Label(c.readyBox, "READY TO TURN IN", W.STYLE_READY.label)
 	c.readyLabel:SetPoint("TOPLEFT", c.readyBox, "TOPLEFT", c.readyBox.insetX, -PAD + 2)
 	c.readyRows = {}
-	for i = 1, 5 do c.readyRows[i] = W.Line(c.readyBox, 11, W.TEXT, "LEFT") end
-	c.readyMore = W.Line(c.readyBox, 10, W.DIM, "LEFT")
+	for i = 1, 5 do c.readyRows[i] = W.Line(c.readyBox, 12, W.TEXT, "LEFT") end
+	c.readyMore = W.Line(c.readyBox, 11, W.DIM, "LEFT")
 
 	-- NEW FOR YOU: secondary, fits its content; present only while active
 	c.nfyBox = W.Card(page, FULL, 80, W.STYLE_NEW)
@@ -79,9 +79,9 @@ local function build(page)
 	c.nfyLabel:SetPoint("TOPLEFT", c.nfyBox, "TOPLEFT", c.nfyBox.insetX, -c.nfyBox.insetY)
 	c.nfyLevel = W.Line(c.nfyBox, 10, W.DIM, "LEFT")
 	c.nfyRows = {}
-	for i = 1, 3 do c.nfyRows[i] = W.Line(c.nfyBox, 11, W.TEXT, "LEFT", true) end
+	for i = 1, 3 do c.nfyRows[i] = W.Line(c.nfyBox, 12, W.TEXT, "LEFT", true) end
 
-	c.reminderFS = W.Line(page, 10, W.DIM, "LEFT", true)
+	c.reminderFS = W.Line(page, 11, W.DIM, "LEFT", true)
 	c.partyHead = W.Line(page, 11, W.WARM_GOLD, "LEFT")
 	c.partyRows = {}
 	for i = 1, 2 do c.partyRows[i] = { head = W.Line(page, 11, W.TEXT, "LEFT") } end
@@ -131,7 +131,7 @@ local function drawNow(c, card)
 	W.SetColor(c.nowTitle, n and W.WARM_GOLD or W.DIM)
 	if n then c.nowSkip:Show() else c.nowSkip:Hide() end
 	c.thenFS:SetText(card.thenLine and ("Then: " .. card.thenLine) or "")
-	st:Skip(16)                                       -- the NOW label row
+	st:Skip(18)                                       -- the NOW label row
 	st:Add(c.nowTitle, 3, nil, inner - 4)
 	st:Add(c.nowWho, 3)
 	st:Add(c.nowDetail, 4)
