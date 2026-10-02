@@ -276,6 +276,9 @@ function D.PlaytestLines(snap, lines)
 	-- what the window shows
 	add("")
 	add("--- WHAT THE WINDOW SHOWS ---")
+	local slots = ns.Presenter.Slots(ctx)
+	add("Quest log: " .. (slots and string.format("%d/%d quests (%d free)%s", slots.used, slots.max, slots.free, slots.full and " - FULL: new quests are not recommended" or "") or "unreadable")
+		.. " | quest-starting items are separate from these slots and are not tracked yet")
 	local okC, card = pcall(ns.Presenter.Card, plan, ctx)
 	if okC and card then
 		local function show(label, it)
@@ -284,7 +287,20 @@ function D.PlaytestLines(snap, lines)
 			if it.progress then add("    progress: " .. tostring(type(it.progress) == "table" and (tostring(it.progress.have) .. "/" .. tostring(it.progress.need)) or it.progress)) end
 		end
 		if card.now then show("NOW", card.now) else add("NOW: " .. tostring(card.empty and card.empty.title or "nothing")) end
-		show("ALSO DO", card.alsoDo)
+		for _, o in ipairs(card.now and card.now.objectives or {}) do
+			add(string.format("    unfinished: %s %s/%s", tostring(o.text), tostring(o.have), tostring(o.need)))
+		end
+		if #(card.also or {}) == 0 then add("ALSO COMPLETE THIS: nothing") end
+		for _, it in ipairs(card.also or {}) do
+			if it.kind == "objective" then
+				local parts = {}
+				for _, o in ipairs(it.objectives) do parts[#parts + 1] = string.format("%s %s/%s", tostring(o.text), tostring(o.have), tostring(o.need)) end
+				add(string.format("ALSO COMPLETE THIS: %s (Q:%s) | %s", tostring(it.title), tostring(it.quest), table.concat(parts, "; ")))
+			else
+				add(string.format("ALSO COMPLETE THIS: %s | %s", tostring(it.title), tostring(it.where)))
+			end
+		end
+		show("planner ALSO DO", card.alsoDo)
 		if card.thenLine then add("THEN: " .. tostring(card.thenLine)) end
 		local okN, near = pcall(ns.Nearby.List, plan, ctx)
 		if okN and #near > 0 then
@@ -400,6 +416,24 @@ function D.PlaytestLines(snap, lines)
 		if #shown == 0 then add("(none)") end
 		local omitted = farther + unmeasured
 		add(string.format("+ %d additional stops omitted (%d farther away, %d with no measurable distance)", omitted, farther, unmeasured))
+
+		-- the candidate funnel: from every known quest down to what is actionable now (counts only; the planner works from the last stage)
+		local f = (plan.stats and plan.stats.filtered) or {}
+		local function n(k) return f[k] or 0 end
+		local kinds = { ACCEPT = 0, TURN_IN = 0, OBJECTIVE = 0 }
+		for _, it in pairs(d.items or {}) do if kinds[it.kind] then kinds[it.kind] = kinds[it.kind] + 1 end end
+		local known = 0
+		for _ in pairs(R.QuestIds()) do known = known + 1 end
+		add("")
+		add("--- CANDIDATE FUNNEL (known quests -> what is actionable now) ---")
+		add(string.format("known quests in the data: %d (this is a universe to filter, not a route)", known))
+		add(string.format("in your quest log: %s (active work, from the quest log itself)", tostring(ctx.logCount)))
+		add(string.format("not for this character: faction %d, race %d, class %d, repeatable %d | completed already %d | skipped by you %d", n("faction"), n("race"), n("class"), n("repeatable"), n("completed"), n("skipped")))
+		add(string.format("FUTURE (known, not actionable yet): level too high %d, earlier quest in the chain not finished %d | too low to be useful %d | no usable location %d | quest log full %d",
+			n("level"), n("prereq"), n("tooLow"), n("noLocation"), n("logFull")))
+		add(string.format("CURRENT: %d pickups, %d objectives, %d hand-ins -> %s stops -> %s sequences searched%s", kinds.ACCEPT, kinds.OBJECTIVE, kinds.TURN_IN, tostring(d.stops), tostring(d.sequences),
+			d.slotPressure and " | quest log nearly full: hand-ins are not deferred" or ""))
+		add("CONDITIONAL (quest-starting drops / items): not modelled yet; none is treated as a current quest")
 
 		-- quests Codex cannot place: which layer lacks the data (provenance, never a guess)
 		add("")

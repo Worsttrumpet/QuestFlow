@@ -314,3 +314,191 @@ do
 	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
 	f.uninstall()
 end
+
+-- ================================================================ deferred turn-ins (a finished quest is not "go back now")
+
+local function unplaced(id, name, have, need, zone)
+	local q = Q(id, name, 9001, nil, nil, { zone = zone or "zone-a", giverName = "Giver " .. id })
+	q.map, q.x, q.y = nil, nil, nil
+	return q, { title = name, objectives = { { text = name .. " thing", have = have, need = need } } }
+end
+local function handIn(id, name, dx, who)
+	return Q(id, name, 9001, 0.5 + dx, 0.5, { giverName = who or ("Taker " .. id) })
+end
+
+section("deferred turn-ins: a finished quest waits while work is underway here, and is listed as READY TO TURN IN")
+do
+	local work, workLog = unplaced(50, "Doom Weed", 9, 10)
+	local ready = handIn(60, "Graverobbers", 0.30, "Coleman")
+	local ns, W = world(6, 9001, { work, ready }, { log = { [50] = workLog, [60] = { title = "Graverobbers", complete = true } } })
+	local p = plan(ns)
+	check(p.now and p.now.quest == 50 and p.now.kind == "OBJECTIVE" and p.diag.deferredTurnIn == true, "work underway here stays NOW; the hand-in 300 yd back waits  [" .. tostring(p.now and p.now.id) .. "]")
+	local card = ns.Presenter.Card(p, ns.State.ctx)
+	check(#card.ready == 1 and card.ready[1].title == "Graverobbers", "the finished quest is listed under READY TO TURN IN")
+	check(card.now and card.now.title == "Finish Doom Weed", "and the card's NOW is the work")
+	check(card.thenLine == nil, "a hand-in is not shown as THEN either")
+	-- the switch
+	ns.Planner.DEFER_TURN_INS = false
+	local p2 = plan(ns)
+	check(p2.now and p2.now.id == "Q:60:TURN_IN", "(proof the rule is what does it) without it the hand-in is NOW")
+	ns.Planner.DEFER_TURN_INS = true
+	check(#ns.errors == 0, "no errors")
+end
+
+section("deferred turn-ins: not forced - with no work underway, or a short walk away, the hand-in is NOW")
+do
+	-- nothing else to do: the finished quest is simply the best thing to do
+	local ready = handIn(60, "Graverobbers", 0.30)
+	local ns = world(6, 9001, { ready }, { log = { [60] = { title = "Graverobbers", complete = true } } })
+	local p = plan(ns)
+	check(p.now and p.now.id == "Q:60:TURN_IN" and p.diag.deferredTurnIn ~= true, "with nothing else going on, the hand-in is NOW")
+	check(#ns.Presenter.Card(p, ns.State.ctx).ready == 0, "and it is not also listed as 'ready' (it is NOW)")
+	-- a short walk: promoted even with work underway
+	local work, workLog = unplaced(50, "Doom Weed", 9, 10)
+	local near = handIn(61, "Close hand-in", 0.08)
+	local ns2 = world(6, 9001, { work, near }, { log = { [50] = workLog, [61] = { title = "Close hand-in", complete = true } } })
+	check(plan(ns2).now.id == "Q:61:TURN_IN", "a hand-in a short walk away (80 yd) is promoted even while work is underway")
+	-- work that has not been started is not 'underway': it does not hold a hand-in back
+	local idle, idleLog = unplaced(51, "Not started", 0, 10)
+	local ns3 = world(6, 9001, { idle, ready }, { log = { [51] = idleLog, [60] = { title = "Graverobbers", complete = true } } })
+	local p3 = plan(ns3)
+	check(p3.now and p3.now.id == "Q:60:TURN_IN", "a quest with no progress yet does not hold a hand-in back  [" .. tostring(p3.now and p3.now.id) .. "]")
+	-- a hand-in the player ADDED themselves is their call
+	local work4, work4Log = unplaced(50, "Doom Weed", 9, 10)
+	local ns4 = world(6, 9001, { work4, ready }, { log = { [50] = work4Log, [60] = { title = "Graverobbers", complete = true } }, added = { 60 } })
+	check(plan(ns4).now.quest == 60, "a quest the player added is never deferred")
+	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0 and #ns4.errors == 0, "no errors")
+end
+
+section("deferred turn-ins: located objective work on this map defers a far hand-in too, and the ready quests are batched once the work is done")
+do
+	local obj = Q(70, "Near objective", 9001, 0.56, 0.5, { objCoords = { { map = 9001, x = 0.56, y = 0.5 } }, giverName = "Obj giver" })
+	local ready = handIn(60, "Graverobbers", 0.35, "Coleman")
+	local ns = world(6, 9001, { obj, ready }, { log = { [70] = { title = "Near objective", objectives = { { text = "Thing", have = 2, need = 6 } } }, [60] = { title = "Graverobbers", complete = true } } })
+	local p = plan(ns)
+	check(p.now and p.now.id == "Q:70:OBJECTIVE", "a located objective right here is done before the far hand-in  [" .. tostring(p.now and p.now.id) .. "]")
+	-- the work finishes: now two ready quests at one NPC are ONE trip
+	local a, b = handIn(80, "First ready", 0.35, "Coleman"), handIn(81, "Second ready", 0.352, "Coleman")
+	local ns2 = world(6, 9001, { a, b }, { log = { [80] = { title = "First ready", complete = true }, [81] = { title = "Second ready", complete = true } } })
+	local p2 = plan(ns2)
+	check(p2.now and p2.now.kind == "TURN_IN", "with the work done the hand-ins become NOW")
+	local both = 0
+	for _, st in ipairs(ns2.State.plan.diag.sequence or {}) do both = both + 1 end
+	check(both == 1, "and the two quests at the same NPC are a single stop of the route (one trip)  [" .. both .. " stop]")
+	local card = ns2.Presenter.Card(p2, ns2.State.ctx)
+	check(#card.ready == 1, "the other finished quest is listed under READY TO TURN IN beside NOW  [" .. #card.ready .. "]")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end
+
+section("READY TO TURN IN: nearest first, skipped quests left out, plain ASCII, drawn as its own card")
+do
+	local work, workLog = unplaced(50, "Doom Weed", 9, 10)
+	local far = handIn(60, "Far ready", 0.40)
+	local nearer = handIn(61, "Nearer ready", 0.25)
+	local ns, W = world(6, 9001, { work, far, nearer }, { log = { [50] = workLog, [60] = { title = "Far ready", complete = true }, [61] = { title = "Nearer ready", complete = true } } })
+	local p = plan(ns)
+	local card = ns.Presenter.Card(p, ns.State.ctx)
+	check(#card.ready == 2 and card.ready[1].title == "Nearer ready" and card.ready[2].title == "Far ready", "nearest first")
+	ns.Prefs.Skip("QT:60")
+	p = plan(ns)
+	check(#ns.Presenter.Card(p, ns.State.ctx).ready == 1, "a skipped quest is not listed")
+	ns.Prefs.Unskip("QT:60")
+	plan(ns)
+	ns.UI.Open("codex")
+	local c = ns.UI.main.codex
+	check(c.readyBox.__shown and c.readyLabel.__text == "READY TO TURN IN" and c.readyRows[1].__text:find("Nearer ready", 1, true) and not c.readyRows[1].__text:find("[\128-\255]"), "the window draws it as a card of its own, in plain ASCII")
+	check(c.nowTitle.__text == "Finish Doom Weed", "with NOW above it")
+	check(c.readyBox.__points[5] < c.nowBox.__points[5], "and READY TO TURN IN below NOW")
+	-- nothing ready: no card
+	local ns2 = world(6, 9001, { work }, { log = { [50] = workLog } })
+	plan(ns2)
+	ns2.UI.Open("codex")
+	check(not ns2.UI.main.codex.readyBox.__shown, "with nothing finished the card is not drawn")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end
+
+section("quest log capacity: the 40-quest log is an input; a full log never recommends a new quest, and the count is exposed")
+do
+	local function manyLog(n, extra)
+		local log, quests = {}, {}
+		for i = 1, n do
+			local id = 1000 + i
+			quests[#quests + 1] = Q(id, "Filler " .. i, 9001, nil, nil, { zone = "zone-a" })
+			quests[#quests].map, quests[#quests].x, quests[#quests].y = nil, nil, nil
+			log[id] = { title = "Filler " .. i, objectives = { { text = "Thing", have = 0, need = 5 } } }
+		end
+		quests[#quests + 1] = Q(1, "A fresh pickup", 9001, 0.52, 0.5, { giverName = "Someone" })
+		return quests, log
+	end
+	local quests, log = manyLog(39)
+	local ns = world(6, 9001, quests, { log = log })
+	local p = plan(ns)
+	local slots = ns.Presenter.Card(p, ns.State.ctx).slots
+	check(slots and slots.used == 39 and slots.max == 40 and slots.free == 1 and not slots.full, "the quest count is exposed: 39/40, one free")
+	local hasPickup = false
+	for _, a in ipairs(p.sequence) do if a.id == "Q:1:ACCEPT" then hasPickup = true end end
+	check(p.now and (p.now.id == "Q:1:ACCEPT" or (p.alsoDo and p.alsoDo.id == "Q:1:ACCEPT") or hasPickup or p.diag.localWork), "with a slot free the pickup is still a normal candidate")
+	local quests2, log2 = manyLog(40)
+	local ns2 = world(6, 9001, quests2, { log = log2 })
+	local p2 = plan(ns2)
+	local s2 = ns2.Presenter.Card(p2, ns2.State.ctx).slots
+	check(s2 and s2.used == 40 and s2.full and s2.free == 0, "40/40 is reported as full")
+	local offered = false
+	for _, a in ipairs(p2.sequence) do if a.kind == "ACCEPT" then offered = true end end
+	check(not offered and not (p2.now and p2.now.kind == "ACCEPT") and (p2.stats.filtered.logFull or 0) >= 1, "a full log recommends no new quest, and the filter is counted for the report")
+	-- a finished quest still holds a slot; handing it in is what frees one (it is still a normal candidate)
+	log2[1001] = { title = "Filler 1", complete = true }
+	local ns3 = world(6, 9001, quests2, { log = log2 })
+	local c3 = ns3.Presenter.Card(plan(ns3), ns3.State.ctx)
+	check(c3.slots.full and #c3.ready + (c3.now and c3.now.kind == "TURN_IN" and 1 or 0) >= 1, "a completed quest still counts toward the 40 and is offered as a hand-in")
+	-- no readable quest log: nothing is assumed
+	check(ns.Presenter.Slots({ logAvailable = false, logCount = 0 }) == nil, "an unreadable quest log gives no count (nothing is invented)")
+	local text
+	rawset(ns3.UI, "ShowReport", function(t) text = t end)
+	H.slash("report")
+	check(text and text:find("Quest log: 40/40 quests (0 free) - FULL", 1, true) ~= nil, "/codex report shows the quest-log count")
+	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
+end
+
+section("quest log pressure: with the log nearly full a finished quest is not left waiting; and the report shows the candidate funnel")
+do
+	local function fillers(n)
+		local quests, log = {}, {}
+		for i = 1, n do
+			local id = 1000 + i
+			local q = Q(id, "Filler " .. i, 9001, nil, nil, { zone = "zone-a" })
+			q.map, q.x, q.y = nil, nil, nil
+			quests[#quests + 1] = q
+			log[id] = { title = "Filler " .. i, objectives = { { text = "Thing", have = i == 1 and 3 or 0, need = 5 } } }
+		end
+		return quests, log
+	end
+	local ready = handIn(60, "Graverobbers", 0.30, "Coleman")
+	-- plenty of room: the finished quest waits behind the work underway
+	local q1, l1 = fillers(10)
+	q1[#q1 + 1] = ready; l1[60] = { title = "Graverobbers", complete = true }
+	local ns1 = world(6, 9001, q1, { log = l1 })
+	local p1 = plan(ns1)
+	check(p1.now and p1.now.kind == "OBJECTIVE" and p1.diag.deferredTurnIn == true and p1.diag.slotPressure ~= true, "with room in the log the hand-in waits behind work underway")
+	-- 39/40: a free slot is worth a hand-in, so it is no longer deferred
+	local q2, l2 = fillers(38)
+	q2[#q2 + 1] = ready; l2[60] = { title = "Graverobbers", complete = true }
+	local ns2 = world(6, 9001, q2, { log = l2 })
+	local p2 = plan(ns2)
+	check(p2.diag.slotPressure == true and p2.diag.deferredTurnIn ~= true, "at 39/40 the planner no longer defers hand-ins  [" .. tostring(p2.now and p2.now.id) .. "]")
+	check(p2.now and p2.now.id == "Q:60:TURN_IN", "and the ready hand-in is NOW (it frees a slot)")
+	-- never forced: a log that is full of work but whose only hand-in is across the sea is not sent there
+	local over = Q(61, "Overseas", 9003, 0.5, 0.5, { giverName = "Far" })
+	local q3, l3 = fillers(38)
+	q3[#q3 + 1] = over; l3[61] = { title = "Overseas", complete = true }
+	local ns3 = world(6, 9001, q3, { log = l3 })
+	local p3 = plan(ns3)
+	check(not (p3.now and p3.now.id == "Q:61:TURN_IN"), "an unmeasurable far hand-in is still not forced, even with the log nearly full")
+	-- the report's funnel
+	local text
+	rawset(ns3.UI, "ShowReport", function(t) text = t end)
+	H.slash("report")
+	check(text and text:find("CANDIDATE FUNNEL", 1, true) and text:find("known quests in the data:", 1, true) and text:find("FUTURE (known, not actionable yet): level too high", 1, true)
+		and text:find("CURRENT:", 1, true) and text:find("CONDITIONAL", 1, true), "/codex report lays out the funnel: known -> not for this character -> FUTURE -> CURRENT -> CONDITIONAL")
+	check(#ns1.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
+end

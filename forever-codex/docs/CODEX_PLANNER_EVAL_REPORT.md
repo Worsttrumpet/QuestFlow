@@ -51,27 +51,28 @@ Scenario:  A1 Scorpid / Vile / Cactus, with the playtest-observed objective posi
            Same state, but the scorpid (46.5, 58.4) and Vile Familiar (45.3, 56.8) positions the player reported are supplied as a test-only overlay.
 Character: Level 4 Orc Warrior (Horde) | strategy efficient | route zone auto | position map 1411 (46.5, 58.4)
 
-NOW       Turn in: Galgar's Cactus Apple Surprise   [TURN_IN, 282 yd from you, approx, assumed]
-ALSO DO   Accept: Lazy Peons   [ACCEPT, 293 yd from you, known]
+NOW       Continue: Sting of the Scorpid   [OBJECTIVE, 0 yd from you, approx]
+ALSO DO   Accept: Carry Your Weight   [ACCEPT, 517 yd from you, known]
 THEN      Accept: The Great Outdoors   [ACCEPT, 364 yd from you, approx]
 
 Selected stops:
-  1. Turn in: Galgar's Cactus Apple Surprise + Accept: Your Place In The World   (282 yd)
-  2. Accept: The Great Outdoors + Accept: The Adventurer   (645 yd)
+  1. Continue: Sting of the Scorpid   (0 yd)
+  2. Accept: The Great Outdoors + Accept: The Adventurer   (364 yd)
   3. Accept: Vanquish the Betrayers + Accept: This Fruit Could Bite Back   (112 yd)
 
 Planner diagnostics:
   Candidates: 97 located (+6 optional hints, 0 without a location)
   Stops: 43   Considered: 8   Sequences scored: 400   Selected stops: 3
-  Estimated sequence time: 238s (about 148s walking + 90s doing; walking = yards / 7, an estimate)
-  Sequence value (net policy points, not XP): 66.5   ALSO DO interruption: 11.9s   Unknown legs: 0
+  Estimated sequence time: 248s (about 68s walking + 180s doing; walking = yards / 7, an estimate)
+  Sequence value (net policy points, not XP): 63.9   ALSO DO interruption: 16.3s   Unknown legs: 0
 
 Reason summary:
-  - 2 actions share the first stop, so they cost one trip
-  - ALSO DO costs a 12s detour
+  - ALSO DO costs a 16s detour
+  - a turn-in is ready but waits: starting with a turn-in would score 66.5 (this plan 63.9) and take 238s
+  - the first stop is on the way to the second (0s detour)
 
-Runners-up as the first step: Continue: Sting of the Scorpid (2.6 lower); Continue: Vile Familiars (4.8 lower); Accept: Sarkoth (7.2 lower)
-Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 527s]; Accept: A Peon's Burden [TOO_FAR 38s]; Accept: Break Sharptusk! [TOO_FAR 552s]; Accept: Sharing the Land [TOO_FAR 553s]; Accept: The Hunt Begins [TOO_FAR 553s]; Accept: A Humble Task (1/2) [TOO_FAR 548s]
+Runners-up as the first step: Turn in: Galgar's Cactus Apple Surprise (-2.6 lower); Continue: Vile Familiars (2.2 lower); Accept: Sarkoth (4.6 lower)
+Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 527s]; Accept: A Peon's Burden [TOO_FAR 79s]; Accept: Break Sharptusk! [TOO_FAR 552s]; Turn in: Galgar's Cactus Apple Surprise [TOO_FAR 80s]; Accept: Your Place In The World [TOO_FAR 86s]; Accept: Lazy Peons [TOO_FAR 83s]
 
 (constants in force: timeValue 0.30/s, detour limit 30s, ALSO DO floor 5, stop radius 60 yd, chain share 0.25; none changed by this harness)
 ------------------------------------------------------------------------------
@@ -670,7 +671,7 @@ SWEEP (REVIEW): K: a pickup on another continent next to one local pickup
 SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objectives, a pickup 250 yd south)
   strategy | plan
   efficient      | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
-  fast           | NOW=Turn in: The ready quest | ALSO DO=(none) | THEN=(none)
+  fast           | NOW=Continue: Local objective one | ALSO DO=(none) | THEN=Turn in: The ready quest
   questing_only  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
   completionist  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
 == planner evaluation: the trace changes nothing ==
@@ -678,5 +679,5 @@ SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objective
   bridge equivalence: 22 scenarios layered, 9 as the only source (13 need ATT-only data the bridge does not read: objective areas, race lists)
 == planner evaluation: the Phase 2.5 baseline is unchanged ==
 
-2221 passed, 0 failed
+2263 passed, 0 failed
 ```

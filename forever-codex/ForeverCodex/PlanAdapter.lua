@@ -82,12 +82,28 @@ function A.ToLegacy(plan, ctx, c)
 		if not have[a.id] then inProgress[#inProgress + 1] = a; have[a.id] = true end
 	end
 	table.sort(inProgress, function(x, y) return x.id < y.id end)
+	-- every quest objective the player is working on, located or not (the Overlap card reads this; nothing here decides anything)
+	local objectives, haveObj = {}, {}
+	for _, list in ipairs({ c.candidates, c.inProgress, plan.reminders }) do
+		for _, a in ipairs(list) do
+			if a.kind == "OBJECTIVE" and not haveObj[a.id] then objectives[#objectives + 1] = a; haveObj[a.id] = true end
+		end
+	end
+	table.sort(objectives, function(x, y) return x.id < y.id end)
+	-- every quest that is finished and can be handed in, located or not (the READY TO TURN IN list reads this)
+	local turnIns, haveTi = {}, {}
+	for _, list in ipairs({ c.candidates, c.inProgress, plan.reminders }) do
+		for _, a in ipairs(list) do
+			if a.kind == "TURN_IN" and not haveTi[a.id] then turnIns[#turnIns + 1] = a; haveTi[a.id] = true end
+		end
+	end
+	table.sort(turnIns, function(x, y) return x.id < y.id end)
 
 	return {
 		next = seq[1], sequence = seq, upcoming = upcoming, nearby = nearby, inProgress = inProgress,
 		stats = env.stats, warnings = env.warnings, strategy = env.strategy.key, routeZone = ctx.prefs.routeZone, routeMap = env.routeMap,
 		player = env.player,
-		now = plan.now, alsoDo = plan.alsoDo, thenAction = plan.thenAction, reminders = plan.reminders, diag = plan.diag,
+		now = plan.now, alsoDo = plan.alsoDo, thenAction = plan.thenAction, reminders = plan.reminders, diag = plan.diag, objectives = objectives, turnIns = turnIns,
 	}
 end
 

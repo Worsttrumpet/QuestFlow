@@ -98,6 +98,21 @@ Pl.LOCAL_MIN_NET = 0
 Pl.TURN_IN_FIRST = true
 Pl.TURN_IN_FIRST_SECONDS = 45
 
+-- DEFERRED TURN-INS. A quest that is COMPLETE is not the same as "now is the time to hand it in". While the player has work underway in this
+-- area, a hand-in that is not a short walk away waits (it stays listed as READY TO TURN IN) and the work goes on; once that work is done, or the
+-- hand-in is close, it becomes NOW and the ready quests are handed in together (hand-ins within 60 yd of each other are one stop already).
+--   * "work underway" = a located objective stop on the player's map, or a quest in the log in this area whose objective spot is unknown but
+--     which the quest log shows has been started (some count above zero): Codex cannot see where the objective is, only that it is being worked
+--   * "a short walk" = within DEFER_NEAR_YD of the player; never applies to a quest the player added, a hand-in sharing a stop with objectives,
+--     or when there is no such work (then the hand-in is simply the best thing to do)
+-- Pl.DEFER_TURN_INS = false switches it off (tests).
+Pl.DEFER_TURN_INS = true
+Pl.DEFER_NEAR_YD = 150
+-- QUEST-LOG PRESSURE. A finished quest still holds one of the 40 quest-log slots until it is handed in. With this few slots left, deferring a
+-- hand-in is no longer free (each one frees a slot for the next pickup), so the deferral above is switched off and normal route value decides.
+-- It never forces a hand-in either: a far hand-in still has to win on net value. Needs a readable quest log.
+Pl.SLOT_PRESSURE_FREE = 2
+
 local function merge(into, over)
 	for k, v in pairs(over or {}) do
 		if type(v) == "table" and type(into[k]) == "table" then
@@ -705,6 +720,42 @@ function Pl.Compute(ctx, c, opts)
 	end
 	rankStops(S)
 	local pick = searchSequences(S, opts.prevNowId)
+	-- a finished quest is not automatically the thing to do next: with work underway here, a hand-in that is not close waits (see DEFER_TURN_INS)
+	local ql = env.questLog
+	local slotPressure = ql and ql.free ~= nil and ql.free <= Pl.SLOT_PRESSURE_FREE
+	if slotPressure then diag.slotPressure = true end
+	if Pl.DEFER_TURN_INS and not slotPressure and not diag.pinnedFirst and S.player and S.player.map then
+		local first = S.stops[pick.stops[1]]
+		if hasHandIn(first) and not hasKind(first, "OBJECTIVE") then
+			local d = E.Distance(ctx, S.player, first.pos)
+			if d and d > Pl.DEFER_NEAR_YD then
+				local alt
+				for f, seq in pairs(S.bestByFirst) do
+					local st = S.stops[f]
+					if hasKind(st, "OBJECTIVE") and not hasHandIn(st) and st.pos.map == S.player.map and better(seq, alt) then alt = seq end
+				end
+				if alt then
+					pick = alt
+					diag.deferredTurnIn = true
+				else
+					local started
+					for _, a in ipairs(S.localWork) do
+						local os = a.objectiveState
+						if os and os.known then
+							for _, o in ipairs(os.list) do
+								if o.finished or (type(o.have) == "number" and o.have > 0) then started = a break end
+							end
+						end
+						if started then break end
+					end
+					if started then
+						diag.deferredTurnIn = true
+						return Pl.StayLocal(S, plan, started)
+					end
+				end
+			end
+		end
+	end
 	-- work already underway in this area comes before a trip somewhere else (a route zone the player chose, or a quest they added, still wins)
 	if Pl.LOCAL_FIRST and S.localWork[1] and not diag.pinnedFirst and S.player and S.stops[pick.stops[1]].pos.map ~= S.player.map
 		and not (env.routeMap ~= nil and S.stops[pick.stops[1]].pos.map == env.routeMap) then

@@ -17,7 +17,8 @@ local W = ns.Widgets
 local UI = {}
 ns.UI = UI
 
-UI.WIDTH, UI.HEIGHT = 520, 430
+UI.WIDTH, UI.HEIGHT = 520, 430       -- the full-size window (Setup, World, Journey, Appendices)
+UI.COMPACT_WIDTH = 270               -- the Codex page: a compact right-side tracker, about as wide as a quest tracker
 UI.HEIGHT_MIN = 150          -- the Codex page shrinks the window to its content, never below this; other pages use UI.HEIGHT
 UI.pageDefs = {}            -- registration order = tab order
 UI.pages = {}               -- key -> { frame, refresh }
@@ -54,43 +55,56 @@ function UI.Icon(parent, kind)
 	return f
 end
 
---- Sets the window height keeping the TOP edge where it is (a CENTER or BOTTOM anchored frame would otherwise jump).
-function UI.FitHeight(h)
+--- Sets the window size keeping its TOP-LEFT corner where it is (a CENTER / RIGHT / BOTTOM anchored frame would otherwise jump).
+-- w is optional (the current width is kept).
+function UI.FitSize(w, h)
 	local frame = UI.frame
 	if not frame then return end
 	h = math.floor(math.max(UI.HEIGHT_MIN, h) + 0.5)
-	local old = UI.main.height or UI.HEIGHT
-	if h == old then return end
+	local oldH, oldW = UI.main.height or UI.HEIGHT, UI.main.width or UI.WIDTH
+	w = math.floor((w or oldW) + 0.5)
+	if h == oldH and w == oldW then return end
 	local ok, point, _, rel, x, y = pcall(frame.GetPoint, frame, 1)
-	frame:SetHeight(h)
-	UI.main.height = h
+	frame:SetSize(w, h)
+	UI.main.height, UI.main.width = h, w
 	if ok and type(point) == "string" and type(x) == "number" and type(y) == "number" then
-		if point:find("BOTTOM") then y = y + (old - h)
-		elseif not point:find("TOP") then y = y + (old - h) / 2 end
+		if point:find("BOTTOM") then y = y + (oldH - h)
+		elseif not point:find("TOP") then y = y + (oldH - h) / 2 end
+		if point:find("RIGHT") then x = x + (w - oldW)
+		elseif not point:find("LEFT") then x = x + (w - oldW) / 2 end
 		frame:ClearAllPoints()
 		frame:SetPoint(point, UIParent, rel or point, x, y)
 	end
 end
+function UI.FitHeight(h) UI.FitSize(nil, h) end
 
 local function savePosition(frame)
 	local ok, point, _, rel, x, y = pcall(frame.GetPoint, frame, 1)
 	if ok and type(point) == "string" and type(x) == "number" and type(y) == "number" then
-		P.SetWindowPos({ point = point, rel = rel or point, x = x, y = y, h = UI.main.height })
+		P.SetWindowPos({ point = point, rel = rel or point, x = x, y = y, h = UI.main.height, w = UI.main.width })
 	end
 end
 
 local function restorePosition(frame)
-	local pos = P.WindowPos()
-	-- the window was saved at the height it had then (the Codex page fits its content): start from that height, so fitting again keeps the top edge where it was
-	if type(pos) == "table" and type(pos.h) == "number" and pos.h >= UI.HEIGHT_MIN and pos.h <= 2000 then
-		UI.main.height = pos.h
-		frame:SetHeight(pos.h)
+	-- 0.2.6: the Codex window became a compact right-side tracker with a new default place. A position saved by an older layout is dropped once, so
+	-- nobody keeps the old big window dead-centre; after that the player's own position is remembered as before.
+	local ui = P.UI()
+	if ui.windowLayout ~= 3 then
+		ui.windowLayout = 3
+		ui.window = nil
 	end
+	local pos = P.WindowPos()
+	-- the window was saved at the size it had then (the Codex page fits its content): start from it, so fitting again keeps the corner where it was
+	local sw, sh = UI.COMPACT_WIDTH, UI.HEIGHT
+	if type(pos) == "table" and type(pos.h) == "number" and pos.h >= UI.HEIGHT_MIN and pos.h <= 2000 then sh = pos.h end
+	if type(pos) == "table" and type(pos.w) == "number" and pos.w >= 200 and pos.w <= 2000 then sw = pos.w end
+	UI.main.height, UI.main.width = sh, sw
+	frame:SetSize(sw, sh)
 	frame:ClearAllPoints()
 	if type(pos) == "table" and pos.point and type(pos.x) == "number" and type(pos.y) == "number" then
 		frame:SetPoint(pos.point, UIParent, pos.rel or pos.point, pos.x, pos.y)
 	else
-		frame:SetPoint("CENTER")
+		frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -240)   -- where the quest tracker normally sits: right side, below the minimap
 	end
 end
 
@@ -104,7 +118,7 @@ local function showPage(key)
 		for _, def in ipairs(UI.pageDefs) do if def.key == key then nav.button.text:SetText(def.label .. "  v") end end
 		nav.menu:Hide()
 	end
-	if key ~= "codex" then UI.FitHeight(UI.HEIGHT) end        -- only the Codex page fits its content
+	if key ~= "codex" then UI.FitSize(UI.WIDTH, UI.HEIGHT) end        -- only the Codex page is the small companion that fits its content
 	UI.Refresh()
 end
 UI.ShowPage = showPage
@@ -131,10 +145,10 @@ local function build()
 	bg:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
 	bg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
 	bg:SetColorTexture(0.04, 0.04, 0.05, 0.94)
-	local title = W.Line(frame, 10, W.DIM, "CENTER")
-	title:SetPoint("TOP", frame, "TOP", 0, -11)
-	title:SetWidth(200)
-	title:SetText("FOREVER CODEX  v" .. tostring(ForeverCodex and ForeverCodex.VERSION or "?"))
+	local title = W.Line(frame, 10, W.DIM, "LEFT")
+	title:SetPoint("TOPLEFT", frame, "TOPLEFT", 116, -11)
+	title:SetWidth(134)
+	title:SetText("FOREVER CODEX v" .. tostring(ForeverCodex and ForeverCodex.VERSION or "?"))
 	local sep = frame:CreateTexture(nil, "ARTWORK")
 	sep:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -33)
 	sep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -33)
@@ -144,7 +158,7 @@ local function build()
 	UI.main.height = UI.main.height or UI.HEIGHT
 	local nav = { items = {} }
 	UI.main.nav = nav
-	nav.button = W.Button(frame, 150, 22, "Codex  v", function() if nav.menu:IsShown() then nav.menu:Hide() else nav.menu:Show() end end)
+	nav.button = W.Button(frame, 104, 22, "Codex  v", function() if nav.menu:IsShown() then nav.menu:Hide() else nav.menu:Show() end end)
 	nav.button:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -6)
 	nav.menu = CreateFrame("Frame", nil, frame)
 	nav.menu:SetSize(150, 4 + 24 * #UI.pageDefs)

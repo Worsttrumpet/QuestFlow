@@ -20,6 +20,8 @@ local R = ns.Registry
 local E = {}
 ns.Engine = E
 
+-- The normal quest log holds 40 quests on WoW Forever (stated by the project owner; not probed from the client). A planner INPUT, not a measured value.
+E.QUEST_LOG_MAX = 40
 local DIFFERENT_CONTINENT = 5000   -- yards charged when two points cannot be compared directly
 local CHAIN_LENGTH = 8             -- quest-ish stops planned ahead
 local TRAVEL_MIN = 150             -- yards before a TRAVEL step is inserted
@@ -213,6 +215,14 @@ function E.Candidates(ctx)
 		env.warnings[#env.warnings + 1] = "No quest data packs are loaded."
 	end
 
+	-- the normal quest log holds at most QUEST_LOG_MAX quests, finished-but-not-handed-in ones included (so a ready hand-in also holds a slot).
+	-- Quest-starting ITEMS are separate: they live in the bags until used. Only what the quest log really reports is counted.
+	env.questLog = { used = ctx.logAvailable and ctx.logCount or nil, max = E.QUEST_LOG_MAX }
+	if env.questLog.used then
+		env.questLog.free = math.max(0, env.questLog.max - env.questLog.used)
+		env.questLog.full = env.questLog.used >= env.questLog.max
+	end
+
 	-- 1. collect from providers, 2. global filters
 	local all = collect(ctx, env)
 	local cands, inProgress, hints = {}, {}, {}
@@ -224,6 +234,8 @@ function E.Candidates(ctx)
 			bump(env.stats, "style")
 		elseif prefs.skipped[a.skipKey] and not a.pinned then
 			bump(env.stats, "skipped")
+		elseif env.questLog.full and a.type == "QUEST" and a.kind == "ACCEPT" then
+			bump(env.stats, "logFull")                    -- a full quest log cannot take another quest: never recommend one
 		elseif a.hereOnly then
 			hints[#hints + 1] = a
 		elseif a.kind == "OBJECTIVE" and not a.target then

@@ -39,116 +39,171 @@ local function text(fs) return fs.__text or "" end
 -- the quest with objective progress: a bar to scan at a glance
 local QUEST = { Q(1, "Worgen Bits Quest", 60, 0, { giverName = "Dalar", objCoords = { { map = 9001, x = 0.56, y = 0.5 } } }) }
 
-section("UI polish: every word still comes from the Presenter; the progress bar shows real counts only")
-do
-	local ns, W, c = uiWorld(QUEST, { [1] = { objectives = { { text = "4/6 Worgen Bits", have = 4, need = 6 } } } })
-	local card = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
-	check(card.now and card.now.progress == "4 / 6", "(setup) the Presenter reports 4 / 6")
-	check(text(c.nowTitle) == card.now.title and text(c.nowWho) == (card.now.who or "") and text(c.nowDetail) == (card.now.detail or "") and text(c.nowWhy) == (card.now.why or ""), "title, who, detail and why are exactly the Presenter's words")
-	check(c.nowBar.__shown and c.nowBar.fraction and math.abs(c.nowBar.fraction - 4 / 6) < 1e-9 and text(c.nowBar.text) == "4 / 6", "the bar shows 4 / 6 with its numbers readable beside it")
-	check(c.nowBar.fill.__w == math.floor((c.nowBar.trackW - 2) * (4 / 6) + 0.5), "and its fill is two thirds of the track")
-	check(text(c.nowInfo):find("4 / 6", 1, true) == nil and text(c.nowInfo) == (card.now.where or ""), "the counts moved into the bar; the info line keeps the distance")
-	-- 0 of 6: the bar is there, nothing is filled
-	local ns2, _, c2 = uiWorld(QUEST, { [1] = { objectives = { { text = "0/6 Worgen Bits", have = 0, need = 6 } } } })
-	check(c2.nowBar.__shown and text(c2.nowBar.text) == "0 / 6" and c2.nowBar.fraction == 0 and not c2.nowBar.fill.__shown, "0 of 6 shows an empty bar and the numbers")
-	-- the quest log did not report counts: no bar, no invented numbers, the old behaviour
-	local ns3, W3, c3 = uiWorld(QUEST, { [1] = {} })
-	local card3 = ns3.Presenter.Card(ns3.State.plan, ns3.State.ctx)
-	check(card3.now and card3.now.progress == nil, "(setup) no counts reported")
-	check(not c3.nowBar.__shown and text(c3.nowBar.text) == "" and not text(c3.nowInfo):find("%d+ / %d+"), "no bar and no made-up numbers when progress is unknown")
-	-- the bar only accepts real numbers
-	local b = c.nowBar
-	check(b:Set(nil, 6) == false and not b.__shown and b:Set(3, 0) == false and b:Set(-1, 5) == false and b:Set("3", 6) == false, "Set refuses missing, zero, negative and non-numeric counts")
-	check(b:Set(9, 6) == true and b.fraction == 1, "more than needed is capped at a full bar")
-	-- a plain quest with no progress, then an accept: nothing odd
-	local ns4, _, c4 = uiWorld({ Q(2, "Plain pickup", 50, 0, { giverName = "Gornek" }) }, {})
-	check(not c4.nowBar.__shown and text(c4.nowTitle):find("Accept", 1, true) ~= nil, "an accept has no bar")
-	check(#ns.errors == 0 and #ns3.errors == 0 and #ns4.errors == 0, "no errors")
-end
+-- ---------------------------------------------------------------- 0.2.6: the compact companion panel
 
-section("UI polish: type hierarchy and spacing in the NOW card")
-do
-	local ns, W, c = uiWorld(QUEST, { [1] = { objectives = { { text = "4/6 Worgen Bits", have = 4, need = 6 } } } })
-	local f = function(fs) return fs.__font and fs.__font.size end
-	check(f(c.nowTitle) == 16 and f(c.nowWho) == 12 and f(c.nowDetail) == 11 and f(c.nowWhy) == 10 and f(c.nowLabel) == 10, "section label 10 < supporting 10-11 < location 12 < the action 16")
-	check(f(c.nowTitle) > f(c.nowWho) and f(c.nowWho) > f(c.nowDetail) and f(c.nowDetail) > f(c.nowWhy), "the action is the largest, metadata the smallest")
-	check(c.nowTitle.__font.path == "Fonts\\FRIZQT__.TTF", "sizes use the game's own font file (no external font)")
-	check(f(c.nearRows[1].title) and f(c.nearRows[1].title) < f(c.nowTitle), "NEARBY text is smaller than the NOW action")
-	-- no overlap: every shown line starts below the previous one by at least its height
-	local order = { c.nowTitle, c.nowWho, c.nowDetail, c.nowBar, c.nowInfo, c.nowWhy }
-	local last, lastH = -1, 0
-	local okOrder, shown = true, 0
-	for _, el in ipairs(order) do
-		if el.__shown ~= false and (text(el) ~= "" or el == c.nowBar) and (el ~= c.nowBar or c.nowBar.__shown) then
-			local yy = y(el)
-			shown = shown + 1
-			if not yy or yy < last + lastH then okOrder = false end
-			last, lastH = yy or last, (el == c.nowBar) and 12 or 12
+local ZONES = { { key = "zone-a", label = "Zone A", map = 9001, quests = 1 }, { key = "zone-b", label = "Zone B", map = 9002, quests = 1 } }
+
+--- Quests the player has IN PROGRESS with no objective spot (as most are): { id, name, zone, objectives = { { text, have, need }, ... } }.
+local function logWorld(list, o)
+	o = o or {}
+	local ns = boot({ char = { level = o.level or 6 }, synthetic = true, loc = { map = o.map or 9001, x = 0.5, y = 0.5, zone = "Fixture Valley" } })
+	local quests, log = {}, {}
+	for _, q in ipairs(list) do
+		quests[#quests + 1] = { id = q.id, name = q.name, zone = q.zone, req = 1, giverName = "Giver " .. q.id, map = q.map, x = q.x, y = q.y, objCoords = q.objCoords }
+		log[#log + 1] = q
+	end
+	H.attPack(ns, quests, ZONES)
+	local W = H.world()
+	W.log, W.objectives, W.completed = {}, {}, {}
+	for _, q in ipairs(log) do
+		W.log[#W.log + 1] = { questID = q.id, title = q.name, complete = q.complete == true }
+		if q.objectives then
+			W.objectives[q.id] = {}
+			for i, ob in ipairs(q.objectives) do W.objectives[q.id][i] = { text = ob.text, type = "monster", finished = ob.have >= ob.need, numFulfilled = ob.have, numRequired = ob.need } end
 		end
 	end
-	check(okOrder and shown >= 4, "lines run top to bottom without overlapping (" .. shown .. " lines)")
-	check(c.nowBox.__h >= last + lastH + 10, "the card is tall enough for its last line plus the padding")
-	-- the card shrinks to what it shows
-	local nsE, WE, cE = uiWorld({}, {})
-	check(cE.nowBox.__h <= 100 and cE.nowBox.__h >= 88, "an empty NOW is compact (" .. tostring(cE.nowBox.__h) .. " px) but never below its minimum")
-	check(c.nowBox.__h > cE.nowBox.__h, "a NOW with progress is taller than an empty one")
-	check(not cE.nowIcon.__shown and text(cE.nowTitle) == "Nothing to recommend right now", "the empty state hides the marker square and says so plainly")
-	check(c.nowIcon.__shown and c.nowIcon.kind == "star", "a real recommendation shows the star")
-	check(#ns.errors == 0 and #nsE.errors == 0, "no errors")
+	ns.Prefs.FinishSetup()
+	ns.State.Recompute()
+	ns.UI.Open("codex")
+	return ns, W, ns.UI.main.codex
 end
 
-section("UI polish: NEARBY is smaller and fits its rows; NEW FOR YOU is narrower, secondary and fits its content")
+local function rowTexts(rows)
+	local out = {}
+	for _, r in ipairs(rows) do if r.__shown ~= false and r.cur then out[#out + 1] = tostring(r.label.__text) .. " " .. tostring(r.count.__text) end end
+	return out
+end
+
+local GRAVE = { id = 10, name = "Graverobbers", zone = "zone-a", objectives = { { text = "Rot Hide Graverobber slain", have = 1, need = 8 }, { text = "Rot Hide Mongrel slain", have = 6, need = 8 }, { text = "Embalming Ichor", have = 6, need = 8 } } }
+local DOOM = { id = 11, name = "Doom Weed", zone = "zone-a", objectives = { { text = "Doom Weed", have = 3, need = 10 } } }
+
+section("window: NOW shows EVERY unfinished objective of the current quest, finished ones drop out, and there is no 'why' in the window")
 do
-	local ns, W, c = uiWorld(QUEST, { [1] = { objectives = { { text = "4/6 Worgen Bits", have = 4, need = 6 } } } })
+	local ns, W, c = logWorld({ GRAVE })
+	local card = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	check(card.now and card.now.title == "Finish Graverobbers" and #card.now.objectives == 3, "(setup) the Presenter reports all three objectives")
+	check(c.nowTitle.__text == "Finish Graverobbers", "NOW names the quest")
+	local rows = rowTexts(c.nowRows)
+	check(#rows == 3 and rows[1] == "Rot Hide Graverobber slain 1/8" and rows[2] == "Rot Hide Mongrel slain 6/8" and rows[3] == "Embalming Ichor 6/8", "every unfinished objective is a row with its own count  [" .. table.concat(rows, " | ") .. "]")
+	check(math.abs(c.nowRows[1].fraction - 1 / 8) < 1e-9 and math.abs(c.nowRows[2].fraction - 6 / 8) < 1e-9, "each row has its own bar")
+	check(not c.nowDetail.__text or c.nowDetail.__text == "", "no 'and 1 more' sentence next to the rows")
+	-- progress changes: a finished objective disappears, the others update
+	W.objectives[10][2].numFulfilled, W.objectives[10][2].finished = 8, true
+	W.objectives[10][1].numFulfilled = 4
+	ns.State.Recompute()
+	rows = rowTexts(c.nowRows)
+	check(#rows == 2 and rows[1] == "Rot Hide Graverobber slain 4/8" and rows[2] == "Embalming Ichor 6/8", "a completed objective leaves the display and the counts update  [" .. table.concat(rows, " | ") .. "]")
+	-- no explanation of WHY anywhere in the window, but the Presenter (and /codex report) still carry it
+	local texts = {}
+	for _, f in ipairs(W.frames) do for _, fs in ipairs(f.__regions or {}) do if fs.__text then texts[#texts + 1] = fs.__text end end end
+	local all = table.concat(texts, "\n")
+	check(not all:find("Keeps you progressing", 1, true) and not all:find("Best use of your time", 1, true) and not all:find("Why", 1, true), "no 'why' text is drawn in the window")
+	check(ns.Presenter.Card(ns.State.plan, ns.State.ctx).now.why == "Keeps you progressing where you are", "the reason is still computed (for /codex report)")
+	check(c.nowWhy == nil, "the page has no 'why' line at all")
+	local text
+	rawset(ns.UI, "ShowReport", function(t) text = t end)
+	H.slash("report")
+	check(text and text:find("unfinished: Rot Hide Graverobber slain 4/8", 1, true) and text:find("ALSO COMPLETE THIS:", 1, true) and text:find("why: Keeps you progressing", 1, true)
+		and text:find("reason=", 1, true) and text:find("Recomputes:", 1, true) and text:find("PLAYTEST REPORT", 1, true), "/codex report keeps the 'why', the reason, the recompute count and now lists the unfinished objectives and the overlap")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("window: an objective whose counts the quest log did not report shows no made-up numbers")
+do
+	local ns, W, c = logWorld({ { id = 20, name = "Mystery chores", zone = "zone-a" } })
+	check(c.nowTitle.__text == "Finish Mystery chores" and #rowTexts(c.nowRows) == 0, "no rows, no bar")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("window: ALSO COMPLETE THIS lists only meaningful overlap, with a bar each")
+do
+	local FAR = { id = 12, name = "Far Quest", zone = "zone-b", objectives = { { text = "Thing", have = 1, need = 5 } } }
+	local MYSTERY = { id = 13, name = "Unknown Zone Quest", objectives = { { text = "Thing", have = 1, need = 5 } } }
+	local ns, W, c = logWorld({ GRAVE, DOOM, FAR, MYSTERY })
+	local list = ns.Overlap.List(ns.State.plan, ns.State.ctx)
+	check(ns.State.plan.now.quest == 10 and #list == 1 and list[1].title == "Doom Weed", "only the quest in the zone you are working in overlaps  [" .. #list .. "]")
+	check(c.alsoBox.__shown and c.alsoLabel.__text == "ALSO COMPLETE THIS", "the card is titled ALSO COMPLETE THIS")
+	local rows = rowTexts(c.alsoRows)
+	check(#rows == 1 and rows[1] == "Doom Weed 3/10" and math.abs(c.alsoRows[1].fraction - 0.3) < 1e-9, "it shows the quest and its count with a bar  [" .. table.concat(rows, " | ") .. "]")
+	local all = {}
+	for _, f in ipairs(W.frames) do for _, fs in ipairs(f.__regions or {}) do if fs.__text then all[#all + 1] = fs.__text end end end
+	local flat = table.concat(all, "\n")
+	check(not flat:find("Far Quest", 1, true) and not flat:find("Unknown Zone Quest", 1, true), "a quest in another zone, or with no known zone, is not offered")
+	check(not flat:find("NEARBY", 1, true), "there is no NEARBY card any more")
+	-- progress updates the row; a finished objective removes the quest from the section
+	W.objectives[11][1].numFulfilled = 5
+	ns.State.Recompute()
+	check(rowTexts(c.alsoRows)[1] == "Doom Weed 5/10", "the count follows the quest log (5/10)")
+	W.objectives[11][1].numFulfilled, W.objectives[11][1].finished = 10, true
+	W.log[2].complete = true                      -- (the quest log marks the quest ready to turn in)
+	ns.State.Recompute()
+	check(#ns.Overlap.List(ns.State.plan, ns.State.ctx) == 0 and not c.alsoBox.__shown, "at 10/10 it leaves the section, and an empty section is not drawn")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("window: ALSO COMPLETE THIS - several unfinished objectives, a cap, skipped quests, and no overlap on a hand-in trip")
+do
+	local multi = { id = 14, name = "Two things", zone = "zone-a", objectives = { { text = "Alpha", have = 2, need = 4 }, { text = "Beta", have = 0, need = 3 }, { text = "Gamma", have = 3, need = 3 } } }
+	local more = {}
+	for i = 1, 4 do more[#more + 1] = { id = 30 + i, name = "Extra " .. i, zone = "zone-a", objectives = { { text = "Thing", have = i, need = 10 } } } end
+	local list = { GRAVE, multi }
+	for _, q in ipairs(more) do list[#list + 1] = q end
+	local ns, W, c = logWorld(list)
+	local items = ns.Overlap.List(ns.State.plan, ns.State.ctx)
+	check(#items <= ns.Overlap.MAX_QUESTS, "at most " .. ns.Overlap.MAX_QUESTS .. " quests are listed (it is not a quest list)  [" .. #items .. "]")
+	local two
+	for _, it in ipairs(items) do if it.title == "Two things" then two = it end end
+	check(two == nil or (#two.objectives == 2 and two.objectives[1].text == "Alpha" and two.objectives[2].text == "Beta"), "a quest with several unfinished objectives lists only the unfinished ones")
+	-- a skipped quest is not offered
+	ns.Prefs.Skip("QT:11")
+	ns.State.Recompute()
+	for _, it in ipairs(ns.Overlap.List(ns.State.plan, ns.State.ctx)) do check(it.quest ~= 11, "a skipped quest is not offered") end
+	-- NOW is a hand-in: working objectives elsewhere is not 'overlap' with it
+	local done = { id = 40, name = "Finished task", zone = "zone-a", complete = true, objectives = { { text = "Thing", have = 5, need = 5 } }, map = 9001, x = 0.505, y = 0.5 }
+	local ns2 = logWorld({ done, DOOM })
+	check(ns2.State.plan.now and ns2.State.plan.now.kind == "TURN_IN" and #ns2.Overlap.List(ns2.State.plan, ns2.State.ctx) == 0, "with a hand-in as NOW there is no objective overlap")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end
+
+section("window: located objectives overlap only when they are on the same patch of ground")
+do
+	local near = { id = 50, name = "Near objective", zone = "zone-a", map = 9001, x = 0.52, y = 0.5, objCoords = { { map = 9001, x = 0.52, y = 0.5 } }, objectives = { { text = "Thing", have = 1, need = 4 } } }
+	local far = { id = 51, name = "Far objective", zone = "zone-a", map = 9001, x = 0.95, y = 0.5, objCoords = { { map = 9001, x = 0.95, y = 0.5 } }, objectives = { { text = "Thing", have = 1, need = 4 } } }
+	local ns = logWorld({ GRAVE, near, far })
+	local titles = {}
+	for _, it in ipairs(ns.Overlap.List(ns.State.plan, ns.State.ctx)) do titles[#titles + 1] = it.title end
+	local flat = table.concat(titles, ",")
+	check(not flat:find("Far objective", 1, true), "an objective whose spot is known and far away is not 'also complete this'  [" .. flat .. "]")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("window: a small movable companion panel, a new default place, nothing else changed")
+do
+	local ns, W, c = logWorld({ GRAVE, DOOM })
 	local UI = ns.UI
-	check(c.nearBox.__h == 56, "NEARBY with nothing to say is the minimum height, not a big empty box (" .. tostring(c.nearBox.__h) .. ")")
-	ns.Nearby.List = function() return { { title = "Rest here", detail = "A short stop.", where = "Right here", icon = "diamond" }, { title = "Second", detail = "More.", where = "Nearby", icon = "diamond" }, { title = "Third", detail = "Even more.", where = "Nearby", icon = "diamond" } } end
-	UI.Refresh()
-	check(c.nearBox.__h > 56 and y(c.nearRows[2].title) > y(c.nearRows[1].title) and y(c.nearRows[3].title) > y(c.nearRows[2].title), "three rows make it taller and are spaced evenly down")
-	check(y(c.nearRows[1].detail) > y(c.nearRows[1].title), "each row's detail sits under its title")
-	check(c.nearBox.__points[5] == -(22 + c.nowBox.__h + 8), "NEARBY starts one gap below NOW (the card height is the measured one)")
-	-- NEW FOR YOU, one item and then three
-	local active
-	ns.NewForYou.Active = function() return active end
-	active = { level = 6, items = { { title = "New quest: One" } } }
-	UI.Refresh()
-	check(c.nfyBox.__shown and c.nfyBox.__w == 192 and c.nowBox.__w == 304 and c.nfyBox.__w < c.nowBox.__w, "NEW FOR YOU is narrower than NOW")
-	local h1 = c.nfyBox.__h
-	active = { level = 6, items = { { title = "New quest: One", detail = "Talk to someone." }, { title = "New quest: Two", detail = "Elsewhere." }, { title = "New quest: Three" } } }
-	UI.Refresh()
-	check(c.nfyBox.__h > h1, "it grows with its content (1 item " .. h1 .. " px, 3 items " .. c.nfyBox.__h .. " px)")
-	check(h1 < c.nowBox.__h + c.nearBox.__h + 8, "and a short one is not a full-height panel")
-	check(c.nfyBox.__points[5] == c.nowBox.__points[5] and c.nfyBox.__points[4] == 312, "it sits level with NOW, in the right column")
-	check(text(c.nfyLabel) == "NEW FOR YOU" and text(c.nfyLevel) == "Level 6", "its words are unchanged")
-	-- it never replaces or moves NOW's content
-	local nowTitle = text(c.nowTitle)
-	active = nil
-	UI.Refresh()
-	check(not c.nfyBox.__shown and c.nowBox.__w == 504 and text(c.nowTitle) == nowTitle, "when it goes, NOW keeps its words and takes the full width")
-	check(#ns.errors == 0, "no errors")
-end
-
-section("UI polish: restrained accents - warm gold NOW, cool NEARBY, neutral NEW FOR YOU; a texture border; nothing animated")
-do
-	local ns, W, c = uiWorld(QUEST, {})
-	local Wd = ns.Widgets
-	local a, n, f = Wd.STYLE_NOW.accent, Wd.STYLE_NEAR.accent, Wd.STYLE_NEW.accent
-	check(a[1] > a[3] and a[1] > 0.8 and a[2] > a[3], "NOW's accent is warm gold/amber (red and green high, blue low)")
-	check(n[3] > n[1] and n[3] > n[2] and n[1] < 0.6, "NEARBY's accent is a cool, muted violet-blue")
-	check(f[1] > f[3] and f[1] < a[1] + 0.001 and Wd.STYLE_NEW.side == "top", "NEW FOR YOU is a quieter neutral gold with a top edge")
-	for name, st in pairs({ now = Wd.STYLE_NOW, near = Wd.STYLE_NEAR, new = Wd.STYLE_NEW }) do
-		local maxc = math.max(st.accent[1], st.accent[2], st.accent[3])
-		local minc = math.min(st.accent[1], st.accent[2], st.accent[3])
-		check(maxc - minc < 0.75 and st.bg[4] < 1, name .. ": no neon (a modest spread between the strongest and weakest channel) and a soft fill")
-	end
-	for _, box in ipairs({ c.nowBox, c.nearBox, c.nfyBox }) do
-		check(box.edge and box.bg and box.accent, "each card has a 1 px border, a fill and a 2 px accent edge")
-	end
-	check(c.nowBox.accent.__w == 2 and c.nfyBox.accent.__h == 2, "the accent is 2 px (left for NOW and NEARBY, top for NEW FOR YOU)")
-	local src = ""
-	for _, f in ipairs({ "Widgets.lua", "PageCodex.lua", "Main.lua" }) do src = src .. H.readFile(H.addonDir .. "/UI/" .. f):gsub("%-%-[^\n]*", "") end
-	check(not src:find("Animation", 1, true) and not src:find("SetAlpha", 1, true) and not src:find("AnimationGroup", 1, true), "no animation")
-	check(#ns.errors == 0, "no errors")
+	check(UI.COMPACT_WIDTH >= 250 and UI.COMPACT_WIDTH <= 300 and UI.frame.__w == UI.COMPACT_WIDTH, "the Codex window is a narrow panel  [" .. tostring(UI.frame.__w) .. " px]")
+	check(c.nowBox.__w == UI.COMPACT_WIDTH - 16 and c.alsoBox.__w == UI.COMPACT_WIDTH - 16, "its cards fill that width")
+	check(UI.frame.__h < UI.HEIGHT, "and its height fits the content")
+	check(UI.frame.__movable == true and UI.frame.__drag and UI.frame.__drag[1] == "LeftButton", "it can be dragged")
+	local p = UI.frame.__points
+	check(p[1] == "TOPRIGHT" and p[4] < 0 and p[5] < -150, "its default place is the right side where the quest tracker sits, below the minimap  [" .. tostring(p[1]) .. " " .. tostring(p[4]) .. "," .. tostring(p[5]) .. "]")
+	UI.ShowPage("journey")
+	check(UI.frame.__w == UI.WIDTH, "the other pages keep the full width")
+	UI.ShowPage("codex")
+	check(UI.frame.__w == UI.COMPACT_WIDTH, "and the Codex page is compact again")
+	-- an old saved position (from the big window) is dropped once; a new one is kept
+	local saved = { version = 1, ui = { window = { point = "CENTER", rel = "CENTER", x = 0, y = 0, h = 430, w = 520 } }, chars = {}, diag = {} }
+	local nsOld = boot({ char = { level = 6 }, synthetic = true, savedVars = saved })
+	nsOld.UI._Build()
+	check(saved.ui.windowLayout == 3 and saved.ui.window == nil, "a position saved by the old big window is forgotten once")
+	local saved2 = { version = 1, ui = { windowLayout = 3, window = { point = "TOPLEFT", rel = "TOPLEFT", x = 50, y = -60, h = 300, w = 270 } }, chars = {}, diag = {} }
+	local nsNew = boot({ char = { level = 6 }, synthetic = true, savedVars = saved2 })
+	nsNew.Prefs.FinishSetup()
+	nsNew.UI._Build()
+	nsNew.State.Recompute()
+	local pt = nsNew.UI.frame.__points
+	check(pt[1] == "TOPLEFT" and pt[4] == 50 and pt[5] == -60 and nsNew.UI.frame.__w == 270, "a position saved by the new layout is remembered")
+	check(#ns.errors == 0 and #nsOld.errors == 0 and #nsNew.errors == 0, "no errors")
 end
 
 section("UI polish: the shell keeps its behaviour (dropdown, drag, position) and gains a border and a title")
@@ -156,10 +211,10 @@ do
 	local ns, W, c = uiWorld(QUEST, {})
 	local UI = ns.UI
 	check(UI.frame.__movable == true and UI.frame.__drag and UI.frame.__drag[1] == "LeftButton" and UI.frame.__clamped == true, "the window is still movable, drag-registered and clamped")
-	check(UI.WIDTH == 520 and UI.HEIGHT == 430 and UI.frame.__w == 520, "the window width is unchanged (the height fits the Codex page, see below)")
+	check(UI.WIDTH == 520 and UI.HEIGHT == 430 and UI.frame.__w == UI.COMPACT_WIDTH, "the full-size window is still 520 x 430; the Codex page is the compact width (the height fits it, see below)")
 	check(UI.main.nav.button.text.__text == "Codex  v", "the dropdown button is unchanged")
 	local found
-	for _, fs in ipairs(W.fonts) do if fs.__text == "FOREVER CODEX  v" .. ForeverCodex.VERSION then found = true end end
+	for _, fs in ipairs(W.fonts) do if fs.__text == "FOREVER CODEX v" .. ForeverCodex.VERSION then found = true end end
 	check(found, "a small title with the version sits in the header")
 	local before = ns.State.computeCount
 	UI.Refresh(); UI.Refresh()
@@ -179,7 +234,7 @@ do
 	ns.State.Recompute()
 	ns.UI.Open("codex")
 	local c = ns.UI.main.codex
-	check(c.nowTitle.__font == nil and text(c.nowTitle) ~= "" and c.nowBox.__h >= 88, "without the font file the text keeps its normal size and the card still lays out")
+	check(c.nowTitle.__font == nil and text(c.nowTitle) ~= "" and c.nowBox.__h >= 56, "without the font file the text keeps its normal size and the card still lays out")
 	check(ns.Widgets.Font(c.nowTitle, 16) == nil, "W.Font reports that it could not size it")
 	check(#ns.errors == 0, "no errors")
 	-- the stub records its own bookkeeping in fields named __x; a real FontString has none, so the real code must never read them
@@ -196,11 +251,11 @@ end
 section("UI polish: PageCodex only draws; the card system is reusable by a future panel")
 do
 	local src = H.readFile(H.addonDir .. "/UI/PageCodex.lua"):gsub("%-%-[^\n]*", "")
-	for _, bad in ipairs({ "ns.Planner", "ns.Engine", "ns.Registry", "ns.Telemetry", "ns.Navigation", "ns.QuestieBridge", "ns.Contract", "ns.Markers", "ns.Pins", "ns.Arrow" }) do
+	for _, bad in ipairs({ "ns.Planner", "ns.Engine", "ns.Registry", "ns.Telemetry", "ns.Navigation", "ns.QuestieBridge", "ns.Contract", "ns.Arrow" }) do
 		check(src:find(bad, 1, true) == nil, "PageCodex.lua does not touch " .. bad)
 	end
 	check(src:find("ns%.Prefs%.Set%u") == nil and src:find("ns%.Prefs%.Skip") == nil and src:find("ns%.Prefs%.Add") == nil, "and changes no preference (it only asks whether setup is done)")
-	check(src:find("ns.Presenter", 1, true) and src:find("ns.Nearby", 1, true) and src:find("ns.NewForYou", 1, true) and src:find("ns.Party", 1, true), "it reads only the Presenter, Nearby, NewForYou and Party view models")
+	check(src:find("ns.Presenter", 1, true) and src:find("ns.NewForYou", 1, true) and src:find("ns.Party", 1, true) and not src:find("ns.Overlap", 1, true) and not src:find("ns.Nearby", 1, true), "it reads only the Presenter (which asks Overlap), NewForYou and Party view models")
 	-- a future panel (for example a dungeon recommendation) is a style plus lines in a stack: nothing dungeon-specific exists in the code
 	for _, f in ipairs({ "Widgets.lua", "PageCodex.lua" }) do
 		local code = H.readFile(H.addonDir .. "/UI/" .. f):gsub("%-%-[^\n]*", ""):lower()

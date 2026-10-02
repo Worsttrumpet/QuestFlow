@@ -105,6 +105,7 @@ W.SOFT_GREEN = { 0.56, 0.80, 0.52 }          -- distance / good news: muted, not
 --- Card styles. bg = fill, edge = 1 px border, accent = the 2 px edge, label = section label colour, side = which edge carries the accent.
 W.STYLE_NOW  = { bg = { 0.17, 0.13, 0.07, 0.92 }, edge = { 0.52, 0.40, 0.14, 0.95 }, accent = { 0.92, 0.70, 0.20, 1 }, label = { 0.92, 0.74, 0.30 }, side = "left" }
 W.STYLE_NEAR = { bg = { 0.08, 0.09, 0.14, 0.88 }, edge = { 0.22, 0.23, 0.36, 0.85 }, accent = { 0.46, 0.42, 0.78, 0.95 }, label = { 0.62, 0.60, 0.86 }, side = "left" }
+W.STYLE_READY = { bg = { 0.07, 0.12, 0.08, 0.88 }, edge = { 0.20, 0.34, 0.22, 0.85 }, accent = { 0.45, 0.72, 0.42, 0.95 }, label = { 0.56, 0.80, 0.52 }, side = "left" }
 W.STYLE_NEW  = { bg = { 0.12, 0.11, 0.08, 0.88 }, edge = { 0.38, 0.33, 0.20, 0.85 }, accent = { 0.74, 0.64, 0.32, 0.95 }, label = { 0.82, 0.72, 0.40 }, side = "top" }
 
 local sizes = setmetatable({}, { __mode = "k" })       -- FontString -> the size W.Font gave it
@@ -289,4 +290,61 @@ function W.Divider(card, color)
 	local d = tex(card, "ARTWORK", color or { 0.40, 0.34, 0.18, 0.55 })
 	d:SetSize(1, 1)
 	return d
+end
+
+--- A compact progress row: a label on the left, "have/need" on the right and a thin bar under both (about 20 px tall).
+-- It never invents numbers: without real counts the label is shown alone and the bar stays hidden.
+-- row:Set(label, have, need) shows it; row:Place(card, x, y, width) puts it at an offset inside a card; row:Clear() hides it.
+W.ROW_H = 20
+function W.ProgressRow(parent)
+	local r = CreateFrame("Frame", nil, parent)
+	r.label = W.Line(r, 11, W.TEXT, "LEFT")
+	r.count = W.Line(r, 11, W.DIM, "RIGHT")
+	r.track = tex(r, "BORDER", { 0.05, 0.05, 0.05, 0.95 })
+	r.fill = tex(r, "ARTWORK", { 0.50, 0.68, 0.34, 0.95 })
+	function r:Place(card, x, y, width)
+		self:ClearAllPoints()
+		self:SetPoint("TOPLEFT", card, "TOPLEFT", x, -y)
+		self:SetSize(width, W.ROW_H)
+		self.width = width
+		self.label:ClearAllPoints()
+		self.label:SetPoint("TOPLEFT", self, "TOPLEFT", 0, 0)
+		self.label:SetWidth(width - 40)
+		self.count:ClearAllPoints()
+		self.count:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, 0)
+		self.count:SetWidth(40)
+		self.track:ClearAllPoints()
+		self.track:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -15)
+		self.track:SetSize(width, 4)
+		self.fill:ClearAllPoints()
+		self.fill:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -15)
+		self:Set(self.cur and self.cur[1], self.cur and self.cur[2], self.cur and self.cur[3])
+	end
+	function r:Set(label, have, need)
+		self.cur = { label, have, need }
+		self.label:SetText(label or "")
+		if type(have) == "number" and type(need) == "number" and need > 0 and have >= 0 then
+			local frac = math.min(1, have / need)
+			self.fraction = frac
+			self.count:SetText(string.format("%d/%d", have, need))
+			local fw = math.floor((self.width or 100) * frac + 0.5)
+			self.fill:SetSize(math.max(1, fw), 4)
+			if fw <= 0 then self.fill:Hide() else self.fill:Show() end
+			self.track:Show()
+		else
+			self.fraction = nil
+			self.count:SetText("")
+			self.track:Hide()
+			self.fill:Hide()
+		end
+		self:Show()
+	end
+	function r:Clear()
+		self.cur, self.fraction = nil, nil
+		self.label:SetText("")
+		self.count:SetText("")
+		self:Hide()
+	end
+	r:Clear()
+	return r
 end

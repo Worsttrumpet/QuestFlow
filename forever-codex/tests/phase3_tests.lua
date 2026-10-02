@@ -112,7 +112,7 @@ do
 	check(ns.Presenter.Card(p, ns.State.ctx).thenLine == "Accept Near pickup", "a near THEN is one short line")
 	local turn = { id = "Q:7:TURN_IN", kind = "TURN_IN", type = "QUEST", quest = 7, name = "Hand in", giver = "Gornek", contract = 1, targets = far.targets }
 	p.thenAction = turn
-	check(ns.Presenter.Card(p, ns.State.ctx).thenLine == "Turn in Hand in", "a turn-in THEN is shown even when it is far")
+	check(ns.Presenter.Card(p, ns.State.ctx).thenLine == nil, "a turn-in is never a THEN line: finished quests are listed under READY TO TURN IN instead")
 	-- nothing to recommend
 	local ns2 = world(6, {}, {})
 	local c2 = ns.Presenter.Card(ns2.State.plan, ns2.State.ctx)

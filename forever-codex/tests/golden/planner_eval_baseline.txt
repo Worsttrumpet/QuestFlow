@@ -1,5 +1,5 @@
 A0 Scorpid / Vile / Cactus, REAL DATA AS IT IS | NOW=Accept: The Great Outdoors | ALSO DO=Accept: The Adventurer | THEN=Accept: Vanquish the Betrayers | seq=Q:96604:ACCEPT>Q:784:ACCEPT>Q:791:ACCEPT | net=67.2762 | secs=159.25 | stops=41 | reminders=2
-A1 Scorpid / Vile / Cactus, with the playtest-observed objective positions | NOW=Turn in: Galgar's Cactus Apple Surprise | ALSO DO=Accept: Lazy Peons | THEN=Accept: The Great Outdoors | seq=Q:4402:TURN_IN>Q:96604:ACCEPT>Q:784:ACCEPT | net=66.5259 | secs=238.41 | stops=43 | reminders=0
+A1 Scorpid / Vile / Cactus, with the playtest-observed objective positions | NOW=Continue: Sting of the Scorpid | ALSO DO=Accept: Carry Your Weight | THEN=Accept: The Great Outdoors | seq=Q:789:OBJECTIVE>Q:96604:ACCEPT>Q:784:ACCEPT | net=63.9098 | secs=247.97 | stops=43 | reminders=0
 A2 Scorpid / Vile / Cactus, standing at the camp turn-ins | NOW=Turn in: Galgar's Cactus Apple Surprise | ALSO DO=Accept: Lazy Peons | THEN=Accept: The Great Outdoors | seq=Q:4402:TURN_IN>Q:96604:ACCEPT>Q:784:ACCEPT | net=78.5981 | secs=198.17 | stops=43 | reminders=0
 D1 Lazy Peons density (camp), real data + illustrative objective placement | NOW=Continue: Lazy Peons | ALSO DO=Accept: Sarkoth | THEN=Accept: The Great Outdoors | seq=Q:4641:ACCEPT>Q:96604:ACCEPT>Q:784:ACCEPT | net=60.2091 | secs=312.80 | stops=43 | reminders=0
 E2 Chain credit on real data: two ready turn-ins | NOW=Turn in: Lazy Peons | ALSO DO=Turn in: Cutting Teeth | THEN=Accept: The Great Outdoors | seq=Q:4641:ACCEPT>Q:96604:ACCEPT>Q:784:ACCEPT | net=159.1907 | secs=278.70 | stops=40 | reminders=0
@@ -57,6 +57,6 @@ SWEEP (REVIEW): K: a pickup on another continent next to one local pickup
 SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objectives, a pickup 250 yd south)
   strategy | plan
   efficient      | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
-  fast           | NOW=Turn in: The ready quest | ALSO DO=(none) | THEN=(none)
+  fast           | NOW=Continue: Local objective one | ALSO DO=(none) | THEN=Turn in: The ready quest
   questing_only  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
   completionist  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away

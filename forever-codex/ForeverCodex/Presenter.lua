@@ -5,8 +5,11 @@
 -- fact is unknown the sentence is simply omitted (it is never invented).
 --
 --   Presenter.Card(plan, ctx) -> {
---     now    = { title, who, detail, progress, where, why, icon, kind } | nil
+--     now    = { title, who, detail, progress, objectives = { { text, have, need } }, where, why, icon, kind } | nil
+--              (`why` is for /codex report: the window does not draw it)
 --     alsoDo = same | nil          (at most ONE, exactly the Planner's alsoDo)
+--     ready  = { { title, who, where } }     READY TO TURN IN: finished quests that are not NOW
+--     also   = { { kind = "objective", title, objectives = { { text, have, need } } } | { kind = "action", title, where } }   ALSO COMPLETE THIS
 --     thenLine = "Turn in X" | nil (omitted when it is far away or says little)
 --     empty  = { title, lines } | nil
 --     reminders = { "Quest name", ... }    quests in the log Codex cannot place on the map
@@ -94,6 +97,9 @@ local function describe(a, plan, ctx, icon)
 		if first then
 			it.detail = first .. (#todo > 1 and string.format(" (and %d more)", #todo - 1) or "") .. "."
 		end
+		-- EVERY unfinished objective the quest log reports (finished ones are left out), so the player sees all that remains
+		it.objectives = {}
+		for _, o in ipairs(todo) do it.objectives[#it.objectives + 1] = { text = Pr.CleanObjective(o.text) or "objective", have = o.have, need = o.need } end
 	elseif a.kind == "TURN_IN" then
 		it.title = "Turn in " .. name
 		it.who = a.giver
@@ -125,16 +131,23 @@ function Pr.Card(plan, ctx)
 			if #lines < 3 and not w:find("^Not available on this client") then lines[#lines + 1] = w end
 		end
 		card.empty = { title = "Nothing to recommend right now", lines = lines }
+		card.also, card.ready = {}, ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
+		card.slots = Pr.Slots(ctx)
 		return card
 	end
 	card.now = describe(plan.now, plan, ctx, "star")
+	-- ALSO COMPLETE THIS: other unfinished objectives that fit with NOW (ns.Overlap), plus the planner's own ALSO DO
+	card.also = ns.Overlap and ns.Overlap.List(plan, ctx) or {}
+	-- READY TO TURN IN: finished quests waiting for the right moment (never promoted to NOW just because they are finished)
+	card.ready = ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
+	card.slots = Pr.Slots(ctx)
 	if plan.alsoDo then
 		card.alsoDo = describe(plan.alsoDo, plan, ctx, plan.alsoDo.type == "FLIGHT" and "triangle" or "diamond")
 	end
 	local t = plan.thenAction
 	if t then
-		local show = t.kind == "TURN_IN"
-		if not show then
+		local show = false                                -- (a THEN hand-in would repeat READY TO TURN IN)
+		if t.kind ~= "TURN_IN" then
 			local a, b = Pl.Locate(plan.now), Pl.Locate(t)
 			local d = a and b and E.Distance(ctx, a, b) or nil
 			show = d ~= nil and d < E.DIFFERENT_CONTINENT and d <= Pr.THEN_MAX_YD
@@ -145,6 +158,13 @@ function Pr.Card(plan, ctx)
 		end
 	end
 	return card
+end
+
+--- The normal quest-log usage the quest log reports: { used, max, free, full } or nil when it cannot be read.
+function Pr.Slots(ctx)
+	if not (ctx and ctx.logAvailable and type(ctx.logCount) == "number") then return nil end
+	local max = E.QUEST_LOG_MAX
+	return { used = ctx.logCount, max = max, free = math.max(0, max - ctx.logCount), full = ctx.logCount >= max }
 end
 
 --- "Thrall - level 25 Troll Warrior"
