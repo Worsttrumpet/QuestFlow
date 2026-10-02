@@ -8,5 +8,5 @@ ForeverCodex/     the addon (copy this folder to Interface\AddOns\)
 generator/        deterministic data-pack generator + tests (reads the local ATT snapshot and the M8.13 observed table)
 tests/            Lua 5.1 stub-client tests:   lua5.1 run_codex_tests.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide
 docs/             architecture, provenance decision, real-client test guide
-dist/             packaged addon zip for testers (built by generator/package_addon.py)
+dist/             packaged addon zips for testers, one folder per minor version (dist/0.4/ ...) (built by generator/package_addon.py)
 ```

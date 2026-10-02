@@ -49,10 +49,15 @@ def test_older_zips_are_left_alone(tmp_path):
 
 
 def test_committed_package_matches_the_addon_folder():
-    dist = P.HERE.parent / "dist" / f"ForeverCodex-{P.version()}.zip"
+    dist = P.default_out() / f"ForeverCodex-{P.version()}.zip"
     if not dist.exists():
         return
     z = zipfile.ZipFile(dist)
     for p in sorted(P.ADDON.rglob("*")):
         if p.is_file():
             assert z.read("ForeverCodex/" + p.relative_to(P.ADDON).as_posix()) == p.read_bytes(), p.name
+
+
+def test_default_output_is_a_folder_per_minor_version():
+    assert P.default_out().name == ".".join(P.version().split(".")[:2])
+    assert P.default_out().parent == P.HERE.parent / "dist"

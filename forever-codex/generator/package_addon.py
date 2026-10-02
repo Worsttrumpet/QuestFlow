@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Packages forever-codex/ForeverCodex into a deterministic zip for testers (fixed timestamps, sorted entries).
 
-Usage: python3 package_addon.py [--out DIR]   ->  DIR/ForeverCodex-<version>.zip   (default: forever-codex/dist)
+Usage: python3 package_addon.py [--out DIR]   ->  DIR/ForeverCodex-<version>.zip   (default: forever-codex/dist/<major>.<minor>/)
 
 Versioning (see forever-codex/docs/RELEASING.md): every packaged code change gets a NEW patch version (0.2.1, 0.2.2, ...), set in
 ForeverCodex.toc (## Version) and Core.lua (C.VERSION), which must match. A zip filename is never reused: if
 ForeverCodex-<version>.zip already exists with different contents this refuses to overwrite it and tells you to bump the version.
-Older zips in dist/ are left alone.
+Older zips in dist/ are left alone. Each minor version has its own folder (dist/0.4/ holds 0.4.0 .. 0.4.9).
 """
 import argparse
 import re
@@ -54,6 +54,11 @@ def _zip_bytes() -> bytes:
     return buf.getvalue()
 
 
+def default_out() -> Path:
+    """dist/<major>.<minor>/ : one folder per minor version (0.4.0 .. 0.4.9 share dist/0.4/)."""
+    return HERE.parent / "dist" / ".".join(version().split(".")[:2])
+
+
 def build(out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / f"ForeverCodex-{version()}.zip"
@@ -67,5 +72,5 @@ def build(out_dir: Path) -> Path:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, default=HERE.parent / "dist")
-    print(build(ap.parse_args().out))
+    ap.add_argument("--out", type=Path, default=None)
+    print(build(ap.parse_args().out or default_out()))
