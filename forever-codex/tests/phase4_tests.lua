@@ -413,7 +413,7 @@ do
 	check(#ns.errors == 0, "no caught errors")
 end
 
-section("UI: dropdown navigation, a compact NOW card, NEW FOR YOU below it")
+section("UI: a tracker plus a tabbed options window (no dropdown), a compact NOW card, NEW FOR YOU below it")
 do
 	local ns, W = nfyWorld(5)
 	ns.UI.Open("codex")
@@ -421,17 +421,21 @@ do
 	local labels = {}
 	for _, f in ipairs(W.frames) do if f.__kind == "Button" and f.text then labels[f.text.__text] = true end end
 	check(not labels["<"] and not labels[">"] or ns.Prefs.SetupDone(), "the Codex page has no back / forward arrows")
-	check(UI.main.nav and UI.main.nav.button.text.__text == "Codex  v" and not UI.main.nav.menu.__shown and UI.main.tabs == nil, "one dropdown button replaces the tab row")
-	click(UI.main.nav.button)
-	check(UI.main.nav.menu.__shown, "clicking it expands the list")
-	local items = {}
-	for k in pairs(UI.main.nav.items) do items[#items + 1] = k end
-	table.sort(items)
-	check(table.concat(items, ",") == "appendices,codex,journey,world", "Codex, World, Journey and Appendices are in it")
-	click(UI.main.nav.items.journey)
-	check(UI.current == "journey" and not UI.main.nav.menu.__shown and UI.main.nav.button.text.__text == "Journey  v", "choosing one goes there and closes the list")
-	click(UI.main.nav.button); click(UI.main.nav.items.codex)
-	check(UI.current == "codex", "and back")
+	check(UI.main.nav == nil and not labels["Codex  v"] and not labels["Appendices  v"], "there is no dropdown button (and no arrow glyph) any more")
+	check(UI.main.optionsButton and UI.main.optionsButton.text.__text == "Options" and UI.options == nil, "the tracker has a small Options button; the options window is not built until asked for")
+	click(UI.main.optionsButton)
+	check(UI.options and UI.options.__shown and UI.optionsKey == "options" and UI.current == "options", "clicking it opens the options window on Codex Options")
+	local tabs = {}
+	for k, t in pairs(UI.main.tabs) do tabs[#tabs + 1] = k .. "=" .. t.text.__text end
+	table.sort(tabs)
+	check(table.concat(tabs, ",") == "appendices=Appendices,journey=Journey,options=Codex Options,world=World", "its tabs are Codex Options, World, Journey and Appendices")
+	click(UI.main.tabs.journey)
+	check(UI.current == "journey" and UI.optionsKey == "journey" and UI.pages.journey.frame.__shown and not UI.pages.world.frame.__shown, "choosing a tab shows that page")
+	click(UI.main.tabs.appendices); click(UI.main.tabs.world); click(UI.main.tabs.options)
+	check(UI.current == "options", "and back")
+	check(UI.frame.__shown, "the tracker stays where it is while the options are open")
+	UI.ToggleOptions()
+	check(not UI.options.__shown, "the options window toggles")
 	check(c.nowBox.__w == ns.UI.COMPACT_WIDTH - 16, "the NOW card fills the compact panel")
 	check(not c.nfyBox.__shown, "and NEW FOR YOU is not shown")
 	W.char.level = 6
@@ -878,12 +882,13 @@ do
 	check(d[1] and d[1].l == "Forever Codex" and d[1].r == "v" .. ForeverCodex.VERSION, "the title is on the left and the version on the right")
 	check(d[1] and d[1].lc[1] == 1 and d[1].lc[2] == 0.82 and d[1].rc[1] == 0.6, "the title is gold and the version grey")
 	check(tip.single[1] == " ", "a blank line separates the title from the rows")
-	check(d[2] and d[2].l == "Left Click" and d[2].r == "Open / close Codex", "row: Left Click opens and closes Codex")
-	check(d[3] and d[3].l == "Drag" and d[3].r == "Move this button", "row: Drag moves the button")
+	check(d[2] and d[2].l == "Left Click" and d[2].r == "Show / hide the tracker", "row: Left Click shows and hides the tracker")
+	check(d[3] and d[3].l == "Right Click" and d[3].r == "Options", "row: Right Click opens the options")
+	check(d[4] and d[4].l == "Drag" and d[4].r == "Move this button", "row: Drag moves the button")
 	check(d[2] and d[2].lc[3] > d[2].lc[1] and d[2].rc[1] == 1 and d[2].rc[2] == 1 and d[2].rc[3] == 1, "inputs are blue, actions are white")
-	check(#d == 3, "only actions that really exist are listed")
+	check(#d == 4, "only actions that really exist are listed")
 	local data = ns.MinimapButton.TooltipLines()
-	check(data.title == "Forever Codex" and #data.rows == 2, "the tooltip is data (title, version, rows) so a row can be added in one place")
+	check(data.title == "Forever Codex" and #data.rows == 3, "the tooltip is data (title, version, rows) so a row can be added in one place")
 	for _, row in ipairs(data.rows) do check(not (row[1] .. row[2]):find("[^\32-\126]"), "tooltip text is plain ASCII: " .. row[1]) end
 	-- if AddDoubleLine is ever missing, each row falls back to one plain line instead of failing
 	local errsBefore = #ns.errors
@@ -891,7 +896,7 @@ do
 	GT.AddDoubleLine = function() error("no AddDoubleLine") end
 	mm.__scripts.OnEnter(mm)
 	local joined = table.concat(tip.single, "|")
-	check(joined:find("Left Click: Open / close Codex", 1, true) ~= nil and joined:find("Drag: Move this button", 1, true) ~= nil, "without AddDoubleLine the rows still show, as single lines")
+	check(joined:find("Left Click: Show / hide the tracker", 1, true) ~= nil and joined:find("Drag: Move this button", 1, true) ~= nil, "without AddDoubleLine the rows still show, as single lines")
 	check(#ns.errors > errsBefore and pcall(mm.__scripts.OnEnter, mm), "and nothing escapes (the failure is recorded for /codex diag)")
 	-- leaving hides it
 	local hidden = 0

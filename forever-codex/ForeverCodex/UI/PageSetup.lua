@@ -112,7 +112,7 @@ function UI.BuildSetup(parent, mode)
 		w.start = W.Button(f, 120, 24, "Start", function()
 			P.FinishSetup()
 			recompute()
-			UI.Refresh()
+			UI.Open("codex")                                  -- show the tracker; the options window stays open on Codex Options
 		end)
 		w.start:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y - 14)
 	else

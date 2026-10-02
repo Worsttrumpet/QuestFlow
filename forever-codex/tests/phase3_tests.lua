@@ -132,10 +132,10 @@ do
 	H.attPack(ns, { Q(1, "Pickup", 30, 0, { giverName = "Someone" }) }, nil)
 	local W = H.world()
 	H.slash("")
-	check(ns.UI.IsShown() and ns.UI.frame.__name == "ForeverCodexMain", "/codex opens the player window")
+	check(ns.UI.IsShown() and ns.UI.options and ns.UI.options.__name == "ForeverCodexOptions" and ns.UI.frame == nil, "first run: /codex opens the options window (where setup is), not the tracker")
 	check(ns.DevUI.frame == nil, "the developer window is not built for a normal player")
 	local setup = ns.UI.main.setupPanel
-	check(not ns.Prefs.SetupDone() and setup.frame.__shown and not ns.UI.main.codexPage.__shown, "first run: the setup panel is shown instead of the Codex page")
+	check(not ns.Prefs.SetupDone() and setup.frame.__shown and ns.UI.optionsKey == "options", "first run: the setup panel is shown on the Codex Options tab")
 	check(setup.w.title.__text == "Here's your character." and setup.w.char.__text:find("Thrall - level 12 Troll Warrior", 1, true), "setup says 'Here's your character' and shows who it is")
 	check(setup.w.start ~= nil, "setup has a Start button")
 	-- choices
@@ -164,12 +164,12 @@ do
 	check(ns.Prefs.IsSystemOn("flight") ~= flightBefore, "a system toggle flips")
 	check(#setup.w.sys >= 1, "only systems that exist are offered (planned ones are not shown)")
 	click(setup.w.start)
-	check(ns.Prefs.SetupDone() and not setup.frame.__shown and ns.UI.main.codexPage.__shown, "Start finishes setup and shows the Codex page")
+	check(ns.Prefs.SetupDone() and not setup.frame.__shown and ns.UI.main.settingsPanel.frame.__shown and ns.UI.frame and ns.UI.main.codexPage.__shown, "Start finishes setup, shows the settings and opens the tracker")
 	check(ns.UI.main.codex.header.__text:find("Thrall", 1, true) and ns.UI.main.codex.nowTitle.__text:find("Pickup", 1, true), "the Codex page shows the character and NOW")
-	check(ns.UI.main.codex.nowIcon.kind == "star", "NOW carries the star icon")
+	check(ns.UI.main.codex.nowIcon == nil, "NOW has no star box (just the label)")
 	-- the normal window has none of the old machinery, on any page
 	for _, key in ipairs({ "codex", "world", "journey", "appendices" }) do ns.UI.ShowPage(key) end
-	for _, sub in ipairs({ "quests", "knowledge", "settings", "help", "party", "menu" }) do ns.UI.main.app.sub = sub; ns.UI.ShowPage("appendices") end
+	for _, sub in ipairs({ "quests", "knowledge", "help", "party", "menu" }) do ns.UI.main.app.sub = sub; ns.UI.ShowPage("appendices") end
 	local bad = leaks(W)
 	check(#bad == 0, "no 'Show on Map', Add quest, Refresh, source, provenance, id or coordinate appears anywhere in the player window" .. (#bad > 0 and (": " .. bad[1]) or ""))
 	local btnLabels = {}
@@ -198,7 +198,7 @@ do
 	H.slash("")
 	local pts = ns2.UI.frame.__points
 	check(pts and pts[1] == "TOPLEFT" and pts[3] == "TOPLEFT" and pts[4] == 120 and pts[5] == -80, "and the window opens where it was left")
-	check(ns2.UI.main.codexPage.__shown and not ns2.UI.main.setupPanel.frame.__shown, "a finished setup is not shown again")
+	check(ns2.UI.main.codexPage.__shown and ns2.UI.options == nil, "a finished setup is not shown again: /codex opens the tracker, not the setup")
 	-- defaults for a character that never saw Phase 3
 	local old = { version = 1, ui = {}, chars = { ["Thrall-Forever"] = { routeZone = "auto", style = "efficient", systems = {}, skipped = { ["Q:5"] = true }, added = {} } }, diag = {} }
 	local ns3 = boot({ char = { level = 12 }, synthetic = true, savedVars = old })
@@ -286,7 +286,8 @@ do
 	check(ns.UI.main.world.title.__text == "Around you: Fixture Valley" and ns.UI.main.world.rows[1].__text:find("Open one", 1, true), "the World page draws it")
 	ns.UI.Open("appendices")
 	local app = ns.UI.main.app
-	for _, key in ipairs({ "quests", "knowledge", "settings", "help", "party" }) do check(app.menu[key] ~= nil, "Appendices lists " .. key) end
+	for _, key in ipairs({ "quests", "knowledge", "help", "party" }) do check(app.menu[key] ~= nil, "Appendices lists " .. key) end
+	check(app.menu.settings == nil, "settings are not in Appendices any more: they are the Codex Options tab")
 	click(app.menu.quests)
 	app.qBox.__text = "Open"
 	app.qBox.__scripts.OnTextChanged(app.qBox)
@@ -295,9 +296,10 @@ do
 	click(app.menu.knowledge)
 	check(app.kRows[1].name.__text == "Trainers" and app.kRows[1].text.__text:find("cannot yet see", 1, true), "Knowledge says what Codex cannot see yet")
 	click(app.back)
-	click(app.menu.settings)
-	check(app.settings.w.title.__text == "Settings" and app.settings.w.nav ~= nil and app.settings.w.party ~= nil, "Settings is reachable from Appendices")
-	click(app.back)
+	ns.Prefs.FinishSetup()
+	ns.UI.Open("options")
+	local st = ns.UI.main.settingsPanel
+	check(st.frame.__shown and st.w.title.__text == "Settings" and st.w.nav ~= nil and st.w.party ~= nil, "the settings are the Codex Options tab")
 	check(#leaks(W) == 0, "no technical words anywhere")
 end
 

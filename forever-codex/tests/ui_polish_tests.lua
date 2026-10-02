@@ -188,9 +188,9 @@ do
 	local p = UI.frame.__points
 	check(p[1] == "TOPRIGHT" and p[4] < 0 and p[5] < -150, "its default place is the right side where the quest tracker sits, below the minimap  [" .. tostring(p[1]) .. " " .. tostring(p[4]) .. "," .. tostring(p[5]) .. "]")
 	UI.ShowPage("journey")
-	check(UI.frame.__w == UI.WIDTH, "the other pages keep the full width")
+	check(UI.options.__w == UI.WIDTH and UI.options.__h == UI.HEIGHT and UI.frame.__w == UI.COMPACT_WIDTH, "the other pages live in the full-size options window; the tracker stays compact")
 	UI.ShowPage("codex")
-	check(UI.frame.__w == UI.COMPACT_WIDTH, "and the Codex page is compact again")
+	check(UI.frame.__w == UI.COMPACT_WIDTH, "and the tracker is still compact")
 	-- an old saved position (from the big window) is dropped once; a new one is kept
 	local saved = { version = 1, ui = { window = { point = "CENTER", rel = "CENTER", x = 0, y = 0, h = 430, w = 520 } }, chars = {}, diag = {} }
 	local nsOld = boot({ char = { level = 6 }, synthetic = true, savedVars = saved })
@@ -206,13 +206,13 @@ do
 	check(#ns.errors == 0 and #nsOld.errors == 0 and #nsNew.errors == 0, "no errors")
 end
 
-section("UI polish: the shell keeps its behaviour (dropdown, drag, position) and gains a border and a title")
+section("UI polish: the tracker shell keeps its behaviour (drag, position) and has a border and a title")
 do
 	local ns, W, c = uiWorld(QUEST, {})
 	local UI = ns.UI
 	check(UI.frame.__movable == true and UI.frame.__drag and UI.frame.__drag[1] == "LeftButton" and UI.frame.__clamped == true, "the window is still movable, drag-registered and clamped")
 	check(UI.WIDTH == 520 and UI.HEIGHT == 430 and UI.frame.__w == UI.COMPACT_WIDTH, "the full-size window is still 520 x 430; the Codex page is the compact width (the height fits it, see below)")
-	check(UI.main.nav.button.text.__text == "Codex  v", "the dropdown button is unchanged")
+	check(UI.main.nav == nil and UI.main.optionsButton ~= nil, "no dropdown: a small Options button instead")
 	local found
 	for _, fs in ipairs(W.fonts) do if fs.__text == "FOREVER CODEX v" .. ForeverCodex.VERSION then found = true end end
 	check(found, "a small title with the version sits in the header")
@@ -432,29 +432,24 @@ do
 	_G.IsShiftKeyDown, _G.GetCursorPosition = nil, nil
 end
 
-section("window: the Codex page fits its content (no empty space), other pages keep the full height, the top edge never moves")
+section("window: the tracker fits its content (no empty space) and its top-left corner never moves; the options window is separate and full size")
 do
 	local ns, W, c = uiWorld(QUEST, {})
 	local UI = ns.UI
 	local h1 = UI.frame.__h
-	check(h1 < UI.HEIGHT and h1 >= UI.HEIGHT_MIN, "with a short page the window is shorter than the full height  [" .. tostring(h1) .. "]")
-	local ns2 = uiWorld(QUEST, {}, 6)
-	-- more content (a log reminder line and a second card row) makes it taller, never shorter than the content
-	ns2.UI.ShowPage("journey")
-	check(ns2.UI.frame.__h == ns2.UI.HEIGHT, "other pages use the full height")
-	ns2.UI.ShowPage("codex")
-	check(ns2.UI.frame.__h < ns2.UI.HEIGHT, "back on the Codex page it fits again")
-	-- the top edge: a CENTER-anchored window keeps its top when the height changes
-	local f = ns2.UI.frame
-	local function top() local p = f.__points; return p[5] + f.__h / 2 end
+	check(h1 < UI.HEIGHT and h1 >= UI.HEIGHT_MIN, "with a short page the tracker is shorter than the full height  [" .. tostring(h1) .. "]")
+	UI.ShowPage("journey")
+	check(UI.options.__h == UI.HEIGHT and UI.frame.__h == h1, "other pages open in their own full-size window and do not resize the tracker")
+	-- the corner: a CENTER-anchored tracker keeps its top-left when its size changes
+	local f = UI.frame
+	local function corner() local p = f.__points; return p[4] - f.__w / 2, p[5] + f.__h / 2 end
 	f:ClearAllPoints(); f:SetPoint("CENTER", UIParent, "CENTER", 10, 20)
-	ns2.UI.main.height = f.__h
-	local before = top()
-	ns2.UI.ShowPage("journey")
-	check(math.abs(top() - before) < 1e-6, "the top edge stays put when the page changes the height")
-	ns2.UI.ShowPage("codex")
-	check(math.abs(top() - before) < 1e-6, "and when it fits again")
-	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+	UI.main.height, UI.main.width = f.__h, f.__w
+	local x0, y0 = corner()
+	UI.FitSize(f.__w + 40, f.__h + 60)
+	local x1, y1 = corner()
+	check(math.abs(x1 - x0) < 1e-6 and math.abs(y1 - y0) < 1e-6, "the top-left corner stays put when the size changes")
+	check(#ns.errors == 0, "no errors")
 end
 
 section("report: /codex report builds one copyable playtest report (what is shown, why, the quest log), changes nothing, is plain ASCII")
@@ -533,5 +528,27 @@ do
 	local btn = MM.button
 	check(btn and btn.__w == 32 and btn.icon and btn.icon.__texture == MM.ICON, "the button is 32 px and shows that picture")
 	check(not btn.label and not btn.border, "the old yellow square and letter are gone")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("0.2.9: the minimap button's left click is the tracker, its right click is the options; /codex options; the NOW label has no star box")
+do
+	local ns, W, c = uiWorld(QUEST, {})
+	local UI, mm = ns.UI, ns.MinimapButton.button
+	check(mm.__scripts.OnClick ~= nil, "(setup) the button has a click handler")
+	UI.frame:Hide()
+	mm.__scripts.OnClick(mm, "LeftButton")
+	check(UI.frame.__shown and UI.options == nil, "left click shows the tracker (and does not open the options)")
+	mm.__scripts.OnClick(mm, "LeftButton")
+	check(not UI.frame.__shown, "and hides it again")
+	mm.__scripts.OnClick(mm, "RightButton")
+	check(UI.options and UI.options.__shown and UI.optionsKey == "options", "right click opens the options window")
+	mm.__scripts.OnClick(mm, "RightButton")
+	check(not UI.options.__shown, "and closes it")
+	H.slash("options")
+	check(UI.options.__shown and UI.current == "options", "/codex options opens it too")
+	H.slash("journey")
+	check(UI.optionsKey == "journey", "/codex journey opens that tab")
+	check(c.nowIcon == nil and c.nowLabel.__text == "NOW", "NOW is just the label: the yellow star box is gone")
 	check(#ns.errors == 0, "no errors")
 end

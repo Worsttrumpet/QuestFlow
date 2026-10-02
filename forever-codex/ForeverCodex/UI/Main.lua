@@ -108,22 +108,47 @@ local function restorePosition(frame)
 	end
 end
 
-local function showPage(key)
-	UI.current = key
-	for k, pg in pairs(UI.pages) do
-		if k == key then pg.frame:Show() else pg.frame:Hide() end
-	end
-	local nav = UI.main.nav
-	if nav then
-		for _, def in ipairs(UI.pageDefs) do if def.key == key then nav.button.text:SetText(def.label .. "  v") end end
-		nav.menu:Hide()
-	end
-	if key ~= "codex" then UI.FitSize(UI.WIDTH, UI.HEIGHT) end        -- only the Codex page is the small companion that fits its content
-	UI.Refresh()
-end
-UI.ShowPage = showPage
+-- ---------------------------------------------------------------- two windows
+--
+--   the TRACKER (UI.frame, "ForeverCodexMain"): the compact Codex page, nothing else. Left click on the minimap button, or /codex.
+--   the OPTIONS window (UI.options, "ForeverCodexOptions"): a tabbed window like most addons have: Codex Options, World, Journey,
+--   Appendices. Right click on the minimap button, the tracker's "Options" button, or /codex options.
+-- The pages themselves (UI/Page*.lua) are unchanged: each is built once into whichever window owns it.
 
-local function build()
+local OPTION_TABS = { "options", "world", "journey", "appendices" }
+local function isOptionsPage(key) for _, k in ipairs(OPTION_TABS) do if k == key then return true end end return false end
+
+--- The shared look of both windows: a 1 px muted-gold border (an outer texture with the fill inset on top).
+local function shell(frame)
+	local edge = frame:CreateTexture(nil, "BACKGROUND")
+	edge:SetAllPoints()
+	edge:SetColorTexture(0.40, 0.33, 0.16, 0.95)
+	local bg = frame:CreateTexture(nil, "BORDER")
+	bg:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+	bg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
+	bg:SetColorTexture(0.04, 0.04, 0.05, 0.94)
+	local sep = frame:CreateTexture(nil, "ARTWORK")
+	sep:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -33)
+	sep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -33)
+	sep:SetSize(1, 1)
+	sep:SetColorTexture(0.40, 0.34, 0.18, 0.55)
+end
+
+local function buildPage(def, parent)
+	local pf = CreateFrame("Frame", nil, parent)
+	pf:SetSize(UI.WIDTH - 16, UI.HEIGHT - 40)
+	pf:SetPoint("TOPLEFT", parent, "TOPLEFT", 8, -36)
+	local page = def.build(pf) or {}
+	page.frame = pf
+	UI.pages[def.key] = page
+	return page
+end
+
+local function defOf(key) for _, d in ipairs(UI.pageDefs) do if d.key == key then return d end end end
+
+-- ---------------------------------------------------------------- the tracker
+
+local function buildTracker()
 	local frame = CreateFrame("Frame", "ForeverCodexMain", UIParent)
 	frame:SetSize(UI.WIDTH, UI.HEIGHT)
 	frame:SetFrameStrata("HIGH")
@@ -137,101 +162,150 @@ local function build()
 	end)
 	ns.Safe(frame.SetClampedToScreen, frame, true)
 	restorePosition(frame)
-	-- the shell: a 1 px muted-gold border (an outer texture with the fill inset on top), a small title and a separator under the header
-	local edge = frame:CreateTexture(nil, "BACKGROUND")
-	edge:SetAllPoints()
-	edge:SetColorTexture(0.40, 0.33, 0.16, 0.95)
-	local bg = frame:CreateTexture(nil, "BORDER")
-	bg:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
-	bg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
-	bg:SetColorTexture(0.04, 0.04, 0.05, 0.94)
+	shell(frame)
 	local title = W.Line(frame, 10, W.DIM, "LEFT")
-	title:SetPoint("TOPLEFT", frame, "TOPLEFT", 116, -11)
-	title:SetWidth(170)
+	title:SetPoint("TOPLEFT", frame, "TOPLEFT", 74, -11)
+	title:SetWidth(200)
 	title:SetText("FOREVER CODEX v" .. tostring(ForeverCodex and ForeverCodex.VERSION or "?"))
-	local sep = frame:CreateTexture(nil, "ARTWORK")
-	sep:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -33)
-	sep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -8, -33)
-	sep:SetSize(1, 1)
-	sep:SetColorTexture(0.40, 0.34, 0.18, 0.55)
 	UI.frame = frame
 	UI.main.height = UI.main.height or UI.HEIGHT
-	local nav = { items = {} }
-	UI.main.nav = nav
-	nav.button = W.Button(frame, 104, 22, "Codex  v", function() if nav.menu:IsShown() then nav.menu:Hide() else nav.menu:Show() end end)
-	nav.button:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -6)
-	nav.menu = CreateFrame("Frame", nil, frame)
-	nav.menu:SetSize(150, 4 + 24 * #UI.pageDefs)
-	nav.menu:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -30)
-	nav.menu:SetFrameStrata("DIALOG")
-	nav.menu.bg = nav.menu:CreateTexture(nil, "BACKGROUND")
-	nav.menu.bg:SetAllPoints()
-	nav.menu.bg:SetColorTexture(0.08, 0.08, 0.08, 0.98)
-	for i, def in ipairs(UI.pageDefs) do
-		local b = W.Button(nav.menu, 146, 22, def.label, function() showPage(def.key) end)
-		b:SetPoint("TOPLEFT", nav.menu, "TOPLEFT", 2, -2 - (i - 1) * 24)
-		nav.items[def.key] = b
-	end
-	nav.menu:Hide()
-	for _, def in ipairs(UI.pageDefs) do
-		local pf = CreateFrame("Frame", nil, frame)
-		pf:SetSize(UI.WIDTH - 16, UI.HEIGHT - 40)
-		pf:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -36)
-		local page = def.build(pf) or {}
-		page.frame = pf
-		UI.pages[def.key] = page
-	end
+	-- the one way to the options from here (the minimap button's right click and /codex options are the others)
+	UI.main.optionsButton = W.Button(frame, 60, 20, "Options", function() UI.ShowPage("options") end)
+	UI.main.optionsButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -7)
+	buildPage(defOf("codex"), frame)
 	-- NEW FOR YOU lasts exactly one minute and then disappears by itself: a light check keeps the card honest while the window is open
 	local sinceCheck = 0
 	frame:SetScript("OnUpdate", function(_, dt)
 		sinceCheck = sinceCheck + (dt or 0)
 		if sinceCheck < 0.5 then return end
 		sinceCheck = 0
-		if UI.current == "codex" and ns.NewForYou and (ns.NewForYou.Active() ~= nil) ~= (UI.main.nfyShown == true) then UI.Refresh() end
+		if ns.NewForYou and (ns.NewForYou.Active() ~= nil) ~= (UI.main.nfyShown == true) then UI.Refresh() end
 	end)
 	local close = W.Button(frame, 18, 18, "x", function() frame:Hide() end)
 	close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
 	UI.main.close = close
-	showPage(UI.current)
+	frame:Hide()                       -- (a new frame is shown by default: whoever opens it shows it)
+end
+
+-- ---------------------------------------------------------------- the options window
+
+local function buildOptions()
+	local frame = CreateFrame("Frame", "ForeverCodexOptions", UIParent)
+	frame:SetSize(UI.WIDTH, UI.HEIGHT)
+	frame:SetFrameStrata("DIALOG")
+	frame:SetMovable(true)
+	frame:EnableMouse(true)
+	frame:RegisterForDrag("LeftButton")
+	frame:SetScript("OnDragStart", frame.StartMoving)
+	frame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
+	ns.Safe(frame.SetClampedToScreen, frame, true)
+	frame:ClearAllPoints()
+	frame:SetPoint("CENTER")
+	shell(frame)
+	UI.options = frame
+	-- tabs along the top, like the options of most addons
+	UI.main.tabs = {}
+	local x = 8
+	for _, key in ipairs(OPTION_TABS) do
+		local def = defOf(key)
+		if def then
+			local width = key == "options" and 110 or 84
+			local tab = W.Button(frame, width, 22, def.label, function() UI.ShowPage(key) end)
+			tab:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -6)
+			UI.main.tabs[key] = tab
+			x = x + width + 4
+			buildPage(def, frame)
+		end
+	end
+	local close = W.Button(frame, 18, 18, "x", function() frame:Hide() end)
+	close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
+	UI.main.optionsClose = close
+	frame:Hide()
+end
+
+local function selectTab(key)
+	for k, tab in pairs(UI.main.tabs or {}) do
+		W.SetColor(tab.text, k == key and W.WHITE or W.GOLD)
+		tab.bg:SetColorTexture(k == key and 0.30 or 0.22, k == key and 0.28 or 0.22, k == key and 0.12 or 0.22, 0.95)
+	end
+	for k, pg in pairs(UI.pages) do
+		if isOptionsPage(k) then if k == key then pg.frame:Show() else pg.frame:Hide() end end
+	end
+	UI.optionsKey = key
+end
+
+local function ensureTracker() if not UI.frame then buildTracker() end end
+local function ensureOptions() if not UI.options then buildOptions() end end
+
+--- Shows a page: "codex" in the tracker, anything else on its tab of the options window.
+local function showPage(key)
+	if key == "codex" then
+		ensureTracker()
+		UI.current = "codex"
+		UI.frame:Show()
+	else
+		ensureOptions()
+		selectTab(key)
+		UI.current = key
+		UI.options:Show()
+	end
+	UI.Refresh()
+end
+UI.ShowPage = showPage
+
+local function refreshPage(key)
+	local pg = UI.pages[key]
+	if pg and pg.Refresh then
+		local ok, err = pcall(pg.Refresh)
+		if not ok then ns.RecordError("ui page " .. tostring(key), err) end
+	end
 end
 
 function UI.Refresh()
 	if ns.DevUI and ns.DevUI.IsShown and ns.DevUI.IsShown() then ns.DevUI.Refresh() end
-	if not UI.frame or not UI.frame:IsShown() then return end
-	local pg = UI.pages[UI.current]
-	if pg and pg.Refresh then
-		local ok, err = pcall(pg.Refresh)
-		if not ok then ns.RecordError("ui page " .. tostring(UI.current), err) end
-	end
+	if UI.frame and UI.frame:IsShown() then refreshPage("codex") end
+	if UI.options and UI.options:IsShown() and UI.optionsKey then refreshPage(UI.optionsKey) end
 end
 
 function UI.IsShown()
-	return (UI.frame ~= nil and UI.frame:IsShown()) or (ns.DevUI ~= nil and ns.DevUI.IsShown() == true)
+	return (UI.frame ~= nil and UI.frame:IsShown()) or (UI.options ~= nil and UI.options:IsShown()) or (ns.DevUI ~= nil and ns.DevUI.IsShown() == true)
 end
 
+--- The tracker on / off (the minimap button's left click and /codex). Before setup is finished it opens the options, where setup lives.
 function UI.Toggle()
-	if not UI.frame then
-		build()
+	if not P.SetupDone() then
 		ns.State.Recompute()
-		UI.frame:Show()
-		UI.Refresh()
+		showPage("options")
 		return
 	end
+	ensureTracker()
 	if UI.frame:IsShown() then
 		UI.frame:Hide()
 	else
 		ns.State.Recompute()
+		UI.current = "codex"
 		UI.frame:Show()
 		UI.Refresh()
 	end
 end
 
---- Opens the window on a page ("codex", "world", "journey", "appendices").
-function UI.Open(key)
-	if not UI.frame then build() end
-	UI.frame:Show()
-	ns.State.Recompute()
-	showPage(UI.pages[key] and key or "codex")
+--- The options window on / off (the minimap button's right click).
+function UI.ToggleOptions()
+	ensureOptions()
+	if UI.options:IsShown() then
+		UI.options:Hide()
+	else
+		ns.State.Recompute()
+		showPage(UI.optionsKey or "options")
+	end
 end
 
-function UI._Build() if not UI.frame then build() end end
+--- Opens a page: "codex" is the tracker; "options", "world", "journey" and "appendices" are the options window's tabs.
+function UI.Open(key)
+	ns.State.Recompute()
+	showPage((key == "codex" or isOptionsPage(key)) and key or "codex")
+end
+
+function UI._Build()
+	ensureTracker()
+end

@@ -92,7 +92,8 @@ end
 -- to MM.TOOLTIP_ROWS: only inputs that really do something belong here.
 
 MM.TOOLTIP_ROWS = {
-	{ "Left Click", "Open / close Codex" },
+	{ "Left Click", "Show / hide the tracker" },
+	{ "Right Click", "Options" },
 	{ "Drag", "Move this button" },
 }
 
@@ -137,9 +138,12 @@ local function build()
 		ns.Safe(MM.SavePosition, self)
 	end)
 
-	btn:SetScript("OnClick", function()
+	ns.Safe(btn.RegisterForClicks, btn, "LeftButtonUp", "RightButtonUp")
+	btn:SetScript("OnClick", function(_, mouse)
 		if dragged then dragged = false return end     -- releasing a drag over the button is not a click
-		if ns.UI and ns.UI.Toggle then
+		if mouse == "RightButton" then
+			if ns.UI and ns.UI.ToggleOptions then ns.UI.ToggleOptions() end
+		elseif ns.UI and ns.UI.Toggle then
 			ns.UI.Toggle()
 		end
 	end)

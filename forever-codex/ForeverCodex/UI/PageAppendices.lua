@@ -8,7 +8,7 @@ local UI = ns.UI
 
 local WIDTH = UI.WIDTH - 24
 local RESULTS = 6
-local ENTRIES = { { "quests", "Quests" }, { "knowledge", "Knowledge" }, { "settings", "Settings" }, { "help", "Help Improve Codex" }, { "party", "Party" } }
+local ENTRIES = { { "quests", "Quests" }, { "knowledge", "Knowledge" }, { "help", "Help Improve Codex" }, { "party", "Party" } }
 
 local function lineAt(parent, y, color, wrap, x, width)
 	local fs = W.Text(parent, color)
@@ -149,8 +149,6 @@ UI.RegisterPage("appendices", "Appendices", function(parent)
 	sub("knowledge", buildKnowledge)
 	sub("help", buildHelp)
 	sub("party", buildParty)
-	local settingsHolder = sub("settings", nil)
-	w.settings = UI.BuildSetup(settingsHolder, "settings")
 	return { Refresh = function()
 		local ctx = ns.State.ctx
 		if not ctx then return end
@@ -163,6 +161,6 @@ UI.RegisterPage("appendices", "Appendices", function(parent)
 		elseif w.sub == "knowledge" then refreshKnowledge(w)
 		elseif w.sub == "help" then refreshHelp(w)
 		elseif w.sub == "party" then refreshParty(w)
-		elseif w.sub == "settings" then w.settings.frame:Show(); w.settings.Refresh() end
+		end
 	end }
 end)

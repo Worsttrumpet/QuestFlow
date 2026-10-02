@@ -36,8 +36,6 @@ local function build(page)
 
 	-- NOW: the strongest card
 	c.nowBox = W.Card(page, FULL, NOW_MIN, W.STYLE_NOW)
-	c.nowIcon = UI.Icon(c.nowBox, "star")
-	c.nowIcon:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX, -PAD + 1)
 	-- a way out of a recommendation that is wrong or unavailable: skips it (the same as /codex skip; /codex unskip brings it back)
 	c.nowSkip = W.Button(c.nowBox, 40, 16, "Skip", function()
 		local a = ns.State.SkipCurrent()
@@ -45,7 +43,7 @@ local function build(page)
 	end)
 	c.nowSkip:SetPoint("TOPRIGHT", c.nowBox, "TOPRIGHT", -PAD + 4, -PAD + 3)
 	c.nowLabel = W.Label(c.nowBox, "NOW", W.STYLE_NOW.label)
-	c.nowLabel:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX + 20, -PAD)
+	c.nowLabel:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX, -PAD)
 	c.nowTitle = W.Line(c.nowBox, 16, W.WARM_GOLD, "LEFT", true)
 	c.nowWho = W.Line(c.nowBox, 12, W.TEXT, "LEFT")
 	c.nowDetail = W.Line(c.nowBox, 11, W.DIM, "LEFT", true)
@@ -111,8 +109,6 @@ local function drawNow(c, card)
 	local n = card.now
 	local objectives = n and n.objectives or {}
 	if n then
-		c.nowIcon:Set("star")
-		c.nowIcon:Show()
 		c.nowTitle:SetText(n.title or "")
 		c.nowWho:SetText(n.who or "")
 		-- the one-line detail is only for an objective whose counts the quest log did not report
@@ -120,8 +116,6 @@ local function drawNow(c, card)
 		c.nowInfo:SetText(n.where or "")
 	else
 		-- nothing to recommend: say so quietly, without the marker
-		c.nowIcon:Set(nil)
-		c.nowIcon:Hide()
 		c.nowTitle:SetText(card.empty.title)
 		c.nowWho:SetText(card.empty.lines[1] or "")
 		c.nowDetail:SetText(card.empty.lines[2] or "")
@@ -318,18 +312,26 @@ UI.RegisterPage("codex", "Codex", function(parent)
 	local page = { frame = holder }
 	UI.main.codexPage = holder
 	build(holder)
-	local setup = ns.UI.BuildSetup(parent, "setup")
-	UI.main.setupPanel = setup
+	-- before the first-time setup is finished the tracker only points to it (setup lives in the options window)
+	local welcome = CreateFrame("Frame", nil, parent)
+	welcome:SetSize(UI.COMPACT_WIDTH - 16, 70)
+	welcome:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+	local msg = W.Line(welcome, 12, W.TEXT, "LEFT", true)
+	msg:SetPoint("TOPLEFT", welcome, "TOPLEFT", 0, -4)
+	msg:SetWidth(UI.COMPACT_WIDTH - 16)
+	msg:SetText("Welcome! Set up Forever Codex once, then this tracker tells you what to do next.")
+	local go = W.Button(welcome, 120, 22, "Set up Codex", function() UI.ShowPage("options") end)
+	go:SetPoint("TOPLEFT", welcome, "TOPLEFT", 0, -46)
+	UI.main.welcome = welcome
 	function page.Refresh()
 		if ns.Prefs.SetupDone() then
-			setup.frame:Hide()
+			welcome:Hide()
 			holder:Show()
 			refresh()
 		else
 			holder:Hide()
-			if UI.FitSize then UI.FitSize(UI.WIDTH, UI.HEIGHT) end
-			setup.frame:Show()
-			setup.Refresh()
+			welcome:Show()
+			if UI.FitSize then UI.FitSize(UI.COMPACT_WIDTH, 36 + 76) end
 		end
 	end
 	return page

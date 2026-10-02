@@ -9,7 +9,7 @@ local say = ns.Say
 
 local function helpLines()
 	say("Forever Codex commands:")
-	say("  /codex                 open / close the Codex window;  /codex world | journey | appendices opens that tab")
+	say("  /codex                 show / hide the Codex tracker;  /codex options | world | journey | appendices opens that tab of the options window (right click the minimap button too)")
 	say("  /codex setup           run the first-time setup again;  /codex dev = the developer window")
 	say("  /codex arrow [on|off|flip|reset|test]   Codex's own small direction arrow")
 	say("  /codex tracker [on|off]   hide the game's quest tracker so Codex's replaces it")
@@ -109,11 +109,11 @@ local function handle(msg)
 		ns.UI.Toggle()
 	elseif cmd == "dev" then
 		ns.DevUI.Toggle()
-	elseif cmd == "world" or cmd == "journey" or cmd == "appendices" then
+	elseif cmd == "world" or cmd == "journey" or cmd == "appendices" or cmd == "options" then
 		ns.UI.Open(cmd)
 	elseif cmd == "setup" then
 		P.ReopenSetup()
-		ns.UI.Open("codex")
+		ns.UI.Open("options")
 	elseif cmd == "nav" then
 		local on = onOff(restLower)
 		if on == nil then
