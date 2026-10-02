@@ -19,7 +19,8 @@ local FULL = UI.COMPACT_WIDTH - 16  -- page width
 local GAP, PAD = W.GAP, W.PAD
 local TOP = 22                      -- below the character line
 local NOW_MIN = 56                  -- a card never gets smaller than this
-local MAX_ROWS = 6                  -- objective rows drawn in one card (the rest are summarised in one line)
+local READY_ROWS = 12              -- hand-ins listed in READY TO TURN IN (the window grows to fit; the rest are summarised in one line)
+local MAX_ROWS = 8                  -- objective rows drawn in one card (the rest are summarised in one line)
 
 --- Places a card at a vertical offset below the page top and sizes it.
 local function placeCard(c, card, y, w, h)
@@ -72,7 +73,7 @@ local function build(page)
 	c.readyLabel = W.Label(c.readyBox, "READY TO TURN IN", W.STYLE_READY.label)
 	c.readyLabel:SetPoint("TOPLEFT", c.readyBox, "TOPLEFT", c.readyBox.insetX, -PAD + 2)
 	c.readyRows, c.readyIcons = {}, {}
-	for i = 1, 5 do
+	for i = 1, READY_ROWS do
 		c.readyRows[i] = W.Line(c.readyBox, 12, W.TEXT, "LEFT")
 		c.readyIcons[i] = W.Icon(c.readyBox, 14)
 	end

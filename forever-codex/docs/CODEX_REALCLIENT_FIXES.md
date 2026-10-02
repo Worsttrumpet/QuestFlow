@@ -292,3 +292,8 @@ Tested with the stub client only; not yet seen in the real client.
 Real report (0.2.18): NOW was "Turn in Remnants of War" (75 yd) while The Cult of the Damned (4/8, 6/8) was 71 yd away. Whether it showed under ALSO COMPLETE THIS depended on a planner tie-break (one report showed "nothing", a screenshot showed it).
 Fix: when NOW is a hand-in within 150 yd (`Overlap.NOW_HANDIN_YD`), unfinished objectives within 300 yd of the player are listed (measured from the player, not the NPC). A far hand-in still lists nothing. The report's old `NEARBY:` line is relabelled "old nearby list (not shown in the window)".
 Unverified: whether a `src=game` hand-in point is the real turn-in NPC (asked the user).
+
+## 36. Release 0.2.20: a taller tracker
+
+Real screenshot (0.2.19): READY TO TURN IN showed five hand-ins and "+ 1 more" with a lot of empty screen below. The window already grows to fit its content, so only the row caps limited it: READY TO TURN IN now draws up to 12 hand-ins (was 5) and a card draws up to 8 objective rows (was 6). Beyond that the "+ N more" line still appears.
+Not changed: the window's width, and the planner (see the open note on deferred hand-ins in the 0.2.19 report analysis: a deferral that pushes near hand-ins behind a farther objective is awaiting a decision).

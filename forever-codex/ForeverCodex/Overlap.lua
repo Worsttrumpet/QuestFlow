@@ -138,7 +138,7 @@ end
 
 -- ---------------------------------------------------------------- READY TO TURN IN
 
-Ov.MAX_READY = 5
+Ov.MAX_READY = 12
 
 --- Finished quests that can be handed in and are NOT the current NOW: { { title = quest name, who = turn-in NPC or nil, where = "Nearby" ... or nil, quest }, ... },
 -- nearest first (unknown distances last). A finished quest is a pending hand-in, not an instruction: it is listed here until the planner makes it NOW.

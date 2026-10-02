@@ -801,3 +801,15 @@ do
 	for _, it in ipairs(list) do check(not (it.title or ""):find("Turn in", 1, true), "still no hand-in line") end
 	check(ns.Overlap.NOW_HANDIN_YD == 150, "the hand-in has to be within 150 yd")
 end
+
+section("0.2.20: READY TO TURN IN lists up to 12 hand-ins before summarising")
+do
+	local list = {}
+	for i = 1, 8 do list[i] = { id = 700 + i, name = "Done " .. i, zone = "zone-a", complete = true, map = 9001, x = 0.5 + i * 0.003, y = 0.5, objectives = { { text = "Thing", have = 2, need = 2 } } } end
+	local ns, W, c = logWorld(list)
+	local shown = 0
+	for _, r in ipairs(c.readyRows) do if (r.__text or "") ~= "" then shown = shown + 1 end end
+	check(#c.readyRows == 12, "twelve rows are available")
+	check(shown >= 7, "seven or more hand-ins are listed (one is NOW)  [" .. shown .. "]")
+	check((c.readyMore.__text or "") == "", "and there is no '+ more' line below 12")
+end
