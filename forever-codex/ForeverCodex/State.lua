@@ -64,7 +64,9 @@ function S.Recompute()
 	end
 	observe("journey", ns.Journey, "OnContext", ctx)
 	observe("party", ns.Party, "OnContext", ctx)
+	observe("newforyou", ns.NewForYou, "OnContext", ctx)
 	observe("navigation", ns.Navigation, "OnPlan", plan, ctx)
+	observe("pins", ns.Pins, "OnPlan", plan)
 	observe("markers", ns.Markers, "OnPlan", plan, ctx)
 	if ns.UI and ns.UI.Refresh then
 		local okU, err = pcall(ns.UI.Refresh)

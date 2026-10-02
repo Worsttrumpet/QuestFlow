@@ -100,6 +100,12 @@ end
 
 function P.NavigationOn() return P.Char().navigation == true end
 function P.SetNavigation(on) P.Char().navigation = on == true end
+function P.ArrowOn() return P.Char().arrow ~= false end
+function P.SetArrow(on) P.Char().arrow = on == true end
+function P.ArrowFlip() return root().ui.arrowFlip == true end
+function P.SetArrowFlip(on) root().ui.arrowFlip = on == true end
+function P.PinsOn() return P.Char().pins ~= false end
+function P.SetPins(on) P.Char().pins = on == true end
 function P.MarkersOn() return P.Char().markers == true end
 function P.SetMarkers(on) P.Char().markers = on == true end
 

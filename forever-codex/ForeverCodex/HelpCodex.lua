@@ -9,10 +9,10 @@ ns.HelpCodex = H
 
 local LABEL = {
 	QUEST_ACCEPT = "Quests you accepted", QUEST_COMPLETE = "Quests whose objectives you finished", QUEST_TURNIN = "Quests you turned in",
-	XP_GAIN = "Experience gains", MOB_KILL = "Creatures defeated", LEVEL_UP = "Level-ups", PLAYER_MOVE = "Stretches of travel",
+	XP_GAIN = "Experience gains", LEVEL_UP = "Level-ups", PLAYER_MOVE = "Stretches of travel",
 	COMBAT_START = "Fights started", COMBAT_END = "Fights finished",
 }
-local ORDER = { "QUEST_ACCEPT", "QUEST_COMPLETE", "QUEST_TURNIN", "LEVEL_UP", "XP_GAIN", "MOB_KILL", "COMBAT_END", "PLAYER_MOVE" }
+local ORDER = { "QUEST_ACCEPT", "QUEST_COMPLETE", "QUEST_TURNIN", "LEVEL_UP", "XP_GAIN", "COMBAT_END", "PLAYER_MOVE" }
 
 local function counts()
 	local by, total = {}, 0

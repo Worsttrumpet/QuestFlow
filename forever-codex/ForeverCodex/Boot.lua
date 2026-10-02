@@ -101,6 +101,8 @@ frame:SetScript("OnUpdate", function(_, elapsed)
 	if not ok then ns.RecordError("tick", err) end
 	local okN, errN = pcall(ns.Navigation.Tick, elapsed)
 	if not okN then ns.RecordError("navigation tick", errN) end
+	ns.Arrow.Tick(elapsed)                 -- (self-protecting: it pcalls its own update)
+	if ns.Pins then ns.Pins.Tick(elapsed) end
 end)
 
 ns._selftest.boot = { frame = frame, onEvent = onEvent }

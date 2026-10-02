@@ -27,6 +27,10 @@ Presenter.lua
 Journey.lua
 Knowledge.lua
 Navigation.lua
+Arrow.lua
+Pins.lua
+NewForYou.lua
+Nearby.lua
 Markers.lua
 Party.lua
 World.lua

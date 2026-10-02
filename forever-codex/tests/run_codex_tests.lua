@@ -41,6 +41,11 @@ local function widget(kind)
 		if k == "Hide" then return function(self) self.__shown = false end end
 		if k == "SetText" then return function(self, v) self.__text = v or "" end end
 		if k == "GetText" then return function(self) return self.__text end end
+		if k == "RegisterEvent" then return function(self, ev) if W then W.registeredEvents = W.registeredEvents or {}; W.registeredEvents[#W.registeredEvents + 1] = ev end end end
+		if k == "SetJustifyH" then return function(self, v) self.__justify = v end end
+		if k == "SetSize" then return function(self, wd, ht) self.__w, self.__h = wd, ht end end
+		if k == "SetWidth" then return function(self, wd) self.__w = wd end end
+		if k == "SetRotation" then return function(self, r) self.__rotation = r end end
 		if k == "SetScript" then return function(self, n, fn) self.__scripts[n] = fn end end
 		if k == "CreateTexture" then return function() return widget("Texture") end end
 		if k == "CreateFontString" then return function() local f = widget("FontString"); if W then W.fonts = W.fonts or {}; W.fonts[#W.fonts + 1] = f end return f end end
@@ -1013,10 +1018,19 @@ do
 	local reg = ns._selftest.telemetry.registered
 	local all = true
 	for _, e in ipairs({ "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "QUEST_ACCEPTED", "QUEST_TURNED_IN", "UNIT_QUEST_LOG_CHANGED", "QUEST_LOG_UPDATE",
-		"PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "COMBAT_LOG_EVENT_UNFILTERED" }) do
+		"PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }) do
 		if reg[e] ~= true then all = false end
 	end
 	check(all, "telemetry registers all its events on its own frame (a refused registration would show as false)")
+	-- REGRESSION (real client): Forever refuses addon registration of the combat log and raises a taint popup
+	local combatLog = 0
+	for _, e in ipairs(W.registeredEvents or {}) do if e == "COMBAT_LOG_EVENT_UNFILTERED" then combatLog = combatLog + 1 end end
+	check(#(W.registeredEvents or {}) > 10 and combatLog == 0 and reg.COMBAT_LOG_EVENT_UNFILTERED == nil, "Codex never registers COMBAT_LOG_EVENT_UNFILTERED on any frame")
+	local caps = {}
+	for _, c in ipairs(ns.Telemetry.Capabilities()) do caps[c.type] = c end
+	check(caps.MOB_KILL.unavailable == true and caps.MOB_KILL.registered == false and not caps.MOB_KILL.verified, "kill tracking is reported UNAVAILABLE (not proven, not registered)")
+	check(caps.QUEST_TURNIN.verified and caps.QUEST_ACCEPT.verified and caps.QUEST_COMPLETE.verified and caps.PLAYER_MOVE.verified and not caps.XP_GAIN.verified, "proven quest/travel telemetry is untouched; XP stays unproven")
+	check(not table.concat(ns.HelpCodex.Learned(), "|"):find("defeated"), "the player-facing summary never implies kills are tracked")
 	check(ns.Telemetry.IsEnabled() and #ns.Telemetry.Events() == 1 and ns.Telemetry.Events()[1].e == "SESSION", "the log starts with one SESSION marker at login")
 	local sess = ns.Telemetry.Events()[1]
 	check(sess.v == 1 and sess.lvl == 25 and sess.xp == 1000 and sess.max == 5000 and type(sess.w) == "number" and sess.build == "70124", "SESSION records schema, level, XP, build and wall time")
@@ -1330,7 +1344,7 @@ do
 	local H = { boot = boot, check = check, section = section, slash = slash, newWorld = newWorld, attPack = attPack,
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

@@ -34,6 +34,7 @@ N.SAME = 1e-4                 -- map fractions: two readbacks closer than this a
 N.state = { status = "idle" } -- idle | following | paused-foreign | arrived | dismissed | unavailable | off
 
 local owned, arrivedFor, dismissedFor, quietUntil = nil, nil, nil, 0
+local lastWant = nil          -- the destination of the current NOW (whether or not a waypoint could be placed for it)
 local sinceCheck = 0
 
 local function now() return type(GetTime) == "function" and GetTime() or 0 end
@@ -133,17 +134,34 @@ local function playerDistanceTo(ctx, pt)
 end
 
 local function checkArrival(ctx)
-	if not owned then return end
-	local d = playerDistanceTo(ctx, owned)
+	local t = owned or (N.state.status == "unavailable" and lastWant) or nil     -- no pin could be placed: the arrow still needs an arrival
+	if not t then return end
+	local d = playerDistanceTo(ctx, t)
 	if d and d <= N.ARRIVE_RADIUS then
-		arrivedFor = owned.action
-		clearOwned("arrived")
+		arrivedFor = t.action
+		if owned then clearOwned("arrived") else N.state = { status = "arrived", action = t.action } end
 	end
 end
 
+--- The destination Codex's own arrow may point at: NOW's target while navigation is on and the player has neither arrived,
+-- dismissed it (removed Codex's pin) nor set a waypoint of their own. Never claims or touches a waypoint.
+function N.Target()
+	if not (lastWant and P.NavigationOn()) then return nil end
+	local st = N.state.status
+	if st == "following" or st == "unavailable" then
+		return { action = lastWant.action, map = lastWant.map, x = lastWant.x, y = lastWant.y }
+	end
+	return nil
+end
+
 function N.OnPlan(plan, ctx)
-	if not N.api.available() then N.state = { status = "unavailable" } return end
-	local want = desired(plan)
+	lastWant = desired(plan)
+	if arrivedFor and (not lastWant or lastWant.action ~= arrivedFor) then arrivedFor = nil end
+	if not N.api.available() then
+		N.state = (arrivedFor and lastWant and arrivedFor == lastWant.action) and { status = "arrived", action = arrivedFor } or { status = "unavailable", action = lastWant and lastWant.action }
+		return
+	end
+	local want = lastWant
 	if not P.NavigationOn() then
 		if owned then clearOwned("off") else N.state = { status = "off" } end
 		return
@@ -204,9 +222,8 @@ function N.Tick(elapsed)
 	sinceCheck = sinceCheck + (elapsed or 0)
 	if sinceCheck < 1 then return end
 	sinceCheck = 0
-	if not owned then return end
 	local base = ns.State and ns.State.ctx
-	if not base then return end
+	if not (owned or N.state.status == "unavailable") or not base then return end
 	checkArrival({ loc = ns.Context.DefaultReader.location(), worldOf = base.worldOf })
 end
 
@@ -242,4 +259,4 @@ function N.Owned() return owned and { action = owned.action, map = owned.map, x 
 function N.Status() return N.state.status end
 
 --- Test/diagnostic reset of the in-memory state only.
-function N._Reset() owned, arrivedFor, dismissedFor, quietUntil, sinceCheck = nil, nil, nil, 0, 0; N.state = { status = "idle" } end
+function N._Reset() owned, arrivedFor, dismissedFor, quietUntil, sinceCheck, lastWant = nil, nil, nil, 0, 0, nil; N.state = { status = "idle" } end

@@ -1,6 +1,6 @@
 -- ForeverCodex.UI (the PLAYER window): a compact companion, not a database. "Hide the machinery, show the decision."
 --
---   [ Codex | World | Journey | Appendices ]
+--   [ Codex  v ]   one dropdown (Codex, World, Journey, Appendices): no tab row, no back / forward arrows
 --
 -- This file is only the shell: the frame, the tabs, where the window remembers it was, and a registry the pages plug into
 -- (UI/Page*.lua). Pages receive view models from Presenter / World / Journey / Knowledge / Party / HelpCodex and draw
@@ -17,7 +17,7 @@ local W = ns.Widgets
 local UI = {}
 ns.UI = UI
 
-UI.WIDTH, UI.HEIGHT = 400, 360
+UI.WIDTH, UI.HEIGHT = 520, 430
 UI.pageDefs = {}            -- registration order = tab order
 UI.pages = {}               -- key -> { frame, refresh }
 UI.current = "codex"
@@ -75,9 +75,10 @@ local function showPage(key)
 	for k, pg in pairs(UI.pages) do
 		if k == key then pg.frame:Show() else pg.frame:Hide() end
 	end
-	for k, b in pairs(UI.main.tabs or {}) do
-		W.SetColor(b.text, k == key and W.GOLD or W.GREY)
-		b.bg:SetColorTexture(k == key and 0.3 or 0.15, k == key and 0.3 or 0.15, k == key and 0.12 or 0.15, 0.95)
+	local nav = UI.main.nav
+	if nav then
+		for _, def in ipairs(UI.pageDefs) do if def.key == key then nav.button.text:SetText(def.label .. "  v") end end
+		nav.menu:Hide()
 	end
 	UI.Refresh()
 end
@@ -101,20 +102,39 @@ local function build()
 	bg:SetAllPoints()
 	bg:SetColorTexture(0, 0, 0, 0.88)
 	UI.frame = frame
-	UI.main.tabs = {}
-	local x = 8
+	local nav = { items = {} }
+	UI.main.nav = nav
+	nav.button = W.Button(frame, 150, 22, "Codex  v", function() if nav.menu:IsShown() then nav.menu:Hide() else nav.menu:Show() end end)
+	nav.button:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -6)
+	nav.menu = CreateFrame("Frame", nil, frame)
+	nav.menu:SetSize(150, 4 + 24 * #UI.pageDefs)
+	nav.menu:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -30)
+	nav.menu:SetFrameStrata("DIALOG")
+	nav.menu.bg = nav.menu:CreateTexture(nil, "BACKGROUND")
+	nav.menu.bg:SetAllPoints()
+	nav.menu.bg:SetColorTexture(0.08, 0.08, 0.08, 0.98)
+	for i, def in ipairs(UI.pageDefs) do
+		local b = W.Button(nav.menu, 146, 22, def.label, function() showPage(def.key) end)
+		b:SetPoint("TOPLEFT", nav.menu, "TOPLEFT", 2, -2 - (i - 1) * 24)
+		nav.items[def.key] = b
+	end
+	nav.menu:Hide()
 	for _, def in ipairs(UI.pageDefs) do
-		local b = W.Button(frame, 88, 20, def.label, function() showPage(def.key) end)
-		b:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -6)
-		UI.main.tabs[def.key] = b
-		x = x + 92
 		local pf = CreateFrame("Frame", nil, frame)
 		pf:SetSize(UI.WIDTH - 16, UI.HEIGHT - 40)
-		pf:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -32)
+		pf:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -36)
 		local page = def.build(pf) or {}
 		page.frame = pf
 		UI.pages[def.key] = page
 	end
+	-- NEW FOR YOU lasts exactly one minute and then disappears by itself: a light check keeps the card honest while the window is open
+	local sinceCheck = 0
+	frame:SetScript("OnUpdate", function(_, dt)
+		sinceCheck = sinceCheck + (dt or 0)
+		if sinceCheck < 0.5 then return end
+		sinceCheck = 0
+		if UI.current == "codex" and ns.NewForYou and (ns.NewForYou.Active() ~= nil) ~= (UI.main.nfyShown == true) then UI.Refresh() end
+	end)
 	local close = W.Button(frame, 18, 18, "x", function() frame:Hide() end)
 	close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
 	UI.main.close = close

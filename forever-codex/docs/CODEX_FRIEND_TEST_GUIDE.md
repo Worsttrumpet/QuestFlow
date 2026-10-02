@@ -52,6 +52,14 @@ Tabs: **Codex** (what to do), **World** (what is around you), **Journey** (what 
 Party news (Appendices > Settings > *Party news*): **Off**, **In the window only** (default), **Party chat** (one plain
 line when *you* finish or turn in a quest), or **Window and party chat**. Codex never posts to party chat unless you choose it.
 
+## New since the first real-client test (see `CODEX_REALCLIENT_FIXES.md`)
+
+- The combat-log registration that caused the "blocked from an action only available to the Blizzard UI" popup is gone.
+- A small **direction arrow** points at NOW (`/codex arrow`). It learns which way you face as you walk: walk a few steps in
+  different directions. If it points the wrong way round, `/codex arrow flip`. It is untested on the real client.
+- Codex's pins on the **world map** (`/codex pins`): untested; dim `?` pins are approximate. No minimap pins.
+- The Codex window now has one dropdown, a centred NOW card, a NEARBY card, and a NEW FOR YOU card at even levels.
+
 ## If something looks wrong
 
 Type `/codex report`, select all in the box (Ctrl+A), copy (Ctrl+C) and paste it to us with a screenshot.

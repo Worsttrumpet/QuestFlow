@@ -94,12 +94,14 @@ function D.Snapshot()
 	end
 	snap.player = { setupDone = P.SetupDone(), navigation = P.NavigationOn(), navStatus = ns.Navigation and ns.Navigation.Status() or nil,
 		navOwned = ns.Navigation and ns.Navigation.Owned() or nil, party = ns.Party and ns.Party.Status() or nil,
-		journeyEntries = #P.Char().journey.entries, markers = ns.Markers and ns.Markers.Status() or nil }
+		journeyEntries = #P.Char().journey.entries, markers = ns.Markers and ns.Markers.Status() or nil,
+		arrow = ns.Arrow and { on = P.ArrowOn(), reason = ns.Arrow.state.reason, calibrated = ns.Arrow.Calibration() ~= nil, flip = P.ArrowFlip() } or nil,
+		pins = ns.Pins and ns.Pins.Status() or nil }
 	if ns.Telemetry then
 		local st = ns.Telemetry.Status()
 		snap.telemetry = { enabled = st.enabled, stored = st.stored, cap = st.cap, anomalies = st.anomalies, types = {} }
 		for _, c in ipairs(ns.Telemetry.Capabilities()) do
-			snap.telemetry.types[#snap.telemetry.types + 1] = { type = c.type, verified = c.verified, registered = c.registered, recorded = c.recorded }
+			snap.telemetry.types[#snap.telemetry.types + 1] = { type = c.type, verified = c.verified, registered = c.registered, unavailable = c.unavailable, recorded = c.recorded }
 		end
 	end
 	for _, e in ipairs(ns.errors) do snap.errors[#snap.errors + 1] = e end
@@ -150,6 +152,10 @@ function D.Lines(s)
 		local p = s.player
 		L[#L + 1] = string.format("Player experience: setup %s | waypoint following %s (%s%s) | journey entries %d", p.setupDone and "done" or "NOT done", p.navigation and "on" or "off",
 			tostring(p.navStatus), p.navOwned and (", Codex pin placed for " .. tostring(p.navOwned.action)) or "", p.journeyEntries)
+		if p.arrow then
+			L[#L + 1] = string.format("  arrow: %s (%s), calibrated %s, flip %s | map pins: %s, world map %s, minimap %s, pins now %s (UNPROVEN on Forever)", p.arrow.on and "on" or "off", tostring(p.arrow.reason),
+				tostring(p.arrow.calibrated), tostring(p.arrow.flip), p.pins and (p.pins.on and "on" or "off") or "?", p.pins and p.pins.worldMap or "?", p.pins and p.pins.minimap or "?", p.pins and p.pins.desired or "?")
+		end
 		if p.party then
 			L[#L + 1] = string.format("  party news: %s | addon messages %s | party chat %s | shared items this session %d | markers: %s (test %s)", p.party.mode,
 				p.party.addonMessages and "available" or "UNAVAILABLE", p.party.chat and "available" or "UNAVAILABLE", p.party.feed,
@@ -204,7 +210,7 @@ function D.Lines(s)
 			tl.enabled and "enabled" or "OFF", tl.stored, tl.cap, tl.anomalies)
 		local parts = {}
 		for _, ty in ipairs(tl.types) do
-			parts[#parts + 1] = string.format("%s[%s reg=%s rec=%d]", ty.type, ty.verified and "proven" or "UNPROVEN", tostring(ty.registered), ty.recorded)
+			parts[#parts + 1] = string.format("%s[%s reg=%s rec=%d]", ty.type, ty.unavailable and "UNAVAILABLE" or (ty.verified and "proven" or "UNPROVEN"), tostring(ty.registered), ty.recorded)
 		end
 		L[#L + 1] = "  " .. table.concat(parts, " ")
 	end

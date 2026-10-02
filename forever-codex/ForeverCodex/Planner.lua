@@ -49,6 +49,7 @@ Pl.RUN_SPEED = 7          -- yards per second. ESTIMATED: a game constant, not m
 Pl.STOP_RADIUS = 60       -- yards: actions this close share one stop (policy; NPC reach + a local mob area)
 Pl.BEAM_K = 8             -- stops considered for sequences (the most promising by solo net value)
 Pl.DEPTH = 3              -- stops per sequence
+Pl.UNKNOWN_LEG_SECONDS = 900  -- policy: a leg whose walking time cannot be known (other continent / no world conversion) is NOT free; charged as ~15 min (boat/flight/long ride)
 Pl.CHAIN_RADIUS = 200     -- yards: a quest this close to a turn-in counts as "unlocked by it" (1 hop)
 
 local BASE = {
@@ -357,13 +358,14 @@ local function rankStops(S)
 	for i, s in ipairs(stops) do
 		if allowed[s] then
 			local t = S.leg(0, i)
-			s.solo = s.val - lam * ((t or 0) + s.dwell)
+			s.solo = s.val - lam * ((t or Pl.UNKNOWN_LEG_SECONDS) + s.dwell)
 			s.soloUnknown = (t == nil and not s.pinned) and 1 or 0     -- a place the player ADDED is theirs to travel to: not penalised
 			ranked[#ranked + 1] = i
 		end
 	end
 	table.sort(ranked, function(x, y)
 		local sx, sy = stops[x], stops[y]
+		if (sx.pinned == true) ~= (sy.pinned == true) then return sx.pinned == true end     -- the player's own quests are always considered
 		if sx.soloUnknown ~= sy.soloUnknown then return sx.soloUnknown < sy.soloUnknown end
 		if sx.solo ~= sy.solo then return sx.solo > sy.solo end
 		return sx.id < sy.id
@@ -390,7 +392,7 @@ local function searchSequences(S, prevId)
 			if not used[i] and not (pinnedFirst and #chosen == 0 and not stops[i].pinned) then
 				local s = stops[i]
 				local t = leg(prev, i)
-				local seq = { net = net + s.val - lam * ((t or 0) + s.dwell), secs = secs + (t or 0) + s.dwell,
+				local seq = { net = net + s.val - lam * ((t or Pl.UNKNOWN_LEG_SECONDS) + s.dwell), secs = secs + (t or Pl.UNKNOWN_LEG_SECONDS) + s.dwell,
 					unknown = unknown + ((t == nil and not s.pinned) and 1 or 0), key = key .. "|" .. s.id }
 				chosen[#chosen + 1] = i
 				used[i] = true
@@ -591,6 +593,16 @@ function Pl.Compute(ctx, c, opts)
 	end
 	rankStops(S)
 	local pick = searchSequences(S, opts.prevNowId)
+	-- Reachable only through a leg we cannot measure, and not worth its (charged) time: do not send the player there on the
+	-- strength of data that may be unverified. A route zone the player chose, or a quest they added, is their call and stays.
+	local inChosenZone = env.routeMap ~= nil and S.stops[pick.stops[1]].pos.map == env.routeMap
+	if pick.unknown > 0 and pick.net < 0 and not inChosenZone and not diag.pinnedFirst then
+		diag.reason = "ONLY_DISTANT_UNMEASURED"
+		diag.net, diag.seconds, diag.unknownLegs, diag.sequence = pick.net, pick.secs, pick.unknown, {}
+		diag.nowId = nil
+		diag.unmeasuredNet = pick.net
+		return plan
+	end
 	diag.net, diag.seconds, diag.unknownLegs = pick.net, pick.secs, pick.unknown
 	local seqStops, seqIds, inSeq = {}, {}, {}
 	for n, i in ipairs(pick.stops) do

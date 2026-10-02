@@ -107,6 +107,8 @@ local function describe(a, plan, ctx, icon)
 	return it
 end
 
+Pr.Describe = describe
+
 function Pr.Card(plan, ctx)
 	local card = { reminders = {} }
 	for _, a in ipairs(plan and plan.reminders or {}) do

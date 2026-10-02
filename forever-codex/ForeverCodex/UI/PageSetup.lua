@@ -119,6 +119,10 @@ function UI.BuildSetup(parent, mode)
 		y = y - 6
 		w.nav = toggle(f, y, function() P.SetNavigation(not P.NavigationOn()); recompute() end)
 		y = y - 22
+		w.arrow = toggle(f, y, function() P.SetArrow(not P.ArrowOn()) end)
+		y = y - 22
+		w.pins = toggle(f, y, function() P.SetPins(not P.PinsOn()); recompute() end)
+		y = y - 22
 		w.markers = toggle(f, y, function()
 			local st = ns.Markers.Status()
 			if st.probe ~= "passed" then
@@ -145,6 +149,8 @@ function UI.BuildSetup(parent, mode)
 		for _, b in ipairs(w.sys) do b.text:SetText(box(P.IsSystemOn(b.sysKey), b.sysLabel)) end
 		if not isSetup then
 			w.nav.text:SetText(box(P.NavigationOn(), "Waypoint follows what Codex recommends"))
+			w.arrow.text:SetText(box(P.ArrowOn(), "Small direction arrow"))
+			w.pins.text:SetText(box(P.PinsOn(), "Pins on the world map"))
 			local st = ns.Markers.Status()
 			w.markers.text:SetText(box(P.MarkersOn() and st.enabled, "World markers" .. (st.probe == "passed" and "" or " (needs a quick test)")))
 			w.hardcore.text:SetText(box(P.IsHardcore(), "This is a Hardcore character"))

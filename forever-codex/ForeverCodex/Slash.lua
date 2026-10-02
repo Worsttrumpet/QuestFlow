@@ -11,6 +11,7 @@ local function helpLines()
 	say("Forever Codex commands:")
 	say("  /codex                 open / close the Codex window;  /codex world | journey | appendices opens that tab")
 	say("  /codex setup           run the first-time setup again;  /codex dev = the developer window")
+	say("  /codex arrow [on|off|flip|reset]   Codex's own small direction arrow;  /codex pins [on|off]   Codex's pins on the world map")
 	say("  /codex nav [on|off]    the waypoint that follows what Codex recommends;  /codex markers [probe|on|off]")
 	say("  /codex party [off|ui|party|both]   what Codex does when party members (or you) finish quests")
 	say("  /codex next            print the recommended next action")
@@ -63,7 +64,7 @@ local function telemetryCommand(rest)
 		say(string.format("Telemetry is %s: %d/%d events stored, %d anomalies. It only records observations; it does not change recommendations.",
 			st.enabled and "on" or "OFF", st.stored, st.cap, st.anomalies))
 		for _, c in ipairs(T.Capabilities()) do
-			say(string.format("  %-13s %s | registered: %s | recorded this session: %d", c.type, c.verified and "proven on Forever" or "UNPROVEN on Forever",
+			say(string.format("  %-13s %s | registered: %s | recorded this session: %d", c.type, c.unavailable and "UNAVAILABLE on Forever" or (c.verified and "proven on Forever" or "UNPROVEN on Forever"),
 				tostring(c.registered), c.recorded))
 		end
 	elseif sub == "summary" then
@@ -118,6 +119,32 @@ local function handle(msg)
 			P.SetNavigation(on)
 			say("Waypoint following " .. (on and "on." or "off. Codex clears its own waypoint and leaves yours alone."))
 			ns.State.Recompute()
+		end
+	elseif cmd == "arrow" then
+		if restLower == "flip" then
+			P.SetArrowFlip(not P.ArrowFlip())
+			say("Arrow direction " .. (P.ArrowFlip() and "inverted." or "back to normal.") .. " (Use this only if the arrow points the wrong way round.)")
+		elseif restLower == "reset" then
+			P.Root().ui.arrowCal = nil
+			ns.Arrow._Reset()
+			say("Arrow forgot which way you face: walk a few steps in different directions to teach it again.")
+		elseif restLower == "on" or restLower == "off" then
+			P.SetArrow(restLower == "on")
+			say("Arrow " .. restLower .. ".")
+		else
+			local st = ns.Arrow.state
+			local cal = ns.Arrow.Calibration()
+			say(string.format("Arrow is %s (%s%s). Calibrated: %s. Unproven on the real client. Usage: /codex arrow on|off|flip|reset", P.ArrowOn() and "on" or "off",
+				tostring(st.reason), st.words and (", " .. st.words) or "", cal and string.format("yes (%d samples)", cal.n or 0) or "no"))
+		end
+	elseif cmd == "pins" then
+		if restLower == "on" or restLower == "off" then
+			P.SetPins(restLower == "on")
+			ns.State.Recompute()
+			say("Map pins " .. restLower .. ".")
+		else
+			local st = ns.Pins.Status()
+			say(string.format("Map pins: %s | world map: %s | minimap: %s | pins for the current plan: %d", st.on and "on" or "off", st.worldMap, st.minimap, st.desired))
 		end
 	elseif cmd == "markers" then
 		if restLower == "probe" then

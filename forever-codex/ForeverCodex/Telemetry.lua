@@ -17,7 +17,7 @@
 --   SESSION        login marker: w, v (schema), lvl, xp, max, build.  Durations/rates only span ONE session.
 --   XP_GAIN        d (XP gained), xp, max, lvl, src ("event"|"poll"|"level_event"), sk (seconds since the last kill, only if
 --                  <= 10), lvlup (true when the gain crossed a level), multi (true if several levels at once)
---   MOB_KILL       npc (creature id), by ("me"|"party"), pet (true if the killer was a pet).  Source: combat log PARTY_KILL.
+--   MOB_KILL       UNAVAILABLE on Forever: the combat log cannot be registered by addons (see WATCHED_EVENTS). Never recorded.
 --   LEVEL_UP       lvl, src
 --   QUEST_ACCEPT   q, w
 --   QUEST_COMPLETE q, dur (wall seconds since accept, only if the accept was seen).  = OBJECTIVES complete (log diff), not turn-in.
@@ -64,13 +64,17 @@ T.EVENT_DEFS = {
 		evidence = "M8.10: position + world conversion proven on Forever; the segmenting logic is Codex's own and untested on the client" },
 	{ type = "XP_GAIN", sources = { "PLAYER_XP_UPDATE", "UnitXP/UnitXPMax (poll)" }, verified = false, evidence = "never probed on Forever" },
 	{ type = "LEVEL_UP", sources = { "PLAYER_LEVEL_UP", "UnitLevel (poll)" }, verified = false, evidence = "UnitLevel is proven on Forever; PLAYER_LEVEL_UP and the XP wrap are not" },
-	{ type = "MOB_KILL", sources = { "COMBAT_LOG_EVENT_UNFILTERED / PARTY_KILL" }, verified = false, evidence = "combat log never probed on Forever" },
+	{ type = "MOB_KILL", sources = { "COMBAT_LOG_EVENT_UNFILTERED / PARTY_KILL" }, verified = false, unavailable = true,
+		evidence = "Forever BLOCKS addon registration of COMBAT_LOG_EVENT_UNFILTERED (real client: IsEventRegistered=false plus a taint popup); kills cannot be counted this way" },
 	{ type = "COMBAT_START", sources = { "PLAYER_REGEN_DISABLED" }, verified = false, evidence = "never probed on Forever" },
 	{ type = "COMBAT_END", sources = { "PLAYER_REGEN_ENABLED" }, verified = false, evidence = "never probed on Forever" },
 }
 
 local WATCHED_EVENTS = { "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "QUEST_ACCEPTED", "QUEST_TURNED_IN", "UNIT_QUEST_LOG_CHANGED",
-	"QUEST_LOG_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "COMBAT_LOG_EVENT_UNFILTERED" }
+	"QUEST_LOG_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }
+-- COMBAT_LOG_EVENT_UNFILTERED is deliberately NOT here: the Forever client refuses an addon's registration of it and raises a
+-- taint popup ("ForeverCodex has been blocked from an action only available to the Blizzard UI"; real-client taint log
+-- pointed at registerAll). The MOB_KILL handler below stays for a future, proven source, but nothing feeds it today.
 
 -- ---------------------------------------------------------------- client readers (replaceable in tests)
 
@@ -531,7 +535,7 @@ function T.Capabilities()
 			end
 		end
 		out[#out + 1] = { type = def.type, verified = def.verified, evidence = def.evidence, sources = def.sources,
-			registered = allKnown and srcRegistered or nil, recorded = seen[def.type] or 0 }
+			registered = (not def.unavailable) and (allKnown and srcRegistered or nil) or false, unavailable = def.unavailable or nil, recorded = seen[def.type] or 0 }
 	end
 	return out
 end

@@ -677,5 +677,5 @@ SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objective
 == planner evaluation: the trace changes nothing ==
 == planner evaluation: the Phase 2.5 baseline is unchanged ==
 
-928 passed, 0 failed
+1068 passed, 0 failed
 ```
