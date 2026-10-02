@@ -52,6 +52,8 @@ local function widget(kind)
 		if k == "GetStringHeight" then return function() return 12 end end
 		if k == "ClearAllPoints" then return function(self) self.__points = nil end end
 		if k == "SetPoint" then return function(self, ...) self.__points = { ... } end end
+		if k == "SetFont" then return function(self, path, size, flags) self.__font = { path = path, size = size, flags = flags } end end
+		if k == "SetHeight" then return function(self, ht) self.__h = ht end end
 		if k == "SetMovable" then return function(self, v) self.__movable = v end end
 		if k == "EnableMouse" then return function(self, v) self.__mouse = v end end
 		if k == "RegisterForDrag" then return function(self, ...) self.__drag = { ... } end end
@@ -81,7 +83,7 @@ local function newWorld(opts)
 	if opts.noLoc then W.loc.map, W.loc.x, W.loc.y = nil, nil, nil end
 	_G.CreateFrame = function(kind, name) local f = widget(kind); f.__name = name; if name then _G[name] = f end; table.insert(W.frames, f); return f end   -- named frames become globals, as in WoW
 	_G.UIParent, _G.Minimap, _G.WorldMapFrame = widget("UIParent"), widget("Minimap"), widget("WorldMapFrame")
-	_G.GameFontNormal, _G.GameTooltip = {}, widget("GameTooltip")
+	_G.GameFontNormal, _G.GameTooltip = { GetFont = function() return "Fonts\\FRIZQT__.TTF", 12, "" end }, widget("GameTooltip")
 	-- the real client shows "||" as one literal pipe (and reads a lone "|r" etc. as a colour code): W.chat is what the player SEES, W.chatRaw what was sent
 	_G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, m) W.chatRaw = W.chatRaw or {}; table.insert(W.chatRaw, m); table.insert(W.chat, (m:gsub("||", "\1"):gsub("|r", ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("\1", "|"))) end }
 	_G.GetBuildInfo = function() return "1.60.1", "70124", "Sep 29 2026", 16001 end
@@ -1350,7 +1352,7 @@ do
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
 	H.fake = dofile(dir .. "/fake_questiedb.lua")
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

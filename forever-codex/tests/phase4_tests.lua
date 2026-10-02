@@ -519,8 +519,8 @@ do
 	W.char.level = 6
 	ns.State.Recompute()
 	check(c.nfyBox.__shown and c.nfyLevel.__text == "Level 6" and c.nfyRows[1].__text:find("New quest: Seen on Forever", 1, true), "reaching an even level with something real shows NEW FOR YOU on the right")
-	check(c.nowBox.__w == 304 and c.nearBox.__w == 304 and c.nfyBox.__w == 192, "NOW and NEARBY stack on the left; the card on the right spans both")
-	check(c.nfyBox.__h == c.nowBox.__h + c.nearBox.__h + 8, "its height is NOW + NEARBY + the gap")
+	check(c.nowBox.__w == 304 and c.nearBox.__w == 304 and c.nfyBox.__w == 192, "NOW and NEARBY stack on the left; the card on the right is narrower than NOW")
+	check(c.nfyBox.__h < c.nowBox.__h + c.nearBox.__h + 8, "it fits its content instead of spanning NOW + NEARBY (was: a full-height panel)")
 	check(c.nowBox.__points[5] == -22 and c.nearBox.__points[5] < c.nowBox.__points[5] and c.nfyBox.__points[5] == c.nowBox.__points[5], "NOW is on top, NEARBY under it, NEW FOR YOU level with NOW")
 	W.now = W.now + 61
 	ns.UI.frame.__scripts.OnUpdate(ns.UI.frame, 1)

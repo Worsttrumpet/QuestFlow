@@ -125,3 +125,15 @@ Changes: the button is movable, takes the mouse and is registered for left-butto
 The same mechanism (SetMovable + RegisterForDrag + StartMoving / StopMovingOrSizing + GetPoint saved to SavedVariables) is already proven on Forever for Codex's window and arrow. It is NOT proven for this button until it is tried in-game.
 The position is not a ring-orbit one (that needs the minimap's geometry, unverified on Forever); the button is placed freely and stored against the screen.
 **Real-client check:** `/reload`, drag the button somewhere, release (it must stop following the mouse and the window must not open), `/reload` (it stays), log out and in (it stays), `/codex minimap reset` (it goes back).
+
+## 12. Player UI polish (presentation only)
+A visual pass over the Codex page and the window shell. Nothing that decides or routes changed: the Presenter, Planner, data, QuestieDB bridge, telemetry, navigation, arrow, minimap button, SavedVariables and slash commands are untouched, and the page still only draws what the Presenter / Nearby / NewForYou / Party hand it.
+* **NOW** is the strongest card: a warm gold 2 px edge, a slightly warmer fill, a 16 px gold action title over a 12 px location line, 11 px detail and 10 px "why". The marker square is hidden when there is nothing to recommend.
+* **Objective progress**: when the Presenter reports counts ("4 / 6") a flat bar with the numbers beside it replaces the plain text; with no counts the old behaviour is kept and no number is made up.
+* **NEARBY** is cooler (muted violet-blue edge), smaller, and fits its rows (56 px when it has nothing to say, was a fixed 168 px).
+* **NEW FOR YOU** is narrower (192 px), has a quiet gold top edge, and fits its content instead of spanning NOW + NEARBY.
+* **Shell**: a 1 px muted-gold border, a small title, a separator under the header. The window stays 520 x 430 (resizing it at run time would make a CENTER-anchored window jump).
+* **Reusable**: `W.Card` + `W.STYLE_*`, `W.Stack`, `W.Progress`, `W.Label`, `W.Line` (Widgets.lua). A future panel is a new style plus its own lines; no feature for one exists.
+* **Type sizes** come from the game's own font file (`GameFontNormal:GetFont()`); if the client will not say which file that is, the text keeps its normal size and the layout still works.
+
+**Real-client check (screenshots, with the Hunter):** the Codex page with a NOW that has objective progress (bar + "4 / 6"), one with a turn-in (e.g. Deathstalkers), the empty NOW, NEARBY with and without rows, and NEW FOR YOU at an even level. Unverified until seen: whether the larger type sizes render, the exact colours against your UI, whether the 2 px edges are crisp.
