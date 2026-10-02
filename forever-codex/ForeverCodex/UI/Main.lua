@@ -18,6 +18,7 @@ local UI = {}
 ns.UI = UI
 
 UI.WIDTH, UI.HEIGHT = 520, 430
+UI.HEIGHT_MIN = 150          -- the Codex page shrinks the window to its content, never below this; other pages use UI.HEIGHT
 UI.pageDefs = {}            -- registration order = tab order
 UI.pages = {}               -- key -> { frame, refresh }
 UI.current = "codex"
@@ -53,15 +54,38 @@ function UI.Icon(parent, kind)
 	return f
 end
 
+--- Sets the window height keeping the TOP edge where it is (a CENTER or BOTTOM anchored frame would otherwise jump).
+function UI.FitHeight(h)
+	local frame = UI.frame
+	if not frame then return end
+	h = math.floor(math.max(UI.HEIGHT_MIN, h) + 0.5)
+	local old = UI.main.height or UI.HEIGHT
+	if h == old then return end
+	local ok, point, _, rel, x, y = pcall(frame.GetPoint, frame, 1)
+	frame:SetHeight(h)
+	UI.main.height = h
+	if ok and type(point) == "string" and type(x) == "number" and type(y) == "number" then
+		if point:find("BOTTOM") then y = y + (old - h)
+		elseif not point:find("TOP") then y = y + (old - h) / 2 end
+		frame:ClearAllPoints()
+		frame:SetPoint(point, UIParent, rel or point, x, y)
+	end
+end
+
 local function savePosition(frame)
 	local ok, point, _, rel, x, y = pcall(frame.GetPoint, frame, 1)
 	if ok and type(point) == "string" and type(x) == "number" and type(y) == "number" then
-		P.SetWindowPos({ point = point, rel = rel or point, x = x, y = y })
+		P.SetWindowPos({ point = point, rel = rel or point, x = x, y = y, h = UI.main.height })
 	end
 end
 
 local function restorePosition(frame)
 	local pos = P.WindowPos()
+	-- the window was saved at the height it had then (the Codex page fits its content): start from that height, so fitting again keeps the top edge where it was
+	if type(pos) == "table" and type(pos.h) == "number" and pos.h >= UI.HEIGHT_MIN and pos.h <= 2000 then
+		UI.main.height = pos.h
+		frame:SetHeight(pos.h)
+	end
 	frame:ClearAllPoints()
 	if type(pos) == "table" and pos.point and type(pos.x) == "number" and type(pos.y) == "number" then
 		frame:SetPoint(pos.point, UIParent, pos.rel or pos.point, pos.x, pos.y)
@@ -80,6 +104,7 @@ local function showPage(key)
 		for _, def in ipairs(UI.pageDefs) do if def.key == key then nav.button.text:SetText(def.label .. "  v") end end
 		nav.menu:Hide()
 	end
+	if key ~= "codex" then UI.FitHeight(UI.HEIGHT) end        -- only the Codex page fits its content
 	UI.Refresh()
 end
 UI.ShowPage = showPage
@@ -116,6 +141,7 @@ local function build()
 	sep:SetSize(1, 1)
 	sep:SetColorTexture(0.40, 0.34, 0.18, 0.55)
 	UI.frame = frame
+	UI.main.height = UI.main.height or UI.HEIGHT
 	local nav = { items = {} }
 	UI.main.nav = nav
 	nav.button = W.Button(frame, 150, 22, "Codex  v", function() if nav.menu:IsShown() then nav.menu:Hide() else nav.menu:Show() end end)

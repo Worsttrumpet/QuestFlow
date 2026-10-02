@@ -257,6 +257,8 @@ local function refresh()
 		c.partyHead:SetText("")
 		for _, row in ipairs(c.partyRows) do row.head:SetText("") end
 	end
+	-- the window fits the page: the page starts 36 px below the window top, with a little room under the last line
+	if UI.FitHeight then UI.FitHeight(36 + y + 12) end
 end
 
 UI.RegisterPage("codex", "Codex", function(parent)
@@ -275,6 +277,7 @@ UI.RegisterPage("codex", "Codex", function(parent)
 			refresh()
 		else
 			holder:Hide()
+			if UI.FitHeight then UI.FitHeight(UI.HEIGHT) end
 			setup.frame:Show()
 			setup.Refresh()
 		end

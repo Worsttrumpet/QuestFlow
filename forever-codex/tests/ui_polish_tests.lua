@@ -156,7 +156,7 @@ do
 	local ns, W, c = uiWorld(QUEST, {})
 	local UI = ns.UI
 	check(UI.frame.__movable == true and UI.frame.__drag and UI.frame.__drag[1] == "LeftButton" and UI.frame.__clamped == true, "the window is still movable, drag-registered and clamped")
-	check(UI.WIDTH == 520 and UI.HEIGHT == 430 and UI.frame.__w == 520 and UI.frame.__h == 430, "the window size is unchanged")
+	check(UI.WIDTH == 520 and UI.HEIGHT == 430 and UI.frame.__w == 520, "the window width is unchanged (the height fits the Codex page, see below)")
 	check(UI.main.nav.button.text.__text == "Codex  v", "the dropdown button is unchanged")
 	local found
 	for _, fs in ipairs(W.fonts) do if fs.__text == "FOREVER CODEX  v" .. ForeverCodex.VERSION then found = true end end
@@ -375,4 +375,29 @@ do
 	check(not slashSrc:find('restLower == "size"', 1, true) and not slashSrc:find("resize", 1, true), "no command was added for arrow sizing")
 	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
 	_G.IsShiftKeyDown, _G.GetCursorPosition = nil, nil
+end
+
+section("window: the Codex page fits its content (no empty space), other pages keep the full height, the top edge never moves")
+do
+	local ns, W, c = uiWorld(QUEST, {})
+	local UI = ns.UI
+	local h1 = UI.frame.__h
+	check(h1 < UI.HEIGHT and h1 >= UI.HEIGHT_MIN, "with a short page the window is shorter than the full height  [" .. tostring(h1) .. "]")
+	local ns2 = uiWorld(QUEST, {}, 6)
+	-- more content (a log reminder line and a second card row) makes it taller, never shorter than the content
+	ns2.UI.ShowPage("journey")
+	check(ns2.UI.frame.__h == ns2.UI.HEIGHT, "other pages use the full height")
+	ns2.UI.ShowPage("codex")
+	check(ns2.UI.frame.__h < ns2.UI.HEIGHT, "back on the Codex page it fits again")
+	-- the top edge: a CENTER-anchored window keeps its top when the height changes
+	local f = ns2.UI.frame
+	local function top() local p = f.__points; return p[5] + f.__h / 2 end
+	f:ClearAllPoints(); f:SetPoint("CENTER", UIParent, "CENTER", 10, 20)
+	ns2.UI.main.height = f.__h
+	local before = top()
+	ns2.UI.ShowPage("journey")
+	check(math.abs(top() - before) < 1e-6, "the top edge stays put when the page changes the height")
+	ns2.UI.ShowPage("codex")
+	check(math.abs(top() - before) < 1e-6, "and when it fits again")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
 end

@@ -162,3 +162,7 @@ Install `forever-codex/dist/ForeverCodex-0.2.2.zip` (0.2.1 stays in `dist/`).
 Planner baseline: only scenario J changed (the hand-in now leads at the shared stop; identical net and time).
 
 Real-client checks still owed: Shift-drag/tooltip on the arrow, the Skip button, local-first and turn-in-first on a fresh character, the turn-in route for a quest that completes instantly.
+
+## 15. Release 0.2.3: the window fits the Codex page
+The Codex page left a large empty area under its cards (the window was a fixed 430 px). The window height now fits the page content (never below 150 px); the other pages keep the full 430 px. The window's top edge stays where it was when the height changes (the saved position records the height it was saved at). Presentation only: the planner, data and 0.2.2 behaviour are untouched.
+Real-client check: the Codex page with and without NEARBY rows / reminder line / party card, switching pages from the dropdown, and dragging then `/reload`.
