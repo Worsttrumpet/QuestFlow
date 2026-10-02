@@ -376,7 +376,7 @@ function D.PlaytestLines(snap, lines)
 	add("--- WHY (planner trace) ---")
 	if d then
 		local flags = {}
-		for _, k in ipairs({ "localOnly", "localWork", "turnInFirst", "stuck", "pinnedFirst", "routeZoneOnly" }) do if d[k] then flags[#flags + 1] = k end end
+		for _, k in ipairs({ "localOnly", "localWork", "turnInFirst", "stuck", "pinnedFirst", "routeZoneOnly", "deferredTurnIn", "handInOnRoute", "handInBatched", "slotPressure", "workHere" }) do if d[k] then flags[#flags + 1] = k end end
 		add(string.format("reason=%s | flags: %s | net %s over ~%s s | unknown legs %s | %s stops, %s sequences", tostring(d.reason), #flags > 0 and table.concat(flags, ",") or "none",
 			num(d.net), num(d.seconds, "%.0f"), tostring(d.unknownLegs), tostring(d.stops), tostring(d.sequences)))
 		local rej = {}

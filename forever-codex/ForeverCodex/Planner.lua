@@ -108,6 +108,15 @@ Pl.TURN_IN_FIRST_SECONDS = 45
 -- Pl.DEFER_TURN_INS = false switches it off (tests).
 Pl.DEFER_TURN_INS = true
 Pl.DEFER_NEAR_YD = 150
+-- A hand-in is NOT deferred (it is worth the trip, or costs nothing) when:
+--   * it is close (DEFER_NEAR_YD), or the log is nearly full (SLOT_PRESSURE_FREE): a freed slot has value
+--   * it is naturally on the route to the productive work: walking player -> hand-in -> work costs at most ON_ROUTE_YD more than going straight there
+--   * it is part of a batch: BATCH_MIN or more hand-ins at one stop, or in a row of stops no more than BATCH_YD apart, so one trip clears several
+--   * there is no located objective work to do first (then the hand-in is simply the best thing to do)
+-- The work does NOT have to be physically close: "meaningful productive work somewhere on the route" is enough to defer a far, lone hand-in.
+Pl.ON_ROUTE_YD = 100
+Pl.BATCH_MIN = 2
+Pl.BATCH_YD = 250
 -- WORK HERE. Work the player has already started, within a short walk, is finished before leaving the area, in every route style: a higher
 -- price on time (the "fast" style) must not walk the player 1800 yd away from two started quests that are 40 yd away just because every local
 -- option scores a little below a far pickup trip, or to run 750 yd to one quest's objectives while another started quest's objective is right
@@ -766,9 +775,33 @@ function Pl.Compute(ctx, c, opts)
 					local st = S.stops[f]
 					if hasKind(st, "OBJECTIVE") and not hasHandIn(st) and st.pos.map == S.player.map and better(seq, alt) then alt = seq end
 				end
+				-- how many hand-ins this trip would clear: the first stop's, plus the stops right behind it that are a short walk apart
+				local batch, prev = 0, first
+				for _, i in ipairs(pick.stops) do
+					local st = S.stops[i]
+					if not hasHandIn(st) or hasKind(st, "OBJECTIVE") then break end
+					if st ~= first then
+						local gap = E.Distance(ctx, prev.pos, st.pos)
+						if not gap or gap > Pl.BATCH_YD then break end
+					end
+					for _, it in ipairs(st.items) do if it.a.kind == "TURN_IN" then batch = batch + 1 end end
+					prev = st
+				end
+				local batched = batch >= Pl.BATCH_MIN
+				-- on the way to the work: the hand-in costs at most ON_ROUTE_YD of extra walking
+				local onRoute = false
 				if alt then
+					local w = S.stops[alt.stops[1]]
+					local direct, leg1, leg2 = E.Distance(ctx, S.player, w.pos), d, E.Distance(ctx, first.pos, w.pos)
+					onRoute = direct ~= nil and leg2 ~= nil and leg1 + leg2 - direct <= Pl.ON_ROUTE_YD
+				end
+				if batched then diag.handInBatched = true end
+				if onRoute then diag.handInOnRoute = true end
+				if alt and not batched and not onRoute then
 					pick = alt
 					diag.deferredTurnIn = true
+				elseif alt or batched then
+					-- keep the hand-in: it is on the route to the work, or it is a batch worth the trip
 				else
 					local started
 					for _, a in ipairs(S.localWork) do

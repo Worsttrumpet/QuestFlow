@@ -393,8 +393,8 @@ end
 section("READY TO TURN IN: nearest first, skipped quests left out, plain ASCII, drawn as its own card")
 do
 	local work, workLog = unplaced(50, "Doom Weed", 9, 10)
-	local far = handIn(60, "Far ready", 0.40)
-	local nearer = handIn(61, "Nearer ready", 0.25)
+	local far = handIn(60, "Far ready", 0.35)
+	local nearer = handIn(61, "Nearer ready", -0.30)     -- on the other side of the player: two far hand-ins that are NOT a batch
 	local ns, W = world(6, 9001, { work, far, nearer }, { log = { [50] = workLog, [60] = { title = "Far ready", complete = true }, [61] = { title = "Nearer ready", complete = true } } })
 	local p = plan(ns)
 	local card = ns.Presenter.Card(p, ns.State.ctx)
@@ -808,5 +808,110 @@ do
 	check(p.now and p.now.quest == 369, "the objective 30 yd away is NOW, not the quests 750 yd away  [" .. tostring(p.now and p.now.id) .. "; without the rule: " .. tostring(before.now and before.now.id) .. "]")
 	check(before.now and before.now.quest ~= 369, "(proof the rule is what does it) without it the plan runs to the far quests  [" .. tostring(before.now and before.now.id) .. "]")
 	ns.Planner.DEPTH = 3
+	check(#ns.errors == 0, "no errors")
+end
+
+
+-- ================================================================ 0.4.3: the hand-in-can-wait principle (route-level, not UI)
+-- READY TO TURN IN = finished but can wait; NOW = the best productive thing at this point in the route. A hand-in is promoted when it is close, on
+-- the route, part of a batch, or the log is nearly full; otherwise productive work (anywhere on the route) comes first.
+
+section("hand-in can wait: productive work + a distant lone hand-in -> the hand-in waits (the work need not be close)")
+do
+	-- the 0.4.1 real-client shape: work 100 yd away, a second quest further on, a lone ready hand-in 1000 yd back
+	local w1 = Q(70, "Rear Guard", 9001, 0.60, 0.5, { objCoords = { { map = 9001, x = 0.60, y = 0.5 } }, giverName = "G1" })
+	local w2 = Q(71, "At War", 9001, 0.72, 0.5, { objCoords = { { map = 9001, x = 0.72, y = 0.5 } }, giverName = "G2" })
+	local ready = handIn(60, "Lich", -1.0, "Bethor")
+	local ns = world(6, 9001, { w1, w2, ready }, { log = { [70] = { title = "Rear Guard", objectives = { { text = "Heart", have = 0, need = 1 } } }, [71] = { title = "At War", objectives = { { text = "Friar", have = 0, need = 5 } } }, [60] = { title = "Lich", complete = true } } })
+	local p = plan(ns)
+	check(p.now and p.now.id == "Q:70:OBJECTIVE" and p.diag.deferredTurnIn ~= false, "NOW is the nearest productive work  [" .. tostring(p.now and p.now.id) .. "]")
+	local card = ns.Presenter.Card(p, ns.State.ctx)
+	check(#card.ready == 1 and card.ready[1].title == "Lich", "the far hand-in is listed as READY TO TURN IN")
+	-- work further away than the hand-in still wins for a lone hand-in off the route
+	local far = Q(72, "Far work", 9001, 0.95, 0.5, { objCoords = { { map = 9001, x = 0.95, y = 0.5 } }, giverName = "G3" })
+	local ready2 = handIn(61, "Behind", -0.30, "Behind NPC")
+	local ns2 = world(6, 9001, { far, ready2 }, { log = { [72] = { title = "Far work", objectives = { { text = "Thing", have = 1, need = 4 } } }, [61] = { title = "Behind", complete = true } } })
+	local p2 = plan(ns2)
+	check(p2.now and p2.now.id == "Q:72:OBJECTIVE" and p2.diag.deferredTurnIn == true, "the work does not have to be close: a hand-in 300 yd BEHIND waits for work 450 yd ahead  [" .. tostring(p2.now and p2.now.id) .. "]")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end
+
+section("hand-in can wait: a close hand-in is promoted")
+do
+	local work = Q(70, "Work", 9001, 0.62, 0.5, { objCoords = { { map = 9001, x = 0.62, y = 0.5 } }, giverName = "G1" })
+	local near = handIn(60, "Close", -0.08, "Close NPC")
+	local ns = world(6, 9001, { work, near }, { log = { [70] = { title = "Work", objectives = { { text = "Thing", have = 1, need = 4 } } }, [60] = { title = "Close", complete = true } } })
+	check(plan(ns).now.id == "Q:60:TURN_IN", "a hand-in 80 yd away is NOW even with productive work available")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("hand-in can wait: a hand-in naturally on the route to the work is included, not deferred")
+do
+	-- player at x=.50; hand-in at .70 (200 yd), work at .90 (400 yd): the hand-in is on the straight line there
+	local work = Q(70, "Work ahead", 9001, 0.90, 0.5, { objCoords = { { map = 9001, x = 0.90, y = 0.5 } }, giverName = "G1" })
+	local onWay = handIn(60, "On the way", 0.20, "Way NPC")
+	local ns = world(6, 9001, { work, onWay }, { log = { [70] = { title = "Work ahead", objectives = { { text = "Thing", have = 1, need = 4 } } }, [60] = { title = "On the way", complete = true } } })
+	local p = plan(ns)
+	check(p.now and p.now.id == "Q:60:TURN_IN" and p.diag.handInOnRoute == true and p.diag.deferredTurnIn ~= true, "the hand-in 200 yd out, on the line to the work 400 yd out, is done first  [" .. tostring(p.now and p.now.id) .. "]")
+	local seq = p.diag.sequence or {}
+	check(seq[1] == "Q:60:TURN_IN" and seq[2] == "Q:70:OBJECTIVE", "and the route goes hand-in, then the work")
+	-- the same hand-in on the OTHER side of the player is a backtrack and waits
+	local back = handIn(61, "Backtrack", -0.20, "Back NPC")
+	local ns2 = world(6, 9001, { work, back }, { log = { [70] = { title = "Work ahead", objectives = { { text = "Thing", have = 1, need = 4 } } }, [61] = { title = "Backtrack", complete = true } } })
+	local p2 = plan(ns2)
+	check(p2.now and p2.now.id == "Q:70:OBJECTIVE" and p2.diag.deferredTurnIn == true and p2.diag.handInOnRoute ~= true, "the same distance behind the player is a backtrack: the work comes first")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end
+
+section("hand-in can wait: several hand-ins near each other are one trip (batched)")
+do
+	local work = Q(70, "Work", 9001, 0.50, 0.9, { objCoords = { { map = 9001, x = 0.50, y = 0.9 } }, giverName = "G1" })
+	-- two hand-ins 100 yd apart, 350 yd to the west (off the line to the work)
+	local a, b = handIn(60, "Ready A", -0.35, "NPC A"), handIn(61, "Ready B", -0.35, "NPC B")
+	b.y = 0.52
+	local log = { [70] = { title = "Work", objectives = { { text = "Thing", have = 1, need = 4 } } }, [60] = { title = "Ready A", complete = true }, [61] = { title = "Ready B", complete = true } }
+	local ns = world(6, 9001, { work, a, b }, { log = log })
+	local p = plan(ns)
+	check(p.now and p.now.kind == "TURN_IN" and p.diag.handInBatched == true and p.diag.deferredTurnIn ~= true, "two hand-ins that are a short walk apart are one trip: the batch is NOW  [" .. tostring(p.now and p.now.id) .. "]")
+	-- one of them alone is a lone far hand-in: it waits
+	local ns2 = world(6, 9001, { work, a }, { log = { [70] = log[70], [60] = log[60] } })
+	local p2 = plan(ns2)
+	check(p2.now and p2.now.id == "Q:70:OBJECTIVE" and p2.diag.deferredTurnIn == true, "(proof the batch is what changed it) the same hand-in alone waits  [" .. tostring(p2.now and p2.now.id) .. "]")
+	-- two hand-ins on opposite sides of the player are not a batch
+	local c = handIn(62, "Ready C", 0.35, "NPC C")
+	local ns3 = world(6, 9001, { work, a, c }, { log = { [70] = log[70], [60] = log[60], [62] = { title = "Ready C", complete = true } } })
+	local p3 = plan(ns3)
+	check(p3.diag.handInBatched ~= true and p3.now.id == "Q:70:OBJECTIVE", "hand-ins far from each other are not a batch  [" .. tostring(p3.now and p3.now.id) .. "]")
+	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
+end
+
+section("hand-in can wait: at 38/40 and above the log is nearly full, so the hand-in is not deferred")
+do
+	local function fill(n)
+		local quests, log = {}, {}
+		for i = 1, n do
+			local id = 2000 + i
+			local q = Q(id, "Filler " .. i, 9001, nil, nil, { zone = "zone-a" })
+			q.map, q.x, q.y = nil, nil, nil
+			quests[#quests + 1] = q
+			log[id] = { title = "Filler " .. i, objectives = { { text = "Thing", have = i == 1 and 3 or 0, need = 5 } } }
+		end
+		return quests, log
+	end
+	local ready = handIn(60, "Graverobbers", -0.30, "Coleman")
+	for _, used in ipairs({ 38, 39, 40 }) do
+		-- `used - 1` quests in progress (one of them started) + the ready one = `used` entries in the log
+		local q, l = fill(used - 1)
+		q[#q + 1] = ready; l[60] = { title = "Graverobbers", complete = true }
+		local ns = world(6, 9001, q, { log = l })
+		local p = plan(ns)
+		check(p.diag.slotPressure == true and p.diag.deferredTurnIn ~= true and p.now.id == "Q:60:TURN_IN", used .. "/40 in the log: no deferral, the hand-in is NOW (it frees a slot)  [" .. tostring(p.now and p.now.id) .. "]")
+	end
+	-- 37/40: still three free, the lone far hand-in waits
+	local q, l = fill(36)
+	q[#q + 1] = ready; l[60] = { title = "Graverobbers", complete = true }
+	local ns = world(6, 9001, q, { log = l })
+	local p = plan(ns)
+	check(p.diag.slotPressure ~= true and p.diag.deferredTurnIn == true, "37/40: there is still room, so the hand-in waits")
 	check(#ns.errors == 0, "no errors")
 end
