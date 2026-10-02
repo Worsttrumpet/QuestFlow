@@ -526,7 +526,7 @@ do
 	check(#bytes == 18 + 64 * 64 * 4 and bytes:byte(3) == 2 and bytes:byte(13) == 64 and bytes:byte(15) == 64 and bytes:byte(17) == 32, "the file is a 64 x 64, 32-bit uncompressed TGA (a power of two, with alpha)")
 	check(bytes:byte(18 + 4) == 0, "and its corners are transparent, so the button is a circle")
 	local btn = MM.button
-	check(btn and btn.__w == 32 and btn.icon and btn.icon.__texture == MM.ICON, "the button is 32 px and shows that picture")
+	check(btn and btn.__w == MM.SIZE and MM.SIZE <= 30 and btn.icon and btn.icon.__texture == MM.ICON, "the button is small (28 px) and shows that picture")
 	check(not btn.label and not btn.border, "the old yellow square and letter are gone")
 	check(#ns.errors == 0, "no errors")
 end
@@ -551,4 +551,87 @@ do
 	check(UI.optionsKey == "journey", "/codex journey opens that tab")
 	check(c.nowIcon == nil and c.nowLabel.__text == "NOW", "NOW is just the label: the yellow star box is gone")
 	check(#ns.errors == 0, "no errors")
+end
+
+section("0.2.12: the minimap button slides round the minimap's edge and only the angle is saved")
+do
+	local function copy(v) if type(v) ~= "table" then return v end local o = {} for k, x in pairs(v) do o[k] = copy(x) end return o end
+	local function button() for _, f in ipairs(H.world().frames) do if f.__name == "ForeverCodexMinimapButton" then return f end end end
+	local function rounded(v) return math.floor(v * 100 + 0.5) / 100 end
+	local ns = boot({ char = { level = 10 } })
+	local MM = ns.MinimapButton
+	local btn = button()
+	local cursor = { 0, 0 }
+	_G.Minimap.GetCenter = function() return 500, 500 end
+	_G.Minimap.GetWidth = function() return 140 end
+	_G.Minimap.GetEffectiveScale = function() return 1 end
+	_G.GetCursorPosition = function() return cursor[1], cursor[2] end
+	MM.Apply(btn)
+	local p = btn.__points
+	check(p[1] == "CENTER" and p[2] == _G.Minimap and p[3] == "CENTER" and math.abs(p[4] + 53.03) < 0.01 and math.abs(p[5] + 53.03) < 0.01, "by default it sits on the ring at the bottom-left (225 degrees, radius 75)")
+	-- drag: the mouse is anywhere, the button stays ON the ring at the mouse's angle
+	btn.StartMoving = function() error("a free drag must not start when the edge is known") end
+	btn.__scripts.OnMouseDown(btn)
+	btn.__scripts.OnDragStart(btn)
+	check(btn.__scripts.OnUpdate ~= nil, "dragging follows the mouse every frame")
+	for _, c in ipairs({ { 700, 500, 0 }, { 500, 900, 90 }, { 100, 500, 180 }, { 500, -300, 270 } }) do
+		cursor[1], cursor[2] = c[1], c[2]
+		btn.__scripts.OnUpdate(btn)
+		local q = btn.__points
+		local r = math.sqrt(q[4] ^ 2 + q[5] ^ 2)
+		check(math.abs(r - 75) < 0.01 and math.abs(btn.angle - c[3]) < 0.01, string.format("the mouse at %d degrees puts the button at %d degrees on the ring, never off it", c[3], c[3]))
+	end
+	cursor[1], cursor[2] = 500 + 30, 500 + 30
+	btn.__scripts.OnUpdate(btn)
+	btn.__scripts.OnDragStop(btn)
+	check(btn.__scripts.OnUpdate == nil and math.abs(ns.Prefs.MinimapAngle() - 45) < 0.01, "letting go ends the drag and saves the angle (45)")
+	check(ns.Prefs.MinimapPos() == nil and ns.Prefs.IsSavedVariablesSafe(ForeverCodexDB), "no free position is saved, and the file is SavedVariables-safe")
+	local toggles = 0
+	ns.UI.Toggle = function() toggles = toggles + 1 end
+	btn.__scripts.OnClick(btn, "LeftButton")
+	check(toggles == 0, "letting go of a drag is not a click")
+	-- a reload puts it back at that angle
+	local db = copy(ForeverCodexDB)
+	local ns2 = boot({ char = { level = 10 }, savedVars = db })
+	_G.Minimap.GetCenter = function() return 500, 500 end
+	_G.Minimap.GetWidth = function() return 140 end
+	_G.Minimap.GetEffectiveScale = function() return 1 end
+	ns2.MinimapButton.Apply(button())
+	local q = button().__points
+	check(math.abs(q[4] - 53.03) < 0.01 and math.abs(q[5] - 53.03) < 0.01, "after a reload it is back at 45 degrees on the ring")
+	-- reset
+	H.slash("minimap reset")
+	check(ns2.Prefs.MinimapAngle() == nil and math.abs(button().angle - 225) < 0.01, "/codex minimap reset forgets the angle and goes back to the default")
+	-- unusable angles are ignored
+	local bad = copy(db); bad.ui.minimapAngle = "oops"
+	local ns3 = boot({ char = { level = 10 }, savedVars = bad })
+	check(ns3.Prefs.MinimapAngle() == nil, "an unusable saved angle is ignored")
+	check(ns.MinimapButton.AngleOf(0, 10) == 90 and ns.MinimapButton.AngleOf(-10, 0) == 180 and ns.MinimapButton.AngleOf(0, -10) == 270, "(the angle maths: north 90, west 180, south 270)")
+	_G.GetCursorPosition = nil
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end
+
+section("0.2.12: the tracker comes back after a reload unless it was closed")
+do
+	local function copy(v) if type(v) ~= "table" then return v end local o = {} for k, x in pairs(v) do o[k] = copy(x) end return o end
+	local ns, W, c = uiWorld(QUEST, {})
+	check(ns.UI.frame.__shown and ns.Prefs.TrackerShown(), "(setup) the tracker is showing")
+	local db = copy(ForeverCodexDB)
+	local ns2 = boot({ char = { level = 6 }, synthetic = true, savedVars = db })
+	check(ns2.UI.frame and ns2.UI.frame.__shown, "after a reload it is shown again by itself (it was open)")
+	-- closed with the x: it stays closed after a reload
+	ns2.UI.main.close.__scripts.OnClick(ns2.UI.main.close)
+	check(not ns2.UI.frame.__shown and not ns2.Prefs.TrackerShown(), "closing it is remembered")
+	local db2 = copy(ForeverCodexDB)
+	local ns3 = boot({ char = { level = 6 }, synthetic = true, savedVars = db2 })
+	check(ns3.UI.frame == nil or not ns3.UI.frame.__shown, "and it does not reappear after a reload")
+	-- the minimap button's left click reopens it and that is remembered too
+	local mm
+	for _, f in ipairs(H.world().frames) do if f.__name == "ForeverCodexMinimapButton" then mm = f end end
+	mm.__scripts.OnClick(mm, "LeftButton")
+	check(ns3.UI.frame.__shown and ns3.Prefs.TrackerShown(), "left click on the minimap button shows it again")
+	-- before setup is finished the tracker is not forced open
+	local fresh = boot({ char = { level = 6 }, synthetic = true })
+	check(fresh.UI.frame == nil and fresh.UI.options == nil, "a brand-new character is not shown a window until it asks for one")
+	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
 end

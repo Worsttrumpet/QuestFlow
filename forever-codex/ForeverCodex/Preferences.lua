@@ -126,6 +126,17 @@ function P.MinimapPos()
 	return { point = t.point, rel = rel, x = x, y = y }
 end
 function P.SetMinimapPos(t) root().ui.minimapPos = t end
+--- Where the minimap button sits ON the minimap's edge, as an angle in degrees (0 = east, counter-clockwise), or nil when none / unusable.
+function P.MinimapAngle()
+	local a = root().ui.minimapAngle
+	if type(a) ~= "number" or a ~= a or a == math.huge or a == -math.huge then return nil end
+	return a % 360
+end
+function P.SetMinimapAngle(a) root().ui.minimapAngle = type(a) == "number" and a or nil end
+function P.ClearMinimapAngle() root().ui.minimapAngle = nil end
+--- Whether the tracker was showing when the player last used it (shown by default; only an explicit close keeps it away after a reload).
+function P.TrackerShown() return root().ui.trackerShown ~= false end
+function P.SetTrackerShown(on) root().ui.trackerShown = on == true end
 function P.ClearMinimapPos() root().ui.minimapPos = nil end
 
 --- The waypoint Codex last placed for this character: { action, map, x, y } or nil (see Navigation).

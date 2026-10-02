@@ -55,10 +55,54 @@ local MM = { DEFAULT = DEFAULT }
 MM.ICON = "Interface\\AddOns\\ForeverCodex\\Media\\CodexIcon.tga"
 ns.MinimapButton = MM
 
+-- ON THE EDGE. When the minimap's geometry can be read, the button does not float freely: dragging slides it round the minimap's edge (it
+-- follows the mouse's angle from the minimap's centre, at the ring's radius) and only the angle is saved. When the geometry cannot be read it
+-- falls back to the free drag below.
+MM.ANGLE_DEFAULT = 225        -- bottom-left of the ring (degrees, 0 = east, counter-clockwise)
+MM.SIZE = 28
+MM.EDGE_PAD = 5               -- how far the button's centre sits outside the minimap's own radius
+
+--- The minimap's centre, width and effective scale, or nil when any of them cannot be read.
+function MM.Geometry()
+	local m = rawget(_G, "Minimap")
+	if type(m) ~= "table" then return nil end
+	local okC, cx, cy = pcall(m.GetCenter, m)
+	local okW, w = pcall(m.GetWidth, m)
+	local okS, sc = pcall(m.GetEffectiveScale, m)
+	if not (okC and okW and type(cx) == "number" and type(cy) == "number" and type(w) == "number" and w > 0) then return nil end
+	if not okS or type(sc) ~= "number" or sc <= 0 then sc = 1 end
+	return cx, cy, w, sc
+end
+
+--- Pure: the offset from the minimap's centre for an angle (degrees) and a radius.
+function MM.Offset(angle, radius)
+	local r = math.rad(angle)
+	return math.cos(r) * radius, math.sin(r) * radius
+end
+
+--- Pure: the angle (degrees, 0..360) of a point relative to a centre.
+function MM.AngleOf(dx, dy)
+	local a = math.deg(math.atan2(dy, dx))
+	if a < 0 then a = a + 360 end
+	return a
+end
+
+local function placeOnEdge(btn, angle)
+	local _, _, w = MM.Geometry()
+	local x, y = MM.Offset(angle, w / 2 + MM.EDGE_PAD)
+	btn:ClearAllPoints()
+	btn:SetPoint("CENTER", Minimap, "CENTER", x, y)
+	btn.angle = angle
+end
+
 --- Anchors the button at its saved spot, or the default when none (or an unusable one) is saved.
 function MM.Apply(btn)
 	btn = btn or MM.button
 	if not btn then return end
+	if MM.Geometry() then
+		placeOnEdge(btn, (ns.Prefs and ns.Prefs.MinimapAngle()) or MM.ANGLE_DEFAULT)
+		return
+	end
 	local pos = ns.Prefs and ns.Prefs.MinimapPos()
 	btn:ClearAllPoints()
 	if pos then
@@ -82,6 +126,7 @@ end
 --- Back to the default spot (the saved position is forgotten).
 function MM.Reset()
 	ns.Prefs.ClearMinimapPos()
+	ns.Prefs.ClearMinimapAngle()
 	MM.Apply()
 end
 
@@ -109,7 +154,7 @@ end
 
 local function build()
 	local btn = CreateFrame("Button", "ForeverCodexMinimapButton", Minimap)
-	btn:SetSize(32, 32)
+	btn:SetSize(MM.SIZE, MM.SIZE)
 	MM.button = btn
 	MM.Apply(btn)
 	btn:SetFrameStrata("MEDIUM")
@@ -131,10 +176,29 @@ local function build()
 	btn:SetScript("OnDragStart", function(self)
 		dragged = true
 		if GameTooltip then ns.Safe(GameTooltip.Hide, GameTooltip) end
-		ns.Safe(self.StartMoving, self)
+		if MM.Geometry() and type(GetCursorPosition) == "function" then
+			-- slide round the edge: follow the mouse's angle from the minimap's centre
+			self.edgeDrag = true
+			self:SetScript("OnUpdate", function(f)
+				local cx, cy, _, sc = MM.Geometry()
+				local okP, px, py = pcall(GetCursorPosition)
+				if cx and okP and type(px) == "number" and type(py) == "number" then
+					placeOnEdge(f, MM.AngleOf(px / sc - cx, py / sc - cy))
+				end
+			end)
+		else
+			self.edgeDrag = false
+			ns.Safe(self.StartMoving, self)
+		end
 	end)
 	btn:SetScript("OnDragStop", function(self)
-		ns.Safe(self.StopMovingOrSizing, self)     -- always release the drag first, whatever happens next
+		if self.edgeDrag then
+			self.edgeDrag = false
+			self:SetScript("OnUpdate", nil)               -- always release the drag first, whatever happens next
+			if type(self.angle) == "number" then ns.Prefs.SetMinimapAngle(self.angle) end
+			return
+		end
+		ns.Safe(self.StopMovingOrSizing, self)
 		ns.Safe(MM.SavePosition, self)
 	end)
 

@@ -181,7 +181,7 @@ local function buildTracker()
 		sinceCheck = 0
 		if ns.NewForYou and (ns.NewForYou.Active() ~= nil) ~= (UI.main.nfyShown == true) then UI.Refresh() end
 	end)
-	local close = W.Button(frame, 18, 18, "x", function() frame:Hide() end)
+	local close = W.Button(frame, 18, 18, "x", function() frame:Hide(); P.SetTrackerShown(false) end)
 	close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
 	UI.main.close = close
 	frame:Hide()                       -- (a new frame is shown by default: whoever opens it shows it)
@@ -243,6 +243,7 @@ local function showPage(key)
 		ensureTracker()
 		UI.current = "codex"
 		UI.frame:Show()
+		P.SetTrackerShown(true)
 	else
 		ensureOptions()
 		selectTab(key)
@@ -281,10 +282,12 @@ function UI.Toggle()
 	ensureTracker()
 	if UI.frame:IsShown() then
 		UI.frame:Hide()
+		P.SetTrackerShown(false)
 	else
 		ns.State.Recompute()
 		UI.current = "codex"
 		UI.frame:Show()
+		P.SetTrackerShown(true)
 		UI.Refresh()
 	end
 end

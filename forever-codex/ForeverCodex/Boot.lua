@@ -56,6 +56,8 @@ local function onLogin()
 	if ns.Party then ns.Safe(ns.Party.Register) end
 	if ns.BlizzardTracker then ns.Safe(ns.BlizzardTracker.Apply) end
 	ns.State.Recompute()
+	-- the tracker comes back after a reload / login unless the player closed it
+	if P.SetupDone() and P.TrackerShown() and ns.UI and ns.UI.Open then ns.Safe(ns.UI.Open, "codex") end
 	-- the player-facing build stays quiet: the engineering summary (data counts, provenance, the plan) is /codex diag
 	if not P.SetupDone() then ns.Say("Welcome! Type /codex to set up Forever Codex.") end
 end
