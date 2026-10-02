@@ -4,17 +4,17 @@
 -- OWN progress (objective finished, quest finished, quest turned in: from the quest log, proven M8.9, and QUEST_TURNED_IN,
 -- proven M8.8) and (b) share it, and (c) show what other Codex users share. Nothing here reads another addon's data.
 --
--- Setting (per character): off | ui | party | both. Default "ui". No party chat unless the player chooses it.
---   off    nothing is sent or shown
---   ui     Codex sends a small invisible addon message to the group (so other Codex users see it) and shows messages it receives
---   party  Codex says ONE plain line in party chat when you finish an objective, finish a quest or turn one in
---          ("Codex: Quest complete: The Weaver - 1/1 Ataeric's Staff"); works for
---          members without Codex; nothing is shown in the window
---   both   both of the above
+-- Codex NEVER writes quest status to party chat or any chat channel: Questie already announces quest completion and similar
+-- status, and Codex does not duplicate it. (An earlier build had "party" and "both" chat modes; they were removed, and a saved
+-- setting of either is read as "ui".)
 --
--- UNVERIFIED on Forever: C_ChatInfo.SendAddonMessage / RegisterAddonMessagePrefix, the CHAT_MSG_ADDON event, and
--- SendChatMessage to PARTY. Every call is feature-checked and pcall-wrapped; if they are missing Codex still detects your
--- own events and simply has nobody to tell. Identity: a sender's SHORT NAME is kept in MEMORY for this session only to show
+-- Setting (per character): off | ui. Default "ui".
+--   off    nothing is sent or shown
+--   ui     Codex sends a small INVISIBLE addon message to the group (so other Codex users see it in their window) and shows
+--          messages it receives on the Party card. Nothing appears in any chat window.
+--
+-- UNVERIFIED on Forever: C_ChatInfo.SendAddonMessage / RegisterAddonMessagePrefix and the CHAT_MSG_ADDON event. Every call is
+-- feature-checked and pcall-wrapped; if they are missing Codex still detects your own events and simply has nobody to tell. Identity: a sender's SHORT NAME is kept in MEMORY for this session only to show
 -- "Bob finished ...": never saved, no GUIDs, no realm. Messages carry only a quest id and numbers.
 --
 -- Protocol (prefix FCODEX, version 1):   v1|DONE|<questId>   v1|TURNIN|<questId>   v1|OBJ|<questId>|<have>|<need>
@@ -35,7 +35,6 @@ local snap = nil
 local trace = {}          -- the last decisions, newest first: what was seen and why it was or was not sent (/codex party log)
 local feed = {}
 local lastSent = {}
-local lastChat = -100
 
 local function now() return type(GetTime) == "function" and GetTime() or 0 end
 
@@ -58,10 +57,6 @@ Pt.api = {
 		end
 		return false
 	end,
-	sendChat = function(text)
-		if type(SendChatMessage) == "function" then return (pcall(SendChatMessage, text, "PARTY")) end
-		return false
-	end,
 	selfName = function()
 		local ok, n = pcall(UnitName, "player")
 		return ok and n or nil
@@ -73,9 +68,8 @@ local function questName(id)
 	return v and v.name or "a quest"
 end
 
-local function showsFeed() local m = P.PartyNotify() return m == "ui" or m == "both" end
-local function sendsAddon() local m = P.PartyNotify() return m == "ui" or m == "both" end
-local function sendsChat() local m = P.PartyNotify() return m == "party" or m == "both" end
+local function showsFeed() return P.PartyNotify() == "ui" end
+local function sendsAddon() return P.PartyNotify() == "ui" end
 
 function Pt.Register() return Pt.api.registerPrefix() end
 
@@ -83,16 +77,8 @@ function Pt.Register() return Pt.api.registerPrefix() end
 
 local function note(ev, inGroup, result)
 	table.insert(trace, 1, { kind = ev.type, quest = ev.quest, name = ev.name, line = ev.line, inGroup = inGroup and true or false, mode = P.PartyNotify(),
-		addon = result.addon, chat = result.chat, why = result.why })
+		addon = result.addon, why = result.why })
 	while #trace > 10 do trace[#trace] = nil end
-end
-
---- The one plain line used in party chat, e.g. "Codex: Quest complete: The Weaver - 1/1 Ataeric's Staff".
-local function chatLine(ev)
-	local name = ev.name or questName(ev.quest)
-	if ev.type == "DONE" then return "Codex: Quest complete: " .. name .. (ev.line and (" - " .. ev.line) or "") end
-	if ev.type == "TURNIN" then return "Codex: Turned in: " .. name end
-	return "Codex: Objective done: " .. name .. (ev.line and (" - " .. ev.line) or "")
 end
 
 local function send(ev, inGroup)
@@ -110,17 +96,6 @@ local function send(ev, inGroup)
 		result.addon = Pt.api.sendAddon(msg)
 		sent = result.addon or sent
 	end
-	if sendsChat() then
-		if t - lastChat >= 3 then
-			lastChat = t
-			result.chat = Pt.api.sendChat(chatLine(ev))
-			sent = result.chat or sent
-		else
-			result.why = "chat rate limit"
-		end
-	end
-	if not sendsChat() and not sendsAddon() then result.why = "no output mode" end
-	if sendsChat() == false and P.PartyNotify() == "ui" then result.why = result.why or "mode 'ui' sends only an invisible addon message, not party chat" end
 	note(ev, inGroup, result)
 	return sent
 end
@@ -228,7 +203,7 @@ end
 
 function Pt.Status()
 	local hasAddon = (type(C_ChatInfo) == "table" and type(C_ChatInfo.SendAddonMessage) == "function") or type(SendAddonMessage) == "function"
-	return { mode = P.PartyNotify(), addonMessages = hasAddon, chat = type(SendChatMessage) == "function", feed = #feed }
+	return { mode = P.PartyNotify(), addonMessages = hasAddon, feed = #feed }
 end
 
-function Pt._Reset() snap, feed, lastSent, lastChat, trace = nil, {}, {}, -100, {} end
+function Pt._Reset() snap, feed, lastSent, trace = nil, {}, {}, {} end

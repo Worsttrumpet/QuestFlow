@@ -13,7 +13,7 @@ local function helpLines()
 	say("  /codex setup           run the first-time setup again;  /codex dev = the developer window")
 	say("  /codex arrow [on|off|flip|reset|test]   Codex's own small direction arrow;  /codex pins [on|off]   Codex's pins on the world map")
 	say("  /codex nav [on|off]    the waypoint that follows what Codex recommends;  /codex markers [probe|on|off]")
-	say("  /codex party [off|ui|party|both|log]   what Codex does when party members (or you) finish quests; log = what it saw and why it did or did not send")
+	say("  /codex party [off|ui|log]   the Party card (what other Codex users in your party finished); log = what Codex saw and why it did or did not share")
 	say("  /codex next            print the recommended next action")
 	say("  /codex diag            print diagnostics (for bug reports); /codex report = copyable box")
 	say("  /codex style [key]     list or set the route style (efficient, fast, questing_only, completionist)")
@@ -202,15 +202,15 @@ local function handle(msg)
 			local tr = ns.Party.Trace()
 			if #tr == 0 then say("Party log: nothing observed yet (it records every objective / quest completion Codex sees, and why it was or was not sent).") end
 			for _, e in ipairs(tr) do
-				say(string.format("  %s %s%s | in group: %s | mode %s | addon msg: %s | chat: %s%s", e.kind, tostring(e.quest), e.name and (" " .. e.name) or "", tostring(e.inGroup), e.mode,
-					tostring(e.addon), tostring(e.chat), e.why and (" | " .. e.why) or ""))
+				say(string.format("  %s %s%s | in group: %s | mode %s | addon msg: %s%s", e.kind, tostring(e.quest), e.name and (" " .. e.name) or "", tostring(e.inGroup), e.mode,
+					tostring(e.addon), e.why and (" | " .. e.why) or ""))
 			end
 		elseif restLower == "" then
-			say("Party news: " .. P.PartyNotify() .. ". Usage: /codex party off|ui|party|both")
+			say("Party news: " .. P.PartyNotify() .. " (ui = the Party card, shared by invisible addon messages; Codex never writes quest status to chat). Usage: /codex party off|ui")
 		elseif P.SetPartyNotify(restLower) then
 			say("Party news: " .. restLower .. ".")
 		else
-			say("usage: /codex party off|ui|party|both|log")
+			say("usage: /codex party off|ui|log")
 		end
 	elseif cmd == "help" or cmd == "?" then
 		helpLines()

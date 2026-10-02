@@ -10,7 +10,7 @@ Codex learns stays on your machine.
 ## Install
 
 1. Quit WoW completely.
-2. Unzip `ForeverCodex-codex-0.2-alpha.zip` so you end up with `...\Interface\AddOns\ForeverCodex\ForeverCodex.toc`
+2. Unzip the newest `ForeverCodex-<version>.zip` from `forever-codex/dist/` (the version is shown in the addon's load message, the window header and the minimap tooltip) so you end up with `...\Interface\AddOns\ForeverCodex\ForeverCodex.toc`
    (not one folder deeper). Start WoW and make sure **Forever Codex** is enabled at character select.
 3. Log in. You should see one line: *Welcome! Type /codex to set up Forever Codex.*
 4. Optional but helpful: type `/console scriptErrors 1` so any Lua error shows up on screen.

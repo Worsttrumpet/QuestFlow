@@ -114,7 +114,7 @@ end
 
 local function refreshParty(w)
 	local ctx = ns.State.ctx
-	local label = ({ off = "Off", ui = "In the window only", party = "Party chat", both = "Window and party chat" })[ns.Prefs.PartyNotify()]
+	local label = ({ off = "Off", ui = "Party card in the window" })[ns.Prefs.PartyNotify()]
 	w.pMode:SetText("Party news: " .. tostring(label) .. "   (change it in Settings)")
 	local v = ns.Party.View(ctx)
 	w.pNote:SetText(v.note or (ctx.group and ctx.group.inGroup and "" or "You are not in a party."))

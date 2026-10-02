@@ -35,7 +35,7 @@ end
 local function onAddonLoaded(name)
 	if name ~= addonName then return end
 	P.ApplyDefaults()
-	ns.Say(string.format("%s loaded. Type /codex to open it, /codex help for commands. Recommendations are suggestions: you stay in control.", C.VERSION))
+	ns.Say(string.format("Forever Codex v%s loaded. Type /codex to open it, /codex help for commands. Recommendations are suggestions: you stay in control.", C.VERSION))
 end
 
 local function onLogin()

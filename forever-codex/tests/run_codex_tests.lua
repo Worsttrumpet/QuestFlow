@@ -310,8 +310,9 @@ end
 section("loading through the stub client (TOC order, SavedVariables timing, ADDON_LOADED, PLAYER_LOGIN)")
 do
 	local ns = boot()
-	check(type(ForeverCodex) == "table" and ForeverCodex.VERSION == "codex-0.2-alpha", "global ForeverCodex with version")
-	check(chatHas("codex-0.2-alpha loaded"), "load message printed at ADDON_LOADED")
+	local tocVersion = readFile(ADDON .. "/ForeverCodex.toc"):match("## Version:%s*(%S+)")
+	check(type(ForeverCodex) == "table" and ForeverCodex.VERSION == tocVersion and tocVersion:match("^%d+%.%d+%.%d+$") ~= nil, "global ForeverCodex with a patch-style version equal to the .toc's (" .. tostring(ForeverCodex.VERSION) .. ")")
+	check(chatHas("Forever Codex v" .. ForeverCodex.VERSION .. " loaded"), "load message printed at ADDON_LOADED, with the version")
 	check(type(_G.SlashCmdList["FOREVERCODEX"]) == "function" and SLASH_FOREVERCODEX1 == "/codex" and SLASH_FOREVERCODEX2 == "/fcodex", "/codex and /fcodex registered")
 	check(type(ForeverCodexDB) == "table" and type(ForeverCodexDB.chars) == "table" and ForeverCodexDB.chars["Thrall-Forever"] ~= nil, "SavedVariable table created with a per-character entry at login")
 	check(ns.State.plan ~= nil and ns.State.ctx ~= nil, "a plan was computed at login")
@@ -878,7 +879,7 @@ do
 	local ns = boot({ char = { level = 25 } })
 	W.chat = {}
 	slash("diag")
-	check(chatHas("Forever Codex codex-0.2-alpha") and chatHas("client 1.60.1 build 70124 interface 16001"), "diag: addon and client versions")
+	check(chatHas("Forever Codex v" .. ForeverCodex.VERSION) and chatHas("client 1.60.1 build 70124 interface 16001"), "diag: addon and client versions")
 	check(chatHas("Character: Thrall level 25 Troll WARRIOR (Horde)"), "diag: the character")
 	check(chatHas("Location: The Barrens / The Crossroads | map 1413"), "diag: the location")
 	check(chatHas("Choices: style=efficient routeZone=auto"), "diag: the player's choices")
@@ -890,7 +891,7 @@ do
 	for _ = 1, 7 do slash("diag") end
 	check(#ForeverCodexDB.diag == 5, "stored diagnostics are capped at the last 5")
 	slash("report")
-	check(ns.UI.report ~= nil and ns.UI.report.box.__text:find("Forever Codex codex-0.2-alpha", 1, true) ~= nil, "/codex report fills the copyable box")
+	check(ns.UI.report ~= nil and ns.UI.report.box.__text:find("Forever Codex v" .. ForeverCodex.VERSION, 1, true) ~= nil, "/codex report fills the copyable box")
 	local nsb = boot({ missing = { UnitClass = true } })
 	W.chat = {}
 	slash("diag")

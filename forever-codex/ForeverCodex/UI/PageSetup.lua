@@ -9,7 +9,7 @@ local W = ns.Widgets
 local UI = ns.UI
 
 local WIDTH = UI.WIDTH - 24
-local PARTY_LABEL = { off = "Off", ui = "In the window only", party = "Party chat", both = "Window and party chat" }
+local PARTY_LABEL = { off = "Off", ui = "Party card in the window" }
 
 local function recompute() ns.State.Recompute() end
 

@@ -759,11 +759,11 @@ local function weaver(opts)
 	W.log = { { questID = 1900, title = "The Weaver", complete = false } }
 	W.objectives = { [1900] = { { text = "0/1 Ataeric's Staff", type = "item", finished = false, numFulfilled = 0, numRequired = 1 } } }
 	ns.Prefs.FinishSetup()
-	ns.Prefs.SetPartyNotify(opts.mode or "both")
+	ns.Prefs.SetPartyNotify(opts.mode or "ui")
 	local sent = { addon = {}, chat = {} }
 	ns.Party._Reset()
 	ns.Party.api.sendAddon = function(t) sent.addon[#sent.addon + 1] = t; return true end
-	ns.Party.api.sendChat = function(t) sent.chat[#sent.chat + 1] = t; return true end
+	_G.SendChatMessage = function(t) sent.chat[#sent.chat + 1] = t end     -- the real chat call: Codex must never use it (Questie announces quest status)
 	ns.State.Recompute()                                     -- baseline: quest in the log, objective 0/1
 	W.now = W.now + 5
 	ns._selftest.telemetry.onEvent("QUEST_LOG_UPDATE")       -- telemetry's own baseline diff
@@ -788,20 +788,20 @@ do
 	W.log[1].complete = true
 	logChanged(ns, W)
 	check(ns.State.ctx.log[1900].objectives[1].numFulfilled == 1 and ns.State.ctx.log[1900].complete, "Codex's context sees the objective at 1/1 and the quest complete (quest-log API only)")
-	check(#sent.chat == 1 and sent.chat[1] == "Codex: Quest complete: The Weaver - 1/1 Ataeric's Staff", "party chat says: " .. tostring(sent.chat[1]))
-	check(#sent.addon == 1 and sent.addon[1] == "v1|DONE|1900", "and the quiet addon message for other Codex users is sent too")
+	check(#sent.chat == 0, "nothing is said in chat: Questie already announces quest completion (" .. tostring(sent.chat[1]) .. ")")
+	check(#sent.addon == 1 and sent.addon[1] == "v1|DONE|1900", "only the invisible addon message for other Codex users' Party card is sent")
 	W.log[1].complete = false; W.objectives[1900][1].finished = false; W.objectives[1900][1].numFulfilled = 0     -- the turn-in reset trap (M8.9)
 	logChanged(ns, W, 0.5)
 	W.log[1].complete = true; W.objectives[1900][1].finished = true; W.objectives[1900][1].numFulfilled = 1
 	logChanged(ns, W, 0.5)
-	check(#sent.chat == 1, "a momentary un-done reading followed by 1/1 again inside the duplicate window is not announced twice")
+	check(#sent.addon == 1 and #sent.chat == 0, "a momentary un-done reading followed by 1/1 again inside the duplicate window is not shared twice")
 	logChanged(ns, W); logChanged(ns, W)
-	check(#sent.chat == 1 and #sent.addon == 1, "later recomputes of the same state do not repeat it")
+	check(#sent.chat == 0 and #sent.addon == 1, "later recomputes of the same state do not repeat it")
 	local tr = ns.Party.Trace()
 	check(tr[1] and tr[1].why and tr[1].why:find("duplicate", 1, true), "/codex party log records the suppressed duplicate with its reason")
 	local sentEntry
-	for _, e in ipairs(tr) do if e.chat == true then sentEntry = e end end
-	check(sentEntry and sentEntry.kind == "DONE" and sentEntry.quest == 1900 and sentEntry.name == "The Weaver" and sentEntry.inGroup, "/codex party log records what was seen and that chat was sent")
+	for _, e in ipairs(tr) do if e.addon == true then sentEntry = e end end
+	check(sentEntry and sentEntry.kind == "DONE" and sentEntry.quest == 1900 and sentEntry.name == "The Weaver" and sentEntry.inGroup, "/codex party log records what was seen and that the addon message was sent")
 	W.chat = {}
 	H.slash("party log")
 	check(table.concat(W.chat, "\n"):find("DONE 1900 The Weaver", 1, true) ~= nil, "/codex party log prints it")
@@ -817,7 +817,7 @@ do
 		W.now = W.now + 10
 		ns._selftest.boot.onEvent(nil, ev, "player")
 		ns.State.Tick(1)
-		check(#sent.chat == 1, ev .. " alone is enough to see it")
+		check(#sent.addon == 1 and #sent.chat == 0, ev .. " alone is enough to see it (shared quietly, nothing in chat)")
 	end
 	for _, f in ipairs({ "Party.lua", "Context.lua", "State.lua", "Boot.lua" }) do
 		check(not H.readFile(H.addonDir .. "/" .. f):gsub("%-%-[^\n]*", ""):find("COMBAT_LOG", 1, true), f .. " does not use the combat log")
@@ -841,16 +841,27 @@ do
 	local ns3, W3, sent3 = weaver({ mode = "ui" })
 	W3.objectives[1900][1].numFulfilled, W3.objectives[1900][1].finished = 1, true; W3.log[1].complete = true
 	logChanged(ns3, W3)
-	check(#sent3.chat == 0 and #sent3.addon == 1 and ns3.Party.Trace()[1].why:find("not party chat", 1, true), "the default 'ui' mode sends no party chat, and the log says that is why")
-	local ns4, W4, sent4 = weaver({ mode = "both" })
-	W4.objectives[1900][1].numFulfilled, W4.objectives[1900][1].finished = 1, true; W4.log[1].complete = true
-	logChanged(ns4, W4)
-	check(#sent4.chat == 1 and #sent4.addon == 1, "'both' sends both")
-	local ns5, W5, sent5 = weaver()
-	ns5.Party.api.sendChat = function() return false end
-	W5.objectives[1900][1].numFulfilled, W5.objectives[1900][1].finished = 1, true; W5.log[1].complete = true
-	logChanged(ns5, W5)
-	check(ns5.Party.Trace()[1].chat == false, "a chat call that fails is recorded as not sent")
+	check(#sent3.chat == 0 and #sent3.addon == 1 and ns3.Party.Trace()[1].addon == true, "the 'ui' mode sends one invisible addon message and no chat")
+	local ns4, W4, sent4 = weaver()
+	check(not ns4.Prefs.SetPartyNotify("both") and not ns4.Prefs.SetPartyNotify("party") and ns4.Prefs.PartyNotify() == "ui", "the removed chat modes cannot be chosen")
+	-- an old saved choice of a chat mode becomes 'ui' (it must never turn into chat output)
+	for _, old in ipairs({ "party", "both", "nonsense" }) do
+		ns4.Prefs.Char().partyNotify = old
+		ns4.Prefs.ApplyDefaults()
+		check(ns4.Prefs.PartyNotify() == "ui", "a saved '" .. old .. "' is read as 'ui'")
+	end
+	ns4.Prefs.Char().partyNotify = "off"
+	ns4.Prefs.ApplyDefaults()
+	check(ns4.Prefs.PartyNotify() == "off", "a saved 'off' stays off")
+	-- and nothing in the addon can write quest status to chat
+	for _, f in ipairs({ "Party.lua", "Boot.lua", "State.lua", "Journey.lua", "Telemetry.lua", "NewForYou.lua", "Context.lua" }) do
+		check(not H.readFile(H.addonDir .. "/" .. f):gsub("%-%-[^\n]*", ""):find("SendChatMessage", 1, true), f .. " never calls SendChatMessage")
+	end
+	local ns6, W6, sent6 = weaver()
+	W6.objectives[1900][1].numFulfilled, W6.objectives[1900][1].finished = 1, true; W6.log[1].complete = true
+	logChanged(ns6, W6)
+	ns6.Party.OnTurnedIn(1900, ns6.State.ctx)
+	check(#sent6.chat == 0, "objective done, quest complete and turn-in together: still nothing in chat")
 end
 
 section("party: partial progress, several objectives, quests accepted later")
@@ -864,26 +875,26 @@ do
 	ns.State.Recompute()
 	W.objectives[1901][1].numFulfilled = 5
 	logChanged(ns, W)
-	check(#sent.chat == 0 and #sent.addon == 0, "progress that is not complete (3/6 -> 5/6) announces nothing")
+	check(#sent.chat == 0 and #sent.addon == 0, "progress that is not complete (3/6 -> 5/6) shares nothing")
 	W.objectives[1901][1].numFulfilled, W.objectives[1901][1].finished = 6, true
 	logChanged(ns, W)
-	check(#sent.chat == 1 and sent.chat[1] == "Codex: Objective done: Training - 6/6 Training Weapon" and sent.addon[1] == "v1|OBJ|1901|6|6", "one objective of two finishing is announced as an objective, with its counts")
+	check(#sent.chat == 0 and sent.addon[1] == "v1|OBJ|1901|6|6", "one objective of two finishing is shared quietly as an objective, with its counts (nothing in chat)")
 	W.objectives[1901][2].numFulfilled, W.objectives[1901][2].finished = 2, true
 	W.log[1].complete = true
 	logChanged(ns, W)
-	check(#sent.chat == 2 and sent.chat[2] == "Codex: Quest complete: Training - 6/6 Training Weapon, 2/2 Scorpid Tail", "the quest completing lists every objective")
+	check(#sent.chat == 0 and sent.addon[#sent.addon] == "v1|DONE|1901" and ns.Party.Trace()[1].line == "6/6 Training Weapon, 2/2 Scorpid Tail", "the quest completing is shared quietly (and the log lists every objective)")
 	-- a quest accepted after the baseline, then progressed while active
 	W.log[#W.log + 1] = { questID = 1902, title = "Fresh", complete = false }
 	W.objectives[1902] = { { text = "0/4 Boar", type = "monster", finished = false, numFulfilled = 0, numRequired = 4 } }
 	logChanged(ns, W)
-	check(#sent.chat == 2, "accepting a quest announces nothing")
+	check(#sent.chat == 0 and #sent.addon == 2, "accepting a quest announces nothing")
 	W.objectives[1902][1].numFulfilled = 4; W.objectives[1902][1].finished = true; W.log[2].complete = true
 	logChanged(ns, W)
-	check(#sent.chat == 3 and sent.chat[3] == "Codex: Quest complete: Fresh - 4/4 Boar", "and finishing it while it is active is seen")
-	local before = #sent.chat
+	check(#sent.chat == 0 and sent.addon[#sent.addon] == "v1|DONE|1902", "and finishing it while it is active is seen and shared quietly")
+	local before = #sent.addon
 	W.now = W.now + 10
 	ns.Party.OnTurnedIn(1902, ns.State.ctx)
-	check(sent.chat[#sent.chat] == "Codex: Turned in: Fresh" and #sent.chat == before + 1, "the turn-in names the quest from the last snapshot (it has left the log)")
+	check(sent.addon[#sent.addon] == "v1|TURNIN|1902" and #sent.addon == before + 1 and #sent.chat == 0 and ns.Party.Trace()[1].name == "Fresh", "the turn-in is shared quietly and the log names the quest from the last snapshot (it has left the log)")
 end
 
 section("party: a planner failure never hides a finished objective")
@@ -892,7 +903,7 @@ do
 	ns.Planner.Compute = function() error("boom") end
 	W.objectives[1900][1].numFulfilled, W.objectives[1900][1].finished = 1, true; W.log[1].complete = true
 	logChanged(ns, W)
-	check(#sent.chat == 1 and #ns.errors >= 1, "the announcement still happens (the planner error is recorded separately)")
+	check(#sent.addon == 1 and #sent.chat == 0 and #ns.errors >= 1, "the quiet share still happens (the planner error is recorded separately)")
 end
 
 section("telemetry: objective transitions are recorded (observation only; proof comes from the real client)")
@@ -1113,7 +1124,7 @@ do
 	mm.__scripts.OnEnter(mm)
 	local d = tip.double
 	check(tip.owner == mm and tip.shown == 1, "hovering the button shows a tooltip owned by it")
-	check(d[1] and d[1].l == "Forever Codex" and d[1].r == "v0.2-alpha", "the title is on the left and the version on the right")
+	check(d[1] and d[1].l == "Forever Codex" and d[1].r == "v" .. ForeverCodex.VERSION, "the title is on the left and the version on the right")
 	check(d[1] and d[1].lc[1] == 1 and d[1].lc[2] == 0.82 and d[1].rc[1] == 0.6, "the title is gold and the version grey")
 	check(tip.single[1] == " ", "a blank line separates the title from the rows")
 	check(d[2] and d[2].l == "Left Click" and d[2].r == "Open / close Codex", "row: Left Click opens and closes Codex")

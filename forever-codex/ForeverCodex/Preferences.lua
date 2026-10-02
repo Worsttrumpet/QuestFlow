@@ -59,7 +59,8 @@ local function ensureChar(key)
 	c.added = type(c.added) == "table" and c.added or {}
 	-- Phase 3 (player-facing build): setup, notifications, navigation, history. All additive; nothing above changes.
 	if c.setupDone == nil then c.setupDone = false end
-	if c.partyNotify == nil then c.partyNotify = "ui" end
+	-- party chat output was removed (Questie already announces quest status): an old "party" / "both" choice, or anything unknown, becomes "ui"
+	if c.partyNotify ~= "off" and c.partyNotify ~= "ui" then c.partyNotify = "ui" end
 	if c.navigation == nil then c.navigation = true end
 	if c.markers == nil then c.markers = false end          -- stays off until the marker probe has succeeded on this client
 	c.journey = type(c.journey) == "table" and c.journey or {}
@@ -89,7 +90,7 @@ function P.SetupDone() return P.Char().setupDone == true end
 function P.FinishSetup() P.Char().setupDone = true end
 function P.ReopenSetup() P.Char().setupDone = false end
 
-P.PARTY_MODES = { "off", "ui", "party", "both" }
+P.PARTY_MODES = { "off", "ui" }
 function P.PartyNotify() return P.Char().partyNotify end
 function P.SetPartyNotify(mode)
 	for _, m in ipairs(P.PARTY_MODES) do

@@ -125,7 +125,7 @@ end
 --- Human-readable lines for a snapshot.
 function D.Lines(s)
 	local L = {}
-	L[#L + 1] = string.format("Forever Codex %s (dev build) | client %s build %s interface %s (addon expects %s)", s.addon.version,
+	L[#L + 1] = string.format("Forever Codex v%s | client %s build %s interface %s (addon expects %s)", s.addon.version,
 		tostring(s.client.version), tostring(s.client.build), tostring(s.client.interface), tostring(s.addon.expectedInterface))
 	if s.character then
 		local c = s.character

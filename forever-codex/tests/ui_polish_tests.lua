@@ -159,8 +159,8 @@ do
 	check(UI.WIDTH == 520 and UI.HEIGHT == 430 and UI.frame.__w == 520 and UI.frame.__h == 430, "the window size is unchanged")
 	check(UI.main.nav.button.text.__text == "Codex  v", "the dropdown button is unchanged")
 	local found
-	for _, fs in ipairs(W.fonts) do if fs.__text == "FOREVER CODEX" then found = true end end
-	check(found, "a small title sits in the header")
+	for _, fs in ipairs(W.fonts) do if fs.__text == "FOREVER CODEX  v" .. ForeverCodex.VERSION then found = true end end
+	check(found, "a small title with the version sits in the header")
 	local before = ns.State.computeCount
 	UI.Refresh(); UI.Refresh()
 	check(ns.State.computeCount == before, "drawing the page never recomputes the plan (it is only a rendering layer)")

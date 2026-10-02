@@ -182,7 +182,7 @@ section("phase 3: setup and window position persist")
 do
 	local ns = boot({ char = { level = 12 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
 	H.attPack(ns, { Q(1, "Pickup", 30, 0) }, { { key = "zone-a", label = "Zone A", map = 9001, quests = 1 } })
-	ns.Prefs.SetStyle("fast"); ns.Prefs.SetRouteZone("zone-a"); ns.Prefs.SetPartyNotify("both"); ns.Prefs.SetNavigation(false); ns.Prefs.FinishSetup()
+	ns.Prefs.SetStyle("fast"); ns.Prefs.SetRouteZone("zone-a"); ns.Prefs.SetPartyNotify("off"); ns.Prefs.SetNavigation(false); ns.Prefs.FinishSetup()
 	H.slash("")
 	ns.UI.frame.GetPoint = function() return "TOPLEFT", nil, "TOPLEFT", 120, -80 end
 	ns.UI.frame.__scripts.OnDragStop(ns.UI.frame)
@@ -192,7 +192,7 @@ do
 	local saved = ForeverCodexDB
 	local ns2 = boot({ char = { level = 12 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 }, savedVars = saved })
 	H.attPack(ns2, { Q(1, "Pickup", 30, 0) }, { { key = "zone-a", label = "Zone A", map = 9001, quests = 1 } })
-	check(ns2.Prefs.SetupDone() and ns2.Prefs.GetStyle() == "fast" and ns2.Prefs.GetRouteZone() == "zone-a" and ns2.Prefs.PartyNotify() == "both" and not ns2.Prefs.NavigationOn(),
+	check(ns2.Prefs.SetupDone() and ns2.Prefs.GetStyle() == "fast" and ns2.Prefs.GetRouteZone() == "zone-a" and ns2.Prefs.PartyNotify() == "off" and not ns2.Prefs.NavigationOn(),
 		"after a reload the setup choices (zone, style, party news, navigation) are still there")
 	H.slash("")
 	local pts = ns2.UI.frame.__points
@@ -574,7 +574,7 @@ do
 	local Pt = ns.Party
 	local sentAddon, sentChat = {}, {}
 	Pt.api.sendAddon = function(t) sentAddon[#sentAddon + 1] = t; return true end
-	Pt.api.sendChat = function(t) sentChat[#sentChat + 1] = t; return true end
+	_G.SendChatMessage = function(t) sentChat[#sentChat + 1] = t end     -- the real chat call: Codex must never use it
 	Pt.api.selfName = function() return "Thrall" end
 	group(ns, 3)
 	ns.State.Recompute()
@@ -593,32 +593,29 @@ do
 	-- turn-in
 	W.now = W.now + 10
 	Pt.OnTurnedIn(1, ns.State.ctx)
-	check(sentAddon[#sentAddon] == "v1|TURNIN|1" and #sentChat == 0, "a turn-in is shared (no chat by default)")
+	check(sentAddon[#sentAddon] == "v1|TURNIN|1" and #sentChat == 0, "a turn-in is shared quietly (never in chat)")
 	local n = #sentAddon
 	Pt.OnTurnedIn(1, ns.State.ctx)
 	check(#sentAddon == n, "the same event twice in a few seconds is sent once")
-	-- modes
-	ns.Prefs.SetPartyNotify("party")
+	-- modes: the chat modes were removed (Questie already announces quest status); only off and ui remain
+	check(not ns.Prefs.SetPartyNotify("party") and not ns.Prefs.SetPartyNotify("both") and ns.Prefs.PartyNotify() == "ui", "the removed chat modes ('party', 'both') are refused")
+	check(table.concat(ns.Prefs.PARTY_MODES, ",") == "off,ui", "only 'off' and 'ui' exist")
 	W.now = W.now + 20
 	Pt.OnTurnedIn(1, ns.State.ctx)
-	check(#sentChat == 1 and sentChat[1] == "Codex: Turned in: Sting of the Scorpid" and #sentAddon == n, "'Party chat': one plain line in party chat, no addon message")
-	W.now = W.now + 20
-	ns.Prefs.SetPartyNotify("both")
-	Pt.OnTurnedIn(1, ns.State.ctx)
-	check(#sentChat == 2 and #sentAddon == n + 1, "'Both': chat and addon message")
+	check(#sentChat == 0 and #sentAddon == n + 1, "'ui': a turn-in is one invisible addon message and nothing in chat")
 	ns.Prefs.SetPartyNotify("off")
 	W.now = W.now + 20
 	Pt.OnTurnedIn(1, ns.State.ctx)
-	check(#sentChat == 2 and #sentAddon == n + 1, "'Off': nothing is sent")
+	check(#sentChat == 0 and #sentAddon == n + 1, "'Off': nothing is sent")
 	check(not ns.Prefs.SetPartyNotify("shout") and ns.Prefs.PartyNotify() == "off", "an unknown mode is refused")
 	-- solo
 	group(ns, 1)
-	ns.Prefs.SetPartyNotify("both")
+	ns.Prefs.SetPartyNotify("ui")
 	W.now = W.now + 20
 	ns.State.Recompute()
 	Pt.OnTurnedIn(1, ns.State.ctx)
-	check(#sentChat == 2 and #sentAddon == n + 1, "outside a group nothing is sent")
-	check(ns.Prefs.Char().partyNotify == "both" and not ns.Prefs.IsSavedVariablesSafe == false, "(the setting is stored per character)")
+	check(#sentChat == 0 and #sentAddon == n + 1, "outside a group nothing is sent")
+	check(ns.Prefs.Char().partyNotify == "ui" and not ns.Prefs.IsSavedVariablesSafe == false, "(the setting is stored per character)")
 end
 
 section("phase 3: Party, what other Codex users share")
@@ -662,9 +659,8 @@ do
 	check(not scan(ForeverCodexDB), "other players' names are never saved (kept in memory for this session only)")
 	ns.Prefs.SetPartyNotify("off")
 	check(Pt.View(ns.State.ctx).note == "Party notifications are off." and #Pt.View(ns.State.ctx).lines == 0, "with party news off nothing is shown")
-	ns.Prefs.SetPartyNotify("party")
 	Pt.OnAddonMessage("FCODEX", "v1|DONE|1", "PARTY", "Zed")
-	check(#Pt.View(ns.State.ctx).lines == 0 or Pt.View(ns.State.ctx).lines[1].head:find("Zed") == nil, "'Party chat' mode does not feed the window")
+	check(#Pt.View(ns.State.ctx).lines == 0 or Pt.View(ns.State.ctx).lines[1].head:find("Zed") == nil, "with party news off a message from a party member does not feed the window")
 	ns.Prefs.SetPartyNotify("ui")
 	Pt._Reset()
 	Pt.OnAddonMessage("FCODEX", "v1|DONE|1", "PARTY", "Zed")
@@ -757,7 +753,9 @@ do
 	H.slash("nav off"); check(not ns.Prefs.NavigationOn() and say(W, "leaves yours alone"), "/codex nav off")
 	H.slash("nav on")
 	H.slash("party"); check(say(W, "Party news: ui"), "/codex party reports")
-	H.slash("party both"); check(ns.Prefs.PartyNotify() == "both", "/codex party both")
+	H.slash("party both"); check(ns.Prefs.PartyNotify() == "ui" and say(W, "usage: /codex party off|ui|log"), "/codex party both is refused: there is no chat mode any more")
+	H.slash("party off"); check(ns.Prefs.PartyNotify() == "off", "/codex party off")
+	H.slash("party ui")
 	H.slash("party nonsense"); check(say(W, "usage: /codex party"), "/codex party rejects nonsense")
 	H.slash("markers on"); check(not ns.Prefs.MarkersOn() and say(W, "quick test first"), "/codex markers on refuses until the test passed")
 	H.slash("markers"); check(say(W, "Placement is off until"), "/codex markers reports")

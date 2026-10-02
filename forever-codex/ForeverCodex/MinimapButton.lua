@@ -98,7 +98,7 @@ local TIP_TITLE, TIP_VERSION, TIP_KEY, TIP_ACTION = { 1, 0.82, 0 }, { 0.6, 0.6, 
 
 --- The tooltip as data: { title, version, rows = { { input, action }, ... } }. Pure, so it can be tested without a tooltip frame.
 function MM.TooltipLines()
-	local v = tostring(ForeverCodex and ForeverCodex.VERSION or ""):gsub("^codex%-", "")
+	local v = tostring(ForeverCodex and ForeverCodex.VERSION or "")
 	return { title = "Forever Codex", version = v ~= "" and ("v" .. v) or "", rows = MM.TOOLTIP_ROWS }
 end
 

@@ -137,3 +137,6 @@ A visual pass over the Codex page and the window shell. Nothing that decides or 
 * **Type sizes** come from the game's own font file (`GameFontNormal:GetFont()`); if the client will not say which file that is, the text keeps its normal size and the layout still works.
 
 **Real-client check (screenshots, with the Hunter):** the Codex page with a NOW that has objective progress (bar + "4 / 6"), one with a turn-in (e.g. Deathstalkers), the empty NOW, NEARBY with and without rows, and NEW FOR YOU at an even level. Unverified until seen: whether the larger type sizes render, the exact colours against your UI, whether the 2 px edges are crisp.
+
+## 13. Party chat announcements removed (0.2.1)
+Questie already announces quest completion and similar status, so Codex no longer writes anything to party chat (or any chat channel): the `party` and `both` modes, the "Codex: Quest complete / Objective done / Turned in" lines and the chat rate limit are gone. Kept: the quest/objective detection and telemetry, the planner, and the **invisible** addon message plus the Party card (what other Codex users in your party finished), which are not chat. Party news is now `off` or `ui` (default `ui`); a saved `party` or `both` is read as `ui`. No replacement message was added. `/codex party off|ui|log`.
