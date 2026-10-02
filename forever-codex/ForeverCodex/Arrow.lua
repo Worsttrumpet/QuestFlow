@@ -212,17 +212,38 @@ local function hide(reason)
 	A.state = { visible = false, reason = reason }
 end
 
+local demoUntil = nil
+
+--- /codex arrow test: shows the arrow frame for `seconds`, sweeping round, WITHOUT a destination and without touching navigation.
+-- It exists to prove on the real client that the frame appears, the texture loads and rotation works.
+function A.Demo(seconds)
+	demoUntil = A.api.now() + (seconds or 10)
+	if not frame then build() end
+end
+
 --- One update. Public so tests can drive it. ctx supplies worldOf; returns the new state.
+-- The arrow is intentionally HIDDEN while Codex has no destination (no NOW with a location), but the facing convention is learned
+-- from walking whenever the arrow is switched on, so it is already calibrated by the time a destination exists.
 function A.Update(ctx)
+	if not frame then build() end                       -- created hidden at the first update, so /codex arrow can say it exists
+	local t = A.api.now()
+	if demoUntil then
+		if t < demoUntil then
+			local ang = (t * 1.5) % (2 * math.pi)
+			show(ang, "Arrow test", true)
+			A.state = { visible = true, reason = "demo", art = true, rotation = ang }
+			return A.state
+		end
+		demoUntil = nil
+	end
 	local target = ns.Navigation and ns.Navigation.Target()
 	if not P.NavigationOn() then return hide("nav off") or A.state end
 	if not P.ArrowOn() then return hide("arrow off") or A.state end
-	if not target then return hide("no destination") or A.state end
 	local pos = A.api.position()
 	local f = A.api.facing()
-	local t = A.api.now()
+	if pos and f and ctx and ctx.worldOf then feed(ctx, pos, f, t) end
+	if not target then return hide("no destination") or A.state end
 	if not (pos and ctx and ctx.worldOf) then return hide("no position") or A.state end
-	if f then feed(ctx, pos, f, t) end
 	local b, d = A.Bearing(ctx, pos, target)
 	if not b then
 		show(0, "In another area", false)
@@ -246,10 +267,27 @@ function A.Update(ctx)
 	return A.state
 end
 
+--- What /codex arrow reports: does the frame exist, is it shown, where, can facing be read, is there a destination, is it calibrated.
+function A.Info()
+	local shown, point
+	if frame then
+		local ok, v = pcall(frame.IsShown, frame)
+		shown = ok and v == true
+		local ok2, pt, _, _, x, y = pcall(frame.GetPoint, frame, 1)
+		if ok2 and pt then point = string.format("%s %+d,%+d", pt, math.floor((x or 0) + 0.5), math.floor((y or 0) + 0.5)) end
+	end
+	local f = A.api.facing()
+	local cal = calibration()
+	return { frame = frame ~= nil, shown = shown, point = point, facingApi = type(GetPlayerFacing) == "function", facing = f,
+		destination = ns.Navigation and ns.Navigation.Target() ~= nil, calibrated = cal ~= nil, samples = #samples, reason = A.state.reason,
+		navOn = P.NavigationOn(), arrowOn = P.ArrowOn(), demo = demoUntil ~= nil }
+end
+
 local since = 0
 function A.Tick(elapsed)
 	since = since + (elapsed or 0)
-	if since < A.PERIOD then return end
+	local period = (ns.Navigation and ns.Navigation.Target()) and A.PERIOD or 0.25     -- learning while idle can be slower
+	if since < period then return end
 	since = 0
 	local base = ns.State and ns.State.ctx
 	if not base then return end
@@ -258,4 +296,4 @@ function A.Tick(elapsed)
 end
 
 function A.Frame() return frame end
-function A._Reset() samples, prev, since = {}, nil, 0; A.state = { visible = false, reason = "idle" }; if frame then frame:Hide() end end
+function A._Reset() samples, prev, since, demoUntil = {}, nil, 0, nil; A.state = { visible = false, reason = "idle" }; if frame then frame:Hide() end end

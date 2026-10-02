@@ -102,3 +102,14 @@ new-for-you) now run before the planner, so a planner error cannot hide a finish
 labelled proven only for what M8.9 proved (reading objectives); its diff is stated as untested on the client.
 **`/codex party log`** prints the last decisions: what was seen, whether you were in a group, the mode, whether the addon message and chat were sent, and why not.
 **To settle it on Forever:** set Party news to *Party chat* or *Both*, loot a quest item objective in a party, then `/codex party log` and `/codex telemetry events`.
+
+## 10. Arrow never appeared (real-client debug)
+`/codex arrow` said "on, no destination, calibrated: false". Findings:
+1. The frame is a small 64x70 frame at the top-centre of the screen (140 px down), draggable (position saved).
+2. It was built lazily, only when first shown, so with no destination it never existed.
+3. `GetPlayerFacing` works on Forever: M8.14 v0.1 recorded 2301 samples between 0.007 and 6.283 (a normal heading in radians).
+4. The self-calibration was only reached **after** the "has a destination" check, so with no NOW it could never start: a real flaw. It now learns while the arrow is on, whether or not there is a destination.
+5. Hiding with no destination is intentional. The arrow needs a NOW with a known location. In Undercity the plan said `ONLY_DISTANT_UNMEASURED`, so there was no NOW and no arrow.
+Changes: frame created (hidden) at the first tick; learning independent of destination; `/codex arrow` now prints destination yes/NO, frame created/shown and where, GetPlayerFacing available and its current value, learned or not and the samples this session;
+`/codex arrow test` shows a spinning arrow for 10 s with no destination and no navigation involved, to prove the frame, texture and rotation on the real client.
+To get a destination for a real check: `/codex add <quest id>` (a quest you add is always planned), or stand in a zone with quests. Still unverified on Forever: the frame's appearance, texture orientation, rotation sign (`/codex arrow flip`), and the learned convention.

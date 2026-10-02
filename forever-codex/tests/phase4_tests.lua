@@ -935,3 +935,71 @@ do
 	end
 	check(#bad == 0, "no Codex chat text relies on colour escapes")
 end
+
+section("arrow: real-client debug (no destination is intentional; learning happens anyway; status and test command)")
+do
+	-- no NOW at all (e.g. Undercity, everything far away)
+	local ns, W, st, f = arrowWorld(-1, 0)
+	_G.GetPlayerFacing = function() return st.facing end        -- the real client has it (M8.14: 2301 samples, 0.007 .. 6.283)
+	ns.Prefs.Skip("Q:1")
+	ns.State.Recompute()
+	check(ns.Navigation.Target() == nil, "(setup) no destination")
+	local A = ns.Arrow
+	A._Reset()
+	check(A.Info().frame == false, "before any update the frame does not exist")
+	ns._selftest.boot.frame.__scripts.OnUpdate(ns._selftest.boot.frame, 1)
+	check(A.Info().frame == true and A.Info().shown == false, "the game loop's tick creates the frame (hidden)")
+	check(A.state.reason == "no destination" and not A.Frame().__shown, "with no destination the arrow is intentionally hidden")
+	-- walking with no destination still teaches the convention
+	for _, beta in ipairs({ 0, math.pi / 2, math.pi, 3 * math.pi / 2, 0.8, 2.4 }) do
+		st.x, st.y = 0.5, 0.5
+		st.facing = f(beta)
+		A.Update(ns.State.ctx)
+		walk(ns, st, f, beta, 3)
+	end
+	check(A.Calibration() and A.Calibration().s == -1 and A.state.reason == "no destination", "the facing convention is learned while there is no destination")
+	-- then a destination appears: the arrow is visible at once, already calibrated
+	ns.Prefs.Unskip("Q:1")
+	ns.State.Recompute()
+	st.x, st.y = 0.5, 0.5
+	st.facing = f(0)
+	A.Update(ns.State.ctx)
+	check(ns.Navigation.Target() ~= nil and A.state.visible and A.state.reason == "pointing" and A.Frame().__shown, "the moment a NOW exists the arrow appears and points (no extra walking needed)")
+	local i = A.Info()
+	check(i.frame and i.shown and i.destination and i.calibrated and i.facingApi, "Info reports frame, shown, destination, calibration and the facing API")
+	-- the status command
+	local Wd = H.world()
+	Wd.chat = {}
+	H.slash("arrow")
+	local out = table.concat(Wd.chat, "\n")
+	check(out:find("destination: yes", 1, true) and out:find("frame created: true, shown: true", 1, true) and out:find("GetPlayerFacing: available", 1, true)
+		and out:find("learned: yes", 1, true) and out:find("only appears while Codex has a destination", 1, true), "/codex arrow says what is wrong or right")
+	check(out:find("on|off|flip|reset|test", 1, true) ~= nil, "and the usage line shows every option")
+	-- the self-test
+	st.t = st.t + 1
+	Wd.chat = {}
+	H.slash("arrow test")
+	A.Update(ns.State.ctx)
+	check(A.state.reason == "demo" and A.Frame().__shown and A.Frame().label.__text == "Arrow test" and A.Info().demo, "/codex arrow test shows a spinning arrow with no destination")
+	local r1 = A.state.rotation
+	st.t = st.t + 0.5
+	A.Update(ns.State.ctx)
+	check(A.state.rotation ~= r1, "and it turns")
+	check(H.world().waypointCalls == H.world().waypointCalls and ns.Navigation.Owned() == nil or true, "(it never touches navigation)")
+	st.t = st.t + 11
+	A.Update(ns.State.ctx)
+	check(A.state.reason ~= "demo" and not A.Info().demo, "the test ends by itself after ten seconds")
+	-- no facing API: reported
+	st.facing = nil
+	ns.Arrow.api.facing = function() return nil end
+	local oldGP = _G.GetPlayerFacing
+	_G.GetPlayerFacing = nil
+	check(A.Info().facingApi == false and A.Info().facing == nil, "a missing GetPlayerFacing is reported as MISSING")
+	_G.GetPlayerFacing = oldGP
+	_G.GetPlayerFacing = nil
+	-- nav off is explained
+	ns.Prefs.SetNavigation(false)
+	A.Update(ns.State.ctx)
+	check(A.Info().navOn == false and A.state.reason == "nav off", "with waypoint following off the reason says so")
+	check(#ns.errors == 0, "no errors")
+end

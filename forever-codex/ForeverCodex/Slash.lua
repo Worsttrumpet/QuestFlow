@@ -11,7 +11,7 @@ local function helpLines()
 	say("Forever Codex commands:")
 	say("  /codex                 open / close the Codex window;  /codex world | journey | appendices opens that tab")
 	say("  /codex setup           run the first-time setup again;  /codex dev = the developer window")
-	say("  /codex arrow [on|off|flip|reset]   Codex's own small direction arrow;  /codex pins [on|off]   Codex's pins on the world map")
+	say("  /codex arrow [on|off|flip|reset|test]   Codex's own small direction arrow;  /codex pins [on|off]   Codex's pins on the world map")
 	say("  /codex nav [on|off]    the waypoint that follows what Codex recommends;  /codex markers [probe|on|off]")
 	say("  /codex party [off|ui|party|both|log]   what Codex does when party members (or you) finish quests; log = what it saw and why it did or did not send")
 	say("  /codex next            print the recommended next action")
@@ -131,11 +131,17 @@ local function handle(msg)
 		elseif restLower == "on" or restLower == "off" then
 			P.SetArrow(restLower == "on")
 			say("Arrow " .. restLower .. ".")
+		elseif restLower == "test" then
+			ns.Arrow.Demo(10)
+			say("Arrow test: a spinning arrow should appear near the top of the screen for 10 seconds. If you see nothing, tell us (/codex arrow shows the details).")
 		else
-			local st = ns.Arrow.state
+			local i = ns.Arrow.Info()
 			local cal = ns.Arrow.Calibration()
-			say(string.format("Arrow is %s (%s%s). Calibrated: %s. Unproven on the real client. Usage: /codex arrow on|off|flip|reset", P.ArrowOn() and "on" or "off",
-				tostring(st.reason), st.words and (", " .. st.words) or "", cal and string.format("yes (%d samples)", cal.n or 0) or "no"))
+			say(string.format("Arrow is %s (%s). It only appears while Codex has a destination (a NOW with a known location) and waypoint following is %s.", i.arrowOn and "on" or "off", tostring(i.reason), i.navOn and "on" or "OFF"))
+			say(string.format("  destination: %s | frame created: %s, shown: %s%s | GetPlayerFacing: %s%s", i.destination and "yes" or "NO", tostring(i.frame), tostring(i.shown),
+				i.point and (" at " .. i.point) or "", i.facingApi and "available" or "MISSING", i.facing and string.format(" (now %.2f)", i.facing) or " (no value)"))
+			say(string.format("  facing convention learned: %s (%d samples this session). Walk in a few directions to learn it. Unproven on the real client. Usage: /codex arrow on|off|flip|reset|test",
+				cal and string.format("yes, %d samples", cal.n or 0) or "no", i.samples))
 		end
 	elseif cmd == "pins" then
 		if restLower == "on" or restLower == "off" then
