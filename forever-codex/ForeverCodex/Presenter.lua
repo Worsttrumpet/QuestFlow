@@ -80,6 +80,13 @@ end
 local function describe(a, plan, ctx, icon)
 	local name = questName(a)
 	local it = { kind = a.kind, icon = icon, where = Pr.Where(a, ctx), progress = Pr.Progress(a) }
+	-- the tracker's short form of the same distance ("Here", "Nearby", "750 yd away"); nil when it cannot be said
+	local pos0 = Pl.Locate(a)
+	local me0 = ctx.loc and ctx.loc.available and { map = ctx.loc.map, x = ctx.loc.x, y = ctx.loc.y, world = ctx.loc.world or false } or nil
+	local d0 = pos0 and me0 and E.Distance(ctx, me0, pos0) or nil
+	local sw = ns.Overlap and ns.Overlap.ShortWhere(d0)
+	if sw then it.whereShort = (sw == "here" and "Here") or (sw == "nearby" and "Nearby") or (sw .. " away") end
+	if pos0 and d0 and d0 >= E.DIFFERENT_CONTINENT then it.whereShort = "In another area" end
 	if a.type == "FLIGHT" then
 		it.title = "Visit the flight master"
 		it.detail = a.name and ("Flight path: " .. a.name .. ".") or nil

@@ -120,7 +120,7 @@ local function drawNow(c, card)
 		c.nowWho:SetText(n.who or "")
 		-- the one-line detail is only for an objective whose counts the quest log did not report
 		c.nowDetail:SetText((n.kind == "OBJECTIVE" and #objectives == 0) and (n.detail or "") or "")
-		c.nowInfo:SetText(n.where or "")
+		c.nowInfo:SetText(n.whereShort or n.where or "")
 	else
 		-- nothing to recommend: say so quietly, without the marker
 		c.nowTitle:SetText(card.empty.title)

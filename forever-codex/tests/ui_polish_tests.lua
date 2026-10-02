@@ -761,3 +761,24 @@ do
 	check(not src:find("SetParent", 1, true) and not src:find("overlayFrames", 1, true) and not src:find("AddOverlayFrame", 1, true), "it adds nothing to the map itself: a plain button, no overlays")
 	check(#ns.errors == 0, "no errors")
 end
+
+section("0.2.18: ALSO COMPLETE THIS never lists a hand-in or a far pickup; the NOW line uses the short distance")
+do
+	-- the real report: NOW is a quest 120 yd away, the planner's ALSO DO was 'Turn in Tomb Weed - 750 yd'
+	local work = { id = 96897, name = "The Cult of the Damned", zone = "zone-a", map = 9001, x = 0.62, y = 0.5, objCoords = { { map = 9001, x = 0.62, y = 0.5 } }, objectives = { { text = "Dark Neophyte slain", have = 2, need = 8 } } }
+	local ready = { id = 99142, name = "Tomb Weed", zone = "zone-a", complete = true, map = 9001, x = 0.5, y = 0.5 + 0.075, objectives = { { text = "Tomb Weed", have = 5, need = 5 } } }
+	local ns, W, c = logWorld({ work, ready })
+	local p = ns.State.plan
+	local list = ns.Overlap.List(p, ns.State.ctx)
+	for _, it in ipairs(list) do check(not (it.title or ""):find("Turn in", 1, true), "a hand-in is never an ALSO COMPLETE THIS line  [" .. tostring(it.title) .. "]") end
+	local all = {}
+	for _, f in ipairs(W.frames) do for _, fs in ipairs(f.__regions or {}) do if fs.__text then all[#all + 1] = fs.__text end end end
+	check(not table.concat(all, "\\n"):find("Turn in Tomb Weed - ", 1, true), "and the window does not show one under ALSO COMPLETE THIS")
+	-- a far pickup is not 'also' either
+	local far = ns.Overlap.ALSO_ACTION_YD
+	check(far == 300, "a pickup has to be within 300 yd to be offered as an extra")
+	local card = ns.Presenter.Card(p, ns.State.ctx)
+	check(card.now.whereShort ~= nil and card.now.whereShort:find("yd away", 1, true) or card.now.whereShort == "Nearby" or card.now.whereShort == "Here", "the NOW line has the short distance ('Here' / 'Nearby' / '750 yd away')")
+	check(c.nowInfo.__text == card.now.whereShort, "and the tracker draws it")
+	check(#ns.errors == 0, "no errors")
+end

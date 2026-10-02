@@ -279,3 +279,10 @@ Real-client check: with `fast` selected, standing next to started quests, NOW sh
 
 ## 33. Release 0.2.17: the work-here rule also applies when the far stop has objectives of its own
 Real report (v0.2.16, Venomweb Vale, `efficient`): NOW was "Finish The Cult of the Damned" 828 yd away while A New Plague (a started quest, objective 70 yd away, the player was fighting its spiders) was not chosen: the report shows "best plan from here" for A New Plague = net 9.0 over 130 s against 14.9 over 484 s for the far stop (two quests' objectives plus hand-ins). The 0.2.16 rule skipped any plan whose first stop already had an objective, so it did not fire. 0.2.17 drops that exception: when the first stop is more than 500 yd away (or on another map) and a stop with an objective of a quest in the log is within 150 yd on the player's map, the best plan starting at that nearby stop is used, whatever the far stop holds. Still never against a quest the player added or a route zone they chose; Skip still gets out of it. The regression test uses a far stop that mixes objectives and a hand-in (so the 0.2.16 rule would not have fired) and shows that without the rule the plan goes there.
+
+## 34. Release 0.2.18: no hand-ins under ALSO COMPLETE THIS
+
+Real report (0.2.16): NOW was "Finish The Cult of the Damned", ALSO COMPLETE THIS showed "Remnants of War 2/12" and, under it, "Turn in Tomb Weed - 750 yd".
+Cause: the overlap list appended the planner's own ALSO DO as a plain row, and here that was a hand-in. It was drawn under the "complete this" label and duplicated READY TO TURN IN.
+Fix: a hand-in is never listed as an extra (READY TO TURN IN has it); a pickup is listed only within 300 yd (`Overlap.ALSO_ACTION_YD`). The NOW line also uses the short distance form ("Here", "Nearby", "750 yd away").
+Tested with the stub client only; not yet seen in the real client.

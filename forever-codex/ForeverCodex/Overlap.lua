@@ -24,6 +24,7 @@ local Ov = {}
 ns.Overlap = Ov
 
 Ov.MAX_QUESTS = 3
+Ov.ALSO_ACTION_YD = 300        -- a pickup is only 'also' when it is a short walk from the player; a hand-in is never listed here (READY TO TURN IN has it)
 Ov.OVERLAP_YD = 300
 
 --- "here" / "nearby" / "350 yd": the short distance text of the tracker (nil when the distance is unknown or not on this continent).
@@ -121,9 +122,12 @@ function Ov.List(plan, ctx)
 	if also and not (also.quest and seen[also.quest]) then
 		if also.kind == "OBJECTIVE" and #unfinishedOf(also) > 0 then
 			out[#out + 1] = { kind = "objective", title = questName(also), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest }
-		elseif also.type ~= "FLIGHT" then
-			local it = ns.Presenter.Describe(also, plan, ctx, "diamond")
-			out[#out + 1] = { kind = "action", title = it.title, where = Ov.ShortWhere(distanceTo(also, ctx)), quest = also.quest }
+		elseif also.type ~= "FLIGHT" and also.kind ~= "TURN_IN" then
+			local d = distanceTo(also, ctx)
+			if d == nil or d <= Ov.ALSO_ACTION_YD then
+				local it = ns.Presenter.Describe(also, plan, ctx, "diamond")
+				out[#out + 1] = { kind = "action", title = it.title, where = Ov.ShortWhere(d), quest = also.quest }
+			end
 		end
 	end
 	return out
