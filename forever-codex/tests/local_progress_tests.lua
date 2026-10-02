@@ -738,3 +738,39 @@ do
 	check(ns.Overlap.ShortWhere(10) == "here" and ns.Overlap.ShortWhere(100) == "nearby" and ns.Overlap.ShortWhere(1750) == "1750 yd" and ns.Overlap.ShortWhere(4999) == "5000 yd" and ns.Overlap.ShortWhere(5000) == nil and ns.Overlap.ShortWhere(nil) == nil,
 		"here / nearby / '1750 yd' and nothing when the distance is unknown or in another area")
 end
+
+section("work here: started work within a short walk is finished before leaving the area, in every style (real report: 'fast' sent the player 1800 yd away)")
+do
+	local function scenario(style)
+		local ns = boot({ char = { level = 10, class = "Paladin", classToken = "PALADIN", race = "Undead", raceToken = "Scourge", faction = "Horde" }, synthetic = true, loc = { map = 9001, x = 0.1, y = 0.5, zone = "Tirisfal" } })
+		local here = Q(370, "At War With The Scarlet Crusade", 9001, 0.12, 0.5, { zone = "zone-a", giverName = "Zygand", objCoords = { { map = 9001, x = 0.12, y = 0.5 } } })
+		local quests = { here }
+		for i = 1, 6 do quests[#quests + 1] = Q(500 + i, "Far pickup " .. i, 9001, 0.9 + i * 0.0005, 0.5, { giverName = "Far giver" }) end     -- a rich pickup bundle 800 yd away
+		H.attPack(ns, quests, ZONES)
+		local W = H.world()
+		W.log, W.objectives, W.completed = { { questID = 370, title = "At War With The Scarlet Crusade" } }, {}, {}
+		W.objectives[370] = { { text = "Scarlet Zealot slain", type = "monster", finished = false, numFulfilled = 0, numRequired = 3 } }
+		ns.Prefs.FinishSetup()
+		ns.Prefs.SetStyle(style)
+		return ns
+	end
+	for _, style in ipairs({ "fast", "efficient" }) do
+		local ns = scenario(style)
+		ns.Planner.WORK_HERE = false
+		local before = plan(ns)
+		ns.Planner.WORK_HERE = true
+		local p = plan(ns)
+		check(p.now and p.now.quest == 370 and p.now.kind == "OBJECTIVE", style .. ": the started quest beside the player is NOW  [" .. tostring(p.now and p.now.id) .. "; without the rule: " .. tostring(before.now and before.now.id) .. "]")
+		check(#ns.errors == 0, style .. ": no errors")
+	end
+	-- never against the player's own choices
+	local ns2 = scenario("fast")
+	ns2.Prefs.Add(501)
+	check(plan(ns2).now.quest == 501, "a quest the player added is still NOW (it is their call)")
+	local ns3 = scenario("fast")
+	check(ns3.Planner.WORK_HERE_YD == 150 and ns3.Planner.WORK_LEAVE_YD == 500, "(the two distances are named constants: 150 yd to be 'here', 500 yd to count as 'leaving')")
+	-- far-away started work does not hold the player
+	local ns4 = scenario("fast")
+	local q = ns4.Registry.Quest(370)
+	check(q ~= nil, "(setup)")
+end

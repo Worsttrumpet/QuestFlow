@@ -108,6 +108,16 @@ Pl.TURN_IN_FIRST_SECONDS = 45
 -- Pl.DEFER_TURN_INS = false switches it off (tests).
 Pl.DEFER_TURN_INS = true
 Pl.DEFER_NEAR_YD = 150
+-- WORK HERE. Work the player has already started, within a short walk, is finished before leaving the area, in every route style: a higher
+-- price on time (the "fast" style) must not walk the player 1800 yd away from two started quests that are 40 yd away just because every local
+-- option scores a little below a far pickup trip. It applies when the plan's first stop is more than WORK_LEAVE_YD away (or on another map) and
+-- a stop with an objective of a quest in the log is within WORK_HERE_YD on the player's map; it never overrides a quest the player added or a
+-- route zone the player chose, and Skip still gets out of it.
+-- Pl.WORK_HERE = false switches it off (tests).
+Pl.WORK_HERE = true
+Pl.WORK_HERE_YD = 150
+Pl.WORK_LEAVE_YD = 500
+
 -- QUEST-LOG PRESSURE. A finished quest still holds one of the 40 quest-log slots until it is handed in. With this few slots left, deferring a
 -- hand-in is no longer free (each one frees a slot for the next pickup), so the deferral above is switched off and normal route value decides.
 -- It never forces a hand-in either: a far hand-in still has to win on net value. Needs a readable quest log.
@@ -720,6 +730,27 @@ function Pl.Compute(ctx, c, opts)
 	end
 	rankStops(S)
 	local pick = searchSequences(S, opts.prevNowId)
+	-- started work right here is done before leaving the area (see WORK_HERE)
+	if Pl.WORK_HERE and not diag.pinnedFirst and S.player and S.player.map then
+		local first = S.stops[pick.stops[1]]
+		local inChosenZone0 = env.routeMap ~= nil and first.pos.map == env.routeMap
+		local dFirst = E.Distance(ctx, S.player, first.pos)
+		local leaving = dFirst == nil or dFirst > Pl.WORK_LEAVE_YD or first.pos.map ~= S.player.map
+		if leaving and not inChosenZone0 and not hasKind(first, "OBJECTIVE") then
+			local alt
+			for f, seq in pairs(S.bestByFirst) do
+				local st = S.stops[f]
+				if hasKind(st, "OBJECTIVE") and st.pos.map == S.player.map then
+					local d = E.Distance(ctx, S.player, st.pos)
+					if d and d <= Pl.WORK_HERE_YD and better(seq, alt) then alt = seq end
+				end
+			end
+			if alt then
+				pick = alt
+				diag.workHere = true
+			end
+		end
+	end
 	-- a finished quest is not automatically the thing to do next: with work underway here, a hand-in that is not close waits (see DEFER_TURN_INS)
 	local ql = env.questLog
 	local slotPressure = ql and ql.free ~= nil and ql.free <= Pl.SLOT_PRESSURE_FREE
