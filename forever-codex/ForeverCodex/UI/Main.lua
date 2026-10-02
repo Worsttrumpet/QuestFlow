@@ -35,7 +35,7 @@ end
 local ICON_COLOR = { star = { 1, 0.82, 0 }, diamond = { 0.75, 0.45, 1 }, triangle = { 0.35, 0.9, 0.35 }, moon = { 0.7, 0.8, 1 } }
 local ICON_LETTER = { star = "*", diamond = "o", triangle = "^", moon = ")" }
 
---- A small coloured square with a letter (the ASCII stand-in for the world-marker symbols).
+--- A small coloured square with a letter (a small ASCII icon).
 function UI.Icon(parent, kind)
 	local f = CreateFrame("Frame", nil, parent)
 	f:SetSize(14, 14)

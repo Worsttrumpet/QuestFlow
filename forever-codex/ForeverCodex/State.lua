@@ -74,8 +74,6 @@ function S.Recompute()
 		end
 	end
 	observe("navigation", ns.Navigation, "OnPlan", plan, ctx)
-	observe("pins", ns.Pins, "OnPlan", plan)
-	observe("markers", ns.Markers, "OnPlan", plan, ctx)
 	if ns.UI and ns.UI.Refresh then
 		local okU, err = pcall(ns.UI.Refresh)
 		if not okU then ns.RecordError("ui", err) end

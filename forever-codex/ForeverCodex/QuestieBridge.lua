@@ -28,8 +28,7 @@
 --   * race masks: Forever's new races use bit positions that only QuestieDB's consumer (Questie) interprets, which is not part of the
 --     documented database API. The mask is kept as `raceMask` for diagnostics but no race restriction is enforced from it.
 --     The faction restriction is INFERRED from the starter NPC's friendliness (a QuestieDB NPC field), and labelled as such.
---   * the turn-in NPC is read (`turnIn`) but the quest provider still assumes the turn-in at the giver, as before: using it
---     would change route behaviour, which is a separate, later decision.
+--   * (the turn-in NPC IS used since 0.2.2: the quest provider routes a hand-in to it when its position is known)
 --   * objective areas, object / item starters, exclusivity, chains beyond prerequisites, Questie's own hide/blacklist policy.
 
 local addonName, ns = ...
@@ -324,6 +323,62 @@ end
 function QB.Available() return QB.status.state == "available" end
 function QB.Status() return QB.status end
 function QB.Stats() return { built = stats.built, withLocation = stats.withLocation, errors = stats.errors, ms = stats.ms } end
+
+-- ---------------------------------------------------------------- diagnostics: what does QuestieDB hold for ONE quest?
+
+--- For the playtest report only (never used by the planner): what QuestieDB knows about one quest's giver, turn-in NPC and objectives,
+-- as plain facts, so a quest Codex cannot place can be traced to the layer that lacks the data. Reads only documented fields
+-- (`startedBy`, `finishedBy`, `objectives`, NPC `spawns`). It does NOT interpret objectives into places: it counts what is there.
+-- Returns nil when QuestieDB is not usable; { known = false } when it does not have the quest (UNKNOWN, not "no such quest").
+function QB.Describe(id)
+	local lib, Q, N = entities()
+	if type(lib) ~= "table" or not Q or not N then return nil end
+	local ok, out = pcall(function()
+		local d = { id = id }
+		local exists = Q.Exists(id)
+		d.known = exists == true
+		if not d.known then return d end
+		local function npcOf(key)
+			local npc = firstNpc(Q.Get(id, key))
+			if not npc then return nil end
+			local info = npcInfo(N, npc)
+			return { npc = npc, name = info and info.name or nil, known = info ~= nil, hasLocation = info ~= nil and info.loc ~= nil }
+		end
+		d.giver, d.turnIn = npcOf("startedBy"), npcOf("finishedBy")
+		local obj = Q.Get(id, "objectives")
+		d.objectives = {}
+		if type(obj) == "table" then
+			for slot, list in pairs(obj) do
+				local n = type(list) == "table" and #list or 0
+				if n > 0 then
+					-- how many entries in this slot are NPCs QuestieDB knows a position for (assuming entries are { npcId, text }: unverified on Forever)
+					local placed = 0
+					for _, e in ipairs(list) do
+						local info = type(e) == "table" and npcInfo(N, e[1]) or nil
+						if info and info.loc then placed = placed + 1 end
+					end
+					d.objectives[#d.objectives + 1] = { slot = slot, entries = n, npcWithLocation = placed }
+				end
+			end
+			table.sort(d.objectives, function(a, b) return tostring(a.slot) < tostring(b.slot) end)
+		end
+		return d
+	end)
+	if not ok then return { id = id, error = tostring(out) } end
+	return out
+end
+
+--- The entity tables the installed QuestieDB exposes (names only), e.g. { "Npc", "Quest" }: tells whether object / item data is reachable.
+function QB.Entities()
+	local lib = QB.api.lib()
+	if type(lib) ~= "table" then return nil end
+	local out = {}
+	for k, v in pairs(lib) do
+		if type(k) == "string" and type(v) == "table" and k:match("^%u") then out[#out + 1] = k end
+	end
+	table.sort(out)
+	return out
+end
 
 -- ---------------------------------------------------------------- development smoke check
 

@@ -99,9 +99,8 @@ function D.Snapshot()
 	end
 	snap.player = { setupDone = P.SetupDone(), navigation = P.NavigationOn(), navStatus = ns.Navigation and ns.Navigation.Status() or nil,
 		navOwned = ns.Navigation and ns.Navigation.Owned() or nil, party = ns.Party and ns.Party.Status() or nil,
-		journeyEntries = #P.Char().journey.entries, markers = ns.Markers and ns.Markers.Status() or nil,
-		arrow = ns.Arrow and { on = P.ArrowOn(), reason = ns.Arrow.state.reason, calibrated = ns.Arrow.Calibration() ~= nil, flip = P.ArrowFlip() } or nil,
-		pins = ns.Pins and ns.Pins.Status() or nil }
+		journeyEntries = #P.Char().journey.entries,
+		arrow = ns.Arrow and { on = P.ArrowOn(), reason = ns.Arrow.state.reason, calibrated = ns.Arrow.Calibration() ~= nil, flip = P.ArrowFlip() } or nil }
 	if ns.Telemetry then
 		local st = ns.Telemetry.Status()
 		snap.telemetry = { enabled = st.enabled, stored = st.stored, cap = st.cap, anomalies = st.anomalies, types = {} }
@@ -168,13 +167,12 @@ function D.Lines(s)
 		L[#L + 1] = string.format("Player experience: setup %s | waypoint following %s (%s%s) | journey entries %d", p.setupDone and "done" or "NOT done", p.navigation and "on" or "off",
 			tostring(p.navStatus), p.navOwned and (", Codex pin placed for " .. tostring(p.navOwned.action)) or "", p.journeyEntries)
 		if p.arrow then
-			L[#L + 1] = string.format("  arrow: %s (%s), calibrated %s, flip %s | map pins: %s, world map %s, minimap %s, pins now %s (UNPROVEN on Forever)", p.arrow.on and "on" or "off", tostring(p.arrow.reason),
-				tostring(p.arrow.calibrated), tostring(p.arrow.flip), p.pins and (p.pins.on and "on" or "off") or "?", p.pins and p.pins.worldMap or "?", p.pins and p.pins.minimap or "?", p.pins and p.pins.desired or "?")
+			L[#L + 1] = string.format("  arrow: %s (%s), calibrated %s, flip %s", p.arrow.on and "on" or "off", tostring(p.arrow.reason),
+				tostring(p.arrow.calibrated), tostring(p.arrow.flip))
 		end
 		if p.party then
-			L[#L + 1] = string.format("  party news: %s | addon messages %s | party chat %s | shared items this session %d | markers: %s (test %s)", p.party.mode,
-				p.party.addonMessages and "available" or "UNAVAILABLE", p.party.chat and "available" or "UNAVAILABLE", p.party.feed,
-				p.markers and (p.markers.enabled and "on" or "off") or "?", p.markers and p.markers.probe or "?")
+			L[#L + 1] = string.format("  party news: %s | addon messages %s | party chat %s | shared items this session %d", p.party.mode,
+				p.party.addonMessages and "available" or "UNAVAILABLE", p.party.chat and "available" or "UNAVAILABLE", p.party.feed)
 		end
 	end
 	if s.planner and s.planner.diag then
@@ -298,32 +296,165 @@ function D.PlaytestLines(snap, lines)
 	end
 	local nfy = ns.NewForYou and ns.NewForYou.Active()
 	add("NEW FOR YOU: " .. (nfy and (#nfy.items .. " item(s) at level " .. tostring(nfy.level)) or "hidden"))
-	if ns.UI and ns.UI.main then add(string.format("Window height: %s", tostring(ns.UI.main.height))) end
+	if ns.UI and ns.UI.main and ns.UI.main.height then add("Window height: " .. tostring(ns.UI.main.height)) end
 
 	-- why the planner chose it (a traced re-run on the same context)
-	add("")
-	add("--- WHY (planner trace) ---")
 	local okT, traced = pcall(ns.PlanAdapter.Compute, ctx, { prevNowId = plan.now and plan.now.id or nil, trace = true })
 	local d = okT and traced and traced.diag or plan.diag
+	local R = ns.Registry
+	local ACTION = { ACCEPT = "Accept", TURN_IN = "Turn in", OBJECTIVE = "Finish" }
+	local ORDER = { TURN_IN = 1, OBJECTIVE = 2, ACCEPT = 3 }
+	local function questName(qid)
+		local v = R.Quest(qid)
+		return (v and v.name) or (ctx.log and ctx.log[qid] and ctx.log[qid].title) or "?"
+	end
+	--- "Q:362 The Haunted Mills - TURN_IN" for a quest action id; other ids are shown as they are.
+	local function label(id)
+		local qid, kind = tostring(id):match("^Q:(%d+):([%u_]+)")
+		if not qid then return tostring(id) end
+		return string.format("Q:%s %s - %s", qid, questName(tonumber(qid)), kind)
+	end
+	local function sentence(id)
+		local qid, kind = tostring(id):match("^Q:(%d+):([%u_]+)")
+		if not qid then return tostring(id) end
+		return string.format("%s %s [Q:%s]", ACTION[kind] or kind, questName(tonumber(qid)), qid)
+	end
+	local function itemsOf(st)
+		local list = {}
+		for _, id in ipairs(st.items) do list[#list + 1] = id end
+		table.sort(list, function(x, y)
+			local kx, ky = ORDER[tostring(x):match(":([%u_]+)$")] or 9, ORDER[tostring(y):match(":([%u_]+)$")] or 9
+			if kx ~= ky then return kx < ky end
+			return tostring(x) < tostring(y)
+		end)
+		return list
+	end
+	local me = l.available and { map = l.map, x = l.x, y = l.y, world = l.world or false } or nil
+	local UNMEASURED = ns.Engine.DIFFERENT_CONTINENT
+	local stops = {}
+	for i, st in ipairs(d and d.stopList or {}) do
+		local dist = me and ns.Engine.Distance(ctx, me, { map = st.map, x = st.x, y = st.y }) or nil
+		stops[i] = { st = st, dist = dist, measured = dist ~= nil and dist ~= UNMEASURED, first = d.bestByFirst and d.bestByFirst[st.id] }
+	end
+	local byId = {}
+	for _, e in ipairs(stops) do byId[e.st.id] = e end
+
+	add("")
+	add("--- WHY (planner trace) ---")
 	if d then
 		local flags = {}
 		for _, k in ipairs({ "localOnly", "localWork", "turnInFirst", "stuck", "pinnedFirst", "routeZoneOnly" }) do if d[k] then flags[#flags + 1] = k end end
 		add(string.format("reason=%s | flags: %s | net %s over ~%s s | unknown legs %s | %s stops, %s sequences", tostring(d.reason), #flags > 0 and table.concat(flags, ",") or "none",
 			num(d.net), num(d.seconds, "%.0f"), tostring(d.unknownLegs), tostring(d.stops), tostring(d.sequences)))
-		add("sequence: " .. (d.sequence and #d.sequence > 0 and table.concat(d.sequence, " > ") or "(none)"))
-		local me = l.available and { map = l.map, x = l.x, y = l.y, world = l.world or false } or nil
-		for _, st in ipairs(d.stopList or {}) do
-			local dist = me and ns.Engine.Distance(ctx, me, { map = st.map, x = st.x, y = st.y }) or nil
-			local first = d.bestByFirst and d.bestByFirst[st.id]
-			add(string.format("  stop %s [%s] map %s | %s yd away | best plan starting here: net %s over %s s%s", tostring(st.id), table.concat(st.items, ","), tostring(st.map),
-				dist and (dist >= 1e8 and "unmeasurable" or string.format("%.0f", dist)) or "?", first and num(first.net) or "?", first and num(first.secs, "%.0f") or "?",
-				first and first.unknown > 0 and (" (" .. first.unknown .. " unknown legs)") or ""))
-		end
 		local rej = {}
-		for _, r in ipairs(d.rejected or {}) do rej[#rej + 1] = r.id .. ":" .. r.code .. (r.seconds and ("(" .. r.seconds .. "s)") or "") end
-		if #rej > 0 then add("rejected ALSO DO: " .. table.concat(rej, " ")) end
-		if d.unlocatedIds and #d.unlocatedIds > 0 then add("no location (reminders): " .. table.concat(d.unlocatedIds, " ")) end
-		add("params: " .. (d.params and string.format("timeValue=%s stickiness=%s", tostring(d.params.timeValue), tostring(d.params.stickiness)) or "?"))
+		for _, r in ipairs(d.rejected or {}) do rej[#rej + 1] = label(r.id) .. (r.code and (" " .. r.code) or "") .. (r.seconds and (" (" .. r.seconds .. " s)") or "") end
+		add("rejected ALSO DO: " .. (#rej > 0 and table.concat(rej, "; ") or "none"))
+		add(string.format("params: timeValue=%s stickiness=%s", tostring(d.params and d.params.timeValue), tostring(d.params and d.params.stickiness)))
+
+		add("")
+		add("--- SEQUENCE (what Codex wants you to do, in order) ---")
+		if d.sequence and #d.sequence > 0 then
+			local n = 0
+			for _, sid in ipairs(d.sequence) do
+				local e = byId[sid]
+				if e then
+					n = n + 1
+					local items = itemsOf(e.st)
+					local qid = tostring(items[1] or ""):match("^Q:(%d+)")
+					local v = qid and R.Quest(tonumber(qid)) or nil
+					local who = v and (v.giverName or (v.turnIn and v.turnIn.name)) or nil
+					add(string.format("%d. Travel to %s%s", n, who and tostring(who) or "the next stop", e.measured and string.format(" (%.0f yd from you)", e.dist) or " (distance not measured)"))
+					for _, id in ipairs(items) do add("   " .. sentence(id)) end
+				end
+			end
+		else
+			add("(none)")
+		end
+
+		-- the stops nearest to you (plus every stop in the sequence); the rest is counted, not listed
+		local inSeq = {}
+		for _, sid in ipairs(d.sequence or {}) do inSeq[sid] = true end
+		local shown, measuredRest, unmeasured = {}, {}, 0
+		for _, e in ipairs(stops) do
+			if inSeq[e.st.id] then shown[#shown + 1] = e
+			elseif e.measured then measuredRest[#measuredRest + 1] = e
+			else unmeasured = unmeasured + 1 end
+		end
+		table.sort(measuredRest, function(x, y) if x.dist ~= y.dist then return x.dist < y.dist end return x.st.id < y.st.id end)
+		local LIMIT = 15
+		local k = 1
+		while #shown < LIMIT and measuredRest[k] do shown[#shown + 1] = measuredRest[k]; k = k + 1 end
+		local farther = #measuredRest - (k - 1)
+		table.sort(shown, function(x, y)
+			local dx, dy = x.measured and x.dist or math.huge, y.measured and y.dist or math.huge
+			if dx ~= dy then return dx < dy end
+			return x.st.id < y.st.id
+		end)
+		add("")
+		add("--- NEAREST RELEVANT STOPS ---")
+		for _, e in ipairs(shown) do
+			local dtext = e.measured and string.format("%.0f yd", e.dist) or "distance not measured"
+			local net = e.first and string.format(" | best plan from here: net %s over %s s%s", num(e.first.net), num(e.first.secs, "%.0f"), inSeq[e.st.id] and " (in the plan)" or "") or (inSeq[e.st.id] and " | (in the plan)" or "")
+			for i, id in ipairs(itemsOf(e.st)) do add(string.format("%s - %s%s", label(id), dtext, i == 1 and net or "")) end
+		end
+		if #shown == 0 then add("(none)") end
+		local omitted = farther + unmeasured
+		add(string.format("+ %d additional stops omitted (%d farther away, %d with no measurable distance)", omitted, farther, unmeasured))
+
+		-- quests Codex cannot place: which layer lacks the data (provenance, never a guess)
+		add("")
+		add("--- NOT PLACED (no usable location) ---")
+		local unplaced = d.unlocatedIds or {}
+		if #unplaced == 0 then add("(none)") end
+		local QB = ns.QuestieBridge
+		local qdb = QB and QB.Available() or false
+		-- the game's own quest-map points for the map you are on (read only; present on Forever but never probed, so shown raw): another possible source
+		local poi, poiCount, poiState = {}, 0, "API not present"
+		if type(C_QuestLog) == "table" and type(C_QuestLog.GetQuestsOnMap) == "function" and l.map then
+			local okP, list = pcall(C_QuestLog.GetQuestsOnMap, l.map)
+			if okP and type(list) == "table" then
+				poiState = "ok"
+				for _, e in ipairs(list) do
+					if type(e) == "table" and type(e.questID) == "number" then poi[e.questID] = e; poiCount = poiCount + 1 end
+				end
+			else
+				poiState = okP and "returned nothing usable" or "error"
+			end
+		end
+		if #unplaced > 0 then add(string.format("game quest-map points on map %s (C_QuestLog.GetQuestsOnMap): %s, %d quest(s)", tostring(l.map), poiState, poiCount)) end
+		for _, id in ipairs(unplaced) do
+			add(label(id))
+			local qid = tonumber(tostring(id):match("^Q:(%d+)"))
+			local v = qid and R.Quest(qid) or nil
+			local pe = qid and poi[qid] or nil
+			add("    game map point: " .. (pe and string.format("%s, %s", num(pe.x, "%.3f"), num(pe.y, "%.3f")) or (poiState == "ok" and "none on this map" or poiState)))
+			if not v then
+				add("    Codex data: no pack (observed, QuestieDB, ATT) knows this quest")
+			else
+				local pv = v.prov or {}
+				local oc = v.objCoords and #v.objCoords or 0
+				add(string.format("    Codex data: giver place %s | turn-in %s | objective places %s", v.loc and ("yes (" .. tostring(v.loc.src) .. ")") or "none",
+					v.turnIn and (v.turnIn.map and ("yes (" .. tostring(pv.turnIn) .. ")") or ((v.turnIn.name or v.turnIn.npc) and "NPC known, no position" or "none")) or "none",
+					oc > 0 and (oc .. " (" .. tostring(pv.objCoords) .. ")") or "none"))
+			end
+			if qdb and qid then
+				local q = QB.Describe(qid)
+				if q and q.error then
+					add("    QuestieDB: error reading it: " .. q.error)
+				elseif q and not q.known then
+					add("    QuestieDB: does not have this quest (UNKNOWN, not 'no such quest')")
+				elseif q then
+					local function npcText(n) return n and string.format("%s%s", n.name or ("NPC #" .. tostring(n.npc)), n.known and (n.hasLocation and ", has a position" or ", NO position") or ", NPC not in QuestieDB") or "none" end
+					local objs = {}
+					for _, o in ipairs(q.objectives) do objs[#objs + 1] = string.format("slot %s: %d entries (%d NPCs with a position)", tostring(o.slot), o.entries, o.npcWithLocation) end
+					add(string.format("    QuestieDB: giver %s | turn-in %s | objectives: %s", npcText(q.giver), npcText(q.turnIn), #objs > 0 and table.concat(objs, "; ") or "none listed"))
+				end
+			end
+		end
+		if qdb then
+			local ents = QB.Entities()
+			add("QuestieDB tables exposed: " .. (ents and #ents > 0 and table.concat(ents, ", ") or "none"))
+		end
 	end
 
 	-- the quest log

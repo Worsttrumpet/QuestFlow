@@ -11,8 +11,8 @@ local function helpLines()
 	say("Forever Codex commands:")
 	say("  /codex                 open / close the Codex window;  /codex world | journey | appendices opens that tab")
 	say("  /codex setup           run the first-time setup again;  /codex dev = the developer window")
-	say("  /codex arrow [on|off|flip|reset|test]   Codex's own small direction arrow;  /codex pins [on|off]   Codex's pins on the world map")
-	say("  /codex nav [on|off]    the waypoint that follows what Codex recommends;  /codex markers [probe|on|off]")
+	say("  /codex arrow [on|off|flip|reset|test]   Codex's own small direction arrow")
+	say("  /codex nav [on|off]    the waypoint that follows what Codex recommends")
 	say("  /codex party [off|ui|log]   the Party card (what other Codex users in your party finished); log = what Codex saw and why it did or did not share")
 	say("  /codex next            print the recommended next action")
 	say("  /codex report          the playtest report in a copyable window (Ctrl+C, paste); /codex diag = same facts in chat")
@@ -171,31 +171,6 @@ local function handle(msg)
 			end
 		else
 			say("The Codex minimap button can be dragged with the left mouse button; its position is saved. /codex minimap reset puts it back at the default spot.")
-		end
-	elseif cmd == "pins" then
-		if restLower == "on" or restLower == "off" then
-			P.SetPins(restLower == "on")
-			ns.State.Recompute()
-			say("Map pins " .. restLower .. ".")
-		else
-			local st = ns.Pins.Status()
-			say(string.format("Map pins: %s | world map: %s | minimap: %s | pins for the current plan: %d", st.on and "on" or "off", st.worldMap, st.minimap, st.desired))
-		end
-	elseif cmd == "markers" then
-		if restLower == "probe" then
-			local ok, msg = ns.Markers.Probe()
-			say((ok and "markers probe passed: " or "markers probe: ") .. msg)
-		elseif restLower == "on" or restLower == "off" then
-			if restLower == "on" and ns.Markers.Status().probe ~= "passed" then
-				say("World markers need the quick test first: target an NPC and type /codex markers probe.")
-			else
-				P.SetMarkers(restLower == "on")
-				say("World markers " .. restLower .. ".")
-			end
-			ns.State.Recompute()
-		else
-			local st = ns.Markers.Status()
-			say(string.format("World markers: %s (test %s). Placement is off until /codex markers probe has passed on this client.", st.enabled and "on" or "off", st.probe))
 		end
 	elseif cmd == "party" then
 		if restLower == "log" then

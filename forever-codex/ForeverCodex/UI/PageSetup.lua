@@ -1,5 +1,5 @@
 -- UI: the setup panel. Shown once ("Here's your character"), then reachable later as Appendices > Settings.
--- Setup picks the route zone, the route style and the systems Codex should consider; Settings adds navigation, markers,
+-- Setup picks the route zone, the route style and the systems Codex should consider; Settings adds navigation,
 -- party notifications and Hardcore. After setup the main window shows none of this: it shows the decision.
 
 local addonName, ns = ...
@@ -121,18 +121,6 @@ function UI.BuildSetup(parent, mode)
 		y = y - 22
 		w.arrow = toggle(f, y, function() P.SetArrow(not P.ArrowOn()) end)
 		y = y - 22
-		w.pins = toggle(f, y, function() P.SetPins(not P.PinsOn()); recompute() end)
-		y = y - 22
-		w.markers = toggle(f, y, function()
-			local st = ns.Markers.Status()
-			if st.probe ~= "passed" then
-				ns.Say("World markers stay off until the quick test passes: target an NPC and type /codex markers probe.")
-			else
-				P.SetMarkers(not P.MarkersOn())
-			end
-			recompute()
-		end)
-		y = y - 22
 		w.hardcore = toggle(f, y, function() P.SetHardcore(not P.IsHardcore()); recompute() end)
 		y = y - 26
 		w.party = picker(f, y, "Party news", function(dir) P.SetPartyNotify(step(P.PARTY_MODES, P.PartyNotify(), dir)) end)
@@ -150,9 +138,6 @@ function UI.BuildSetup(parent, mode)
 		if not isSetup then
 			w.nav.text:SetText(box(P.NavigationOn(), "Waypoint follows what Codex recommends"))
 			w.arrow.text:SetText(box(P.ArrowOn(), "Small direction arrow"))
-			w.pins.text:SetText(box(P.PinsOn(), "Pins on the world map"))
-			local st = ns.Markers.Status()
-			w.markers.text:SetText(box(P.MarkersOn() and st.enabled, "World markers" .. (st.probe == "passed" and "" or " (needs a quick test)")))
 			w.hardcore.text:SetText(box(P.IsHardcore(), "This is a Hardcore character"))
 			w.party:SetText(PARTY_LABEL[P.PartyNotify()] or P.PartyNotify())
 		end

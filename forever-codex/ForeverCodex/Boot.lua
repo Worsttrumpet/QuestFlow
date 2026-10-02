@@ -17,8 +17,8 @@ local EVENTS = {
 	"UNIT_QUEST_LOG_CHANGED", "QUEST_LOG_UPDATE", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA",
 	-- Phase 3. USER_WAYPOINT_UPDATED is proven (M8.10). The rest are standard Classic events NOT yet observed on Forever:
 	-- each registration is feature-checked and a refusal is ignored (GROUP_ROSTER_UPDATE: party; CHAT_MSG_ADDON: Codex users
-	-- sharing progress; PLAYER_TARGET_CHANGED / UPDATE_MOUSEOVER_UNIT: world markers, which are off until probed).
-	"USER_WAYPOINT_UPDATED", "GROUP_ROSTER_UPDATE", "CHAT_MSG_ADDON", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT",
+	-- sharing progress).
+	"USER_WAYPOINT_UPDATED", "GROUP_ROSTER_UPDATE", "CHAT_MSG_ADDON",
 }
 
 local frame = CreateFrame("Frame")
@@ -78,10 +78,6 @@ local function onEvent(_, event, arg1, arg2, arg3, arg4)
 		elseif event == "CHAT_MSG_ADDON" then
 			ns.Party.OnAddonMessage(arg1, arg2, arg3, arg4)
 			if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
-		elseif event == "PLAYER_TARGET_CHANGED" then
-			ns.Markers.OnUnit("target")
-		elseif event == "UPDATE_MOUSEOVER_UNIT" then
-			ns.Markers.OnUnit("mouseover")
 		else
 			ns.State.MarkDirty()
 		end
@@ -99,7 +95,6 @@ frame:SetScript("OnUpdate", function(_, elapsed)
 	local okN, errN = pcall(ns.Navigation.Tick, elapsed)
 	if not okN then ns.RecordError("navigation tick", errN) end
 	ns.Arrow.Tick(elapsed)                 -- (self-protecting: it pcalls its own update)
-	if ns.Pins then ns.Pins.Tick(elapsed) end
 end)
 
 ns._selftest.boot = { frame = frame, onEvent = onEvent }

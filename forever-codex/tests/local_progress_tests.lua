@@ -129,7 +129,7 @@ do
 	local card = ns.Presenter.Card(p, ns.State.ctx)
 	check(card.now and card.now.title == "Finish Clear the area" and card.now.where == nil and card.now.progress == "2 / 8" and card.now.why == "Keeps you progressing where you are", "the card says: finish it, 2 / 8, and why (no distance is invented)")
 	check(p.alsoDo == nil and p.thenAction == nil, "no ALSO DO or THEN is invented around it")
-	check(ns.Navigation.Target() == nil and ns.Pins.Desired(p)[1] == nil, "nothing is sent to the arrow, the waypoint or the map")
+	check(ns.Navigation.Target() == nil, "nothing is sent to the arrow or the waypoint")
 	-- the player can get out of it
 	local skipped = ns.State.SkipCurrent()
 	check(skipped and skipped.quest == 50 and ns.State.plan.now and mapOf(ns.State.plan.now) == 9002, "Skip moves on: the distant stop becomes NOW")

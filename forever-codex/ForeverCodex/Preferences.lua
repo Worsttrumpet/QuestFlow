@@ -62,7 +62,6 @@ local function ensureChar(key)
 	-- party chat output was removed (Questie already announces quest status): an old "party" / "both" choice, or anything unknown, becomes "ui"
 	if c.partyNotify ~= "off" and c.partyNotify ~= "ui" then c.partyNotify = "ui" end
 	if c.navigation == nil then c.navigation = true end
-	if c.markers == nil then c.markers = false end          -- stays off until the marker probe has succeeded on this client
 	c.journey = type(c.journey) == "table" and c.journey or {}
 	c.journey.entries = type(c.journey.entries) == "table" and c.journey.entries or {}
 	return c
@@ -105,10 +104,6 @@ function P.ArrowOn() return P.Char().arrow ~= false end
 function P.SetArrow(on) P.Char().arrow = on == true end
 function P.ArrowFlip() return root().ui.arrowFlip == true end
 function P.SetArrowFlip(on) root().ui.arrowFlip = on == true end
-function P.PinsOn() return P.Char().pins ~= false end
-function P.SetPins(on) P.Char().pins = on == true end
-function P.MarkersOn() return P.Char().markers == true end
-function P.SetMarkers(on) P.Char().markers = on == true end
 
 --- The player window's saved anchor: { point, relPoint, x, y } or nil.
 function P.WindowPos() return root().ui.window end

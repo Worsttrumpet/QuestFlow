@@ -1,7 +1,7 @@
 -- phase3_tests.lua: the player-facing build (Phase 3). Loaded by run_codex_tests.lua with the shared harness table H.
 --
 -- Covers: the Presenter (what the player reads), the player window and its pages, setup and window persistence, Journey,
--- Knowledge, Navigation (ownership above all), Markers (gated), Party, Help Improve Codex, event wiring, diagnostics, and
+-- Knowledge, Navigation (ownership above all), Party, Help Improve Codex, event wiring, diagnostics, and
 -- the guarantee that none of it changed what the Planner decides.
 -- As everywhere in this project: these prove Codex's OWN logic against a stub client. What Forever does is a separate,
 -- real-client question (docs/CODEX_PHASE3_NOTES.md lists what has and has not been verified there).
@@ -202,8 +202,8 @@ do
 	-- defaults for a character that never saw Phase 3
 	local old = { version = 1, ui = {}, chars = { ["Thrall-Forever"] = { routeZone = "auto", style = "efficient", systems = {}, skipped = { ["Q:5"] = true }, added = {} } }, diag = {} }
 	local ns3 = boot({ char = { level = 12 }, synthetic = true, savedVars = old })
-	check(not ns3.Prefs.SetupDone() and ns3.Prefs.PartyNotify() == "ui" and ns3.Prefs.NavigationOn() and not ns3.Prefs.MarkersOn() and ns3.Prefs.IsSkipped("Q:5"),
-		"an existing character gets safe defaults (setup once, party news in the window only, markers off) and keeps its skips")
+	check(not ns3.Prefs.SetupDone() and ns3.Prefs.PartyNotify() == "ui" and ns3.Prefs.NavigationOn() and ns3.Prefs.IsSkipped("Q:5"),
+		"an existing character gets safe defaults (setup once, party news in the window only) and keeps its skips")
 	H.slash("setup")
 	check(not ns3.Prefs.SetupDone() and ns3.UI.IsShown(), "/codex setup runs the setup again")
 end
@@ -469,8 +469,8 @@ do
 	check(ns4.Navigation.Owned() == nil and ns4.Prefs.NavRecord() == nil, "a different pin at login is not Codex's")
 	-- the Planner does not know about any of this
 	local src = H.readFile(H.addonDir .. "/Planner.lua"):gsub("%-%-[^\n]*", "")
-	check(not src:find("Navigation", 1, true) and not src:find("Markers", 1, true) and not src:find("Presenter", 1, true) and not src:find("Journey", 1, true) and not src:find("Party", 1, true),
-		"Planner.lua mentions none of Navigation, Markers, Presenter, Journey or Party")
+	check(not src:find("Navigation", 1, true) and not src:find("Presenter", 1, true) and not src:find("Journey", 1, true) and not src:find("Party", 1, true),
+		"Planner.lua mentions none of Navigation, Presenter, Journey or Party")
 end
 
 section("phase 3: navigation through State follows the real plan")
@@ -493,76 +493,6 @@ do
 	local p = ns.State.Recompute()
 	check(p ~= nil and #ns.errors >= 1 and ns.errors[#ns.errors]:find("navigation"), "a navigation failure is recorded and the plan is still produced")
 	ns.Navigation.OnPlan = realOnPlan
-end
-
--- ================================================================ Markers
-
-section("phase 3: Markers (what would be marked; placement gated behind a successful test)")
-do
-	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
-	local Mk = ns.Markers
-	local A = act(ns, "Q:1:ACCEPT", 1, 10, 0, { npc = 3143 })
-	local B = act(ns, "Q:2:ACCEPT", 2, 20, 0, { npc = 3145 })
-	local C = act(ns, "Q:3:ACCEPT", 3, 30, 0, { npc = 3143 })
-	local D = act(ns, "Q:4:TURN_IN", 4, 40, 0, { npc = 3150, assumed = true })
-	D.kind = "TURN_IN"
-	local noNpc = act(ns, "Q:5:ACCEPT", 5, 40, 0)
-	local d = Mk.Desired({ now = A, alsoDo = B })
-	check(d.star and d.star.npc == 3143 and d.diamond and d.diamond.npc == 3145 and d.triangle == nil and d.moon == nil, "star = NOW, diamond = ALSO DO, no triangle or moon without a purpose")
-	local n = 0
-	for _ in pairs(d) do n = n + 1 end
-	check(n == 2, "at most one marker per symbol, and only the ones with a purpose")
-	check(Mk.Desired({ now = A, alsoDo = C }).diamond == nil, "one NPC never carries two symbols")
-	check(next(Mk.Desired({ now = D })) == nil, "a turn-in whose NPC is only ASSUMED is never marked")
-	check(next(Mk.Desired({ now = noNpc })) == nil, "an action with no identifiable NPC is not marked (an area is not an NPC)")
-	local fp = act(ns, "FP:1", 1, 10, 0, { npc = 3310 })
-	fp.type = "FLIGHT"
-	check(Mk.Desired({ now = A, alsoDo = fp }).triangle and Mk.Desired({ now = A, alsoDo = fp }).diamond == nil, "a relevant flight path is the green triangle, not the diamond")
-	check(next(Mk.Desired({})) == nil and next(Mk.Desired(nil)) == nil, "no plan, no markers")
-	check(Mk.CreatureId("Creature-0-3-1-0-3143-00001ABC") == 3143 and Mk.CreatureId("Player-0-3-1-0-3143-00001ABC") == nil and Mk.CreatureId(nil) == nil, "an NPC is recognised by the creature id in its GUID; players are not")
-	-- gated: nothing is placed until the probe passed AND the player switched markers on
-	local calls = {}
-	local unit = { exists = true, guid = "Creature-0-3-1-0-3143-00001ABC", mark = nil }
-	_G.UnitExists = function() return unit.exists end
-	_G.UnitGUID = function() return unit.guid end
-	_G.GetRaidTargetIndex = function() return unit.mark end
-	_G.SetRaidTarget = function(_, idx) calls[#calls + 1] = idx; unit.mark = idx ~= 0 and idx or nil end
-	Mk.OnPlan({ now = A, alsoDo = B })
-	Mk.OnUnit("target")
-	check(#calls == 0 and not Mk.Enabled() and Mk.Status().probe == "not run", "off by default: no marker call is ever made before the test")
-	local ok, msg = Mk.Probe()
-	check(ok and msg:find("placed and cleared", 1, true) and Mk.Status().probe == "passed" and unit.mark == nil, "/codex markers probe sets and reads back a mark, then restores the target")
-	Mk.OnUnit("target")
-	check(#calls == 2 or #calls == 0 or true, "(the probe itself touched the target)")
-	calls = {}
-	check(Mk.Enabled() and ns.Prefs.MarkersOn(), "a passing probe switches markers on (the player ran it on purpose)")
-	ns.Prefs.SetMarkers(false)
-	check(not Mk.Enabled(), "and the player can still switch them off")
-	ns.Prefs.SetMarkers(true)
-	Mk.OnPlan({ now = A, alsoDo = B })
-	check(unit.mark == 1, "targeting the NOW NPC puts the star on it")
-	calls = {}
-	Mk.OnUnit("target")
-	check(#calls == 0, "and it is not re-set while it is already right")
-	unit.guid = "Creature-0-3-1-0-9999-00001ABC"; unit.mark = nil
-	Mk.OnUnit("target")
-	check(unit.mark == nil, "an NPC that is not part of the plan is never marked")
-	unit.guid = "Creature-0-3-1-0-3143-00001ABC"; unit.mark = 1
-	Mk.OnPlan({ now = B })
-	Mk.OnUnit("target")
-	check(unit.mark == nil, "when the plan moves on, the old NPC's mark is removed the next time it is seen")
-	-- a failing probe
-	_G.SetRaidTarget = function() error("protected") end
-	local ns2 = boot({ char = { level = 6 }, synthetic = true })
-	_G.UnitExists = function() return true end
-	local ok2, msg2 = ns2.Markers.Probe()
-	check(not ok2 and ns2.Markers.Status().probe == "failed" and msg2:find("refused", 1, true), "a refused SetRaidTarget is recorded as a failed test")
-	ns2.Prefs.SetMarkers(true)
-	check(not ns2.Markers.Enabled(), "and markers stay off")
-	local ok3, msg3 = (function() _G.UnitExists = function() return false end; return ns2.Markers.Probe() end)()
-	check(not ok3 and msg3:find("target an NPC first", 1, true), "the test asks for a target first")
-	_G.SetRaidTarget, _G.GetRaidTargetIndex, _G.UnitGUID, _G.UnitExists = nil, nil, nil, nil
-	check(not boot({ char = { level = 6 }, synthetic = true }).Markers.api.available(), "(cleanup) no marker API on the client: the system reports itself unavailable")
 end
 
 -- ================================================================ Party
@@ -758,19 +688,16 @@ do
 	H.slash("party off"); check(ns.Prefs.PartyNotify() == "off", "/codex party off")
 	H.slash("party ui")
 	H.slash("party nonsense"); check(say(W, "usage: /codex party"), "/codex party rejects nonsense")
-	H.slash("markers on"); check(not ns.Prefs.MarkersOn() and say(W, "quick test first"), "/codex markers on refuses until the test passed")
-	H.slash("markers"); check(say(W, "Placement is off until"), "/codex markers reports")
-	H.slash("markers probe"); check(say(W, "target an NPC first") or say(W, "no SetRaidTarget"), "/codex markers probe explains what it needs")
 	H.slash("journey"); check(ns.UI.current == "journey" and ns.UI.IsShown(), "/codex journey opens the Journey tab")
 	H.slash("world"); check(ns.UI.current == "world", "/codex world")
 	H.slash("appendices"); check(ns.UI.current == "appendices", "/codex appendices")
 	H.slash("dev"); check(ns.DevUI.IsShown(), "/codex dev opens the developer window (with the old machinery)")
 	W.chat = {}
-	H.slash("help"); check(say(W, "/codex setup") and say(W, "/codex nav") and say(W, "/codex party") and say(W, "/codex markers"), "help lists the new commands")
+	H.slash("help"); check(say(W, "/codex setup") and say(W, "/codex nav") and say(W, "/codex party"), "help lists the new commands")
 	-- diag
 	W.chat = {}
 	H.slash("diag")
-	check(say(W, "Player experience: setup done | waypoint following on") and say(W, "party news:") and say(W, "markers:"), "/codex diag reports navigation, party and markers")
+	check(say(W, "Player experience: setup done | waypoint following on") and say(W, "party news:"), "/codex diag reports navigation and party")
 	check(ns.Prefs.IsSavedVariablesSafe(ForeverCodexDB.diag[#ForeverCodexDB.diag]), "and the snapshot stays SavedVariables-safe")
 	check(#ns.errors == 0, "no caught errors" .. (#ns.errors > 0 and (": " .. ns.errors[1]) or ""))
 end
