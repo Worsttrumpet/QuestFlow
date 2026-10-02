@@ -20,6 +20,7 @@ local GAP, PAD = W.GAP, W.PAD
 local TOP = 22                      -- below the character line
 local NOW_MIN = 56                  -- a card never gets smaller than this
 local READY_ROWS = 12              -- hand-ins listed in READY TO TURN IN (the window grows to fit; the rest are summarised in one line)
+local DG_GROUPS, DG_ROWS = 4, 12      -- DUNGEON QUESTS: dungeons and quest lines drawn (the rest are summarised in one line)
 local MAX_ROWS = 8                  -- objective rows drawn in one card (the rest are summarised in one line)
 
 --- Places a card at a vertical offset below the page top and sizes it.
@@ -78,6 +79,15 @@ local function build(page)
 		c.readyIcons[i] = W.Icon(c.readyBox, 14)
 	end
 	c.readyMore = W.Line(c.readyBox, 11, W.DIM, "LEFT")
+
+	-- DUNGEON QUESTS: quests the game tags as dungeon / raid, a red card, grouped by dungeon; present only when there are some
+	c.dgBox = W.Card(page, FULL, 40, W.STYLE_DUNGEON)
+	c.dgLabel = W.Label(c.dgBox, "DUNGEON QUESTS", W.STYLE_DUNGEON.label)
+	c.dgLabel:SetPoint("TOPLEFT", c.dgBox, "TOPLEFT", c.dgBox.insetX, -PAD + 2)
+	c.dgHeads, c.dgRows = {}, {}
+	for i = 1, DG_GROUPS do c.dgHeads[i] = W.Line(c.dgBox, 12, W.STYLE_DUNGEON.label, "LEFT") end
+	for i = 1, DG_ROWS do c.dgRows[i] = W.Line(c.dgBox, 12, W.TEXT, "LEFT") end
+	c.dgMore = W.Line(c.dgBox, 11, W.DIM, "LEFT")
 
 	-- NEW FOR YOU: secondary, fits its content; present only while active
 	c.nfyBox = W.Card(page, FULL, 80, W.STYLE_NEW)
@@ -249,6 +259,39 @@ local function drawReady(c, items)
 	return math.floor(st.y + PAD - 2 + 0.5)
 end
 
+--- DUNGEON QUESTS, grouped by dungeon (a heading only when there is more than one dungeon). Returns the card height, or nil when there are none.
+local function drawDungeons(c, groups)
+	if #groups == 0 then return nil end
+	local box = c.dgBox
+	local inner = FULL - box.insetX - PAD
+	local st = W.Stack(box, inner)
+	st:Skip(16)
+	local rows, heads, left = 0, 0, 0
+	local several = #groups > 1
+	for _, h in ipairs(c.dgHeads) do h:SetText("") end
+	for _, r in ipairs(c.dgRows) do r:SetText("") end
+	for gi, g in ipairs(groups) do
+		local head = (several or g.via ~= "none") and c.dgHeads[gi] or nil
+		if head and gi <= #c.dgHeads then
+			head:SetText(g.name)
+			st:Add(head, 3, box.insetX, inner)
+		end
+		for _, q in ipairs(g.quests) do
+			rows = rows + 1
+			local row = c.dgRows[rows]
+			if row then
+				row:SetText(q.title .. (q.complete and "  -  ready to turn in" or ""))
+				st:Add(row, 2, box.insetX + (head and 8 or 0), inner - (head and 8 or 0))
+			else
+				left = left + 1
+			end
+		end
+	end
+	c.dgMore:SetText(left > 0 and string.format("+ %d more", left) or "")
+	st:Add(c.dgMore, 0)
+	return math.floor(st.y + PAD - 2 + 0.5)
+end
+
 local function drawNewForYou(c, nfy)
 	local box = c.nfyBox
 	local inner = FULL - box.insetX - PAD
@@ -301,6 +344,15 @@ local function refresh()
 		bottom = bottom + GAP - 2 + readyH
 	else
 		c.readyBox:Hide()
+	end
+
+	local dgH = drawDungeons(c, card.dungeons or {})
+	if dgH then
+		c.dgBox:Show()
+		placeCard(c, c.dgBox, bottom + GAP - 2, FULL, dgH)
+		bottom = bottom + GAP - 2 + dgH
+	else
+		c.dgBox:Hide()
 	end
 
 	if nfy then

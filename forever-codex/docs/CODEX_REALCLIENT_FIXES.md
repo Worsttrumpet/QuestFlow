@@ -299,3 +299,14 @@ Real screenshot (0.2.19): READY TO TURN IN showed five hand-ins and "+ 1 more" w
 Not changed: the window's width, and the planner (see the open note on deferred hand-ins in the 0.2.19 report analysis: a deferral that pushes near hand-ins behind a farther objective is awaiting a decision).
 
 Version numbering changed with this release: the patch number runs 0-9 and then the next number up begins at 0 (see `RELEASING.md`). Older sections keep the numbers they shipped under (0.2.10 to 0.2.19 count as 0.3.0 to 0.3.9).
+
+## 37. Release 0.4.1: quest tags, (Elite) labels and a red DUNGEON QUESTS card
+
+Request: let players know which quests are elite, and show dungeon quests in a section of their own, red, split by dungeon.
+How: Codex asks the GAME for each quest's tag (`C_QuestLog.GetQuestTagInfo`, or the older `GetQuestTagInfo`), the same technique Questie uses (no Questie code or data is copied). Nothing is guessed when the client does not answer: such a quest has no tag.
+* Elite, Dungeon, Raid, Heroic and Legendary quests get the game's tag word after the name, e.g. "Finish The Foo (Elite)", wherever the name is shown (NOW, ALSO COMPLETE THIS, READY TO TURN IN, the report).
+* Quests tagged Dungeon / Raid / Heroic / Raid 10 / Raid 25 / Legendary that are in the quest log go to a red DUNGEON QUESTS card below READY TO TURN IN, instead of the other cards. Each dungeon is its own group with a heading when there is more than one. A finished one says "ready to turn in" there.
+* The dungeon is named by the game's name for the quest data's area (`C_Map.GetAreaInfo`), else by the quest log's own section heading, else the group is just "Dungeon quests". The report says which was used.
+* Display only: the planner does not look at tags, so a dungeon quest can still be NOW (it is then labelled).
+* The report prints `quest tags (game, unverified on Forever)`: which API exists, how many logged quests came back tagged, and `[tag id name]` on each tagged quest in the QUEST LOG list.
+Unverified on the real client: whether the tag API exists, whether it answers for quests not in the log (so an Elite pickup may show no label), the tag ids (taken from the documented ids; the report prints the real ones), and whether the quest data's area gives the dungeon name.

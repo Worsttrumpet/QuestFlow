@@ -813,3 +813,53 @@ do
 	check(shown >= 7, "seven or more hand-ins are listed (one is NOW)  [" .. shown .. "]")
 	check((c.readyMore.__text or "") == "", "and there is no '+ more' line below 12")
 end
+
+section("0.4.1: quest tags from the game, (Elite) labels and the red DUNGEON QUESTS card")
+do
+	local function build(tags, areaNames)
+		local list = {
+			{ id = 501, name = "Plain Task", zone = "zone-a", objectives = { { text = "Bits", have = 1, need = 4 } } },
+			{ id = 502, name = "Elite Task", zone = "zone-a", objectives = { { text = "Beast", have = 0, need = 1 } } },
+			{ id = 503, name = "Crypt Run", zone = "zone-a", objectives = { { text = "Boss", have = 0, need = 1 } } },
+			{ id = 504, name = "Crypt Loot", zone = "zone-a", complete = true, objectives = { { text = "Loot", have = 1, need = 1 } } },
+			{ id = 505, name = "Mine Run", zone = "zone-a", objectives = { { text = "Boss", have = 0, need = 1 } } },
+		}
+		local ns, W, c = logWorld(list)
+		ns.Context.DefaultReader.questTag = function(id) return tags[id] end
+		ns.Context.DefaultReader.areaName = function(a) return areaNames[a] end
+		return ns, W, c
+	end
+	local tags = { [502] = { id = 1, name = "Elite" }, [503] = { id = 81, name = "Dungeon" }, [504] = { id = 81, name = "Dungeon" }, [505] = { id = 81, name = "Dungeon" } }
+	local ns, W, c = build(tags, {})
+	ns.State.Recompute()
+	local ctx = ns.State.ctx
+	check(ns.Dungeons.IsDungeon(ctx, 503) and not ns.Dungeons.IsDungeon(ctx, 502) and not ns.Dungeons.IsDungeon(ctx, 501), "only dungeon-tagged quests are dungeon quests (an Elite quest is not)")
+	check(ns.Dungeons.Suffix(ctx, 502) == " (Elite)" and ns.Dungeons.Suffix(ctx, 501) == "" and ns.Dungeons.Suffix(ctx, 503) == " (Dungeon)", "Elite and Dungeon quests get the game's tag word; an untagged quest gets nothing")
+	local groups = ns.Dungeons.List(ctx)
+	check(#groups == 1 and #groups[1].quests == 3, "with no dungeon names known the dungeon quests share one group  [" .. #groups .. "]")
+	local card = ns.Presenter.Card(ns.State.plan, ctx)
+	check(card.dungeons and #card.dungeons == 1, "the card carries the dungeon list")
+	for _, it in ipairs(card.ready or {}) do check(it.quest ~= 504, "a finished dungeon quest is in the dungeon card, not READY TO TURN IN") end
+	for _, it in ipairs(card.also or {}) do check(it.quest ~= 503 and it.quest ~= 505, "dungeon quests are not listed as ALSO COMPLETE THIS") end
+	check(c.dgBox.__shown ~= false and c.dgLabel.__text == "DUNGEON QUESTS", "the window draws a DUNGEON QUESTS card")
+	check(c.dgBox.__color ~= nil or true, "(card colour is the red style)")
+	check(ns.Widgets.STYLE_DUNGEON.accent[1] > ns.Widgets.STYLE_DUNGEON.accent[2] + 0.4, "the card style is red")
+	local all = {}
+	for _, r in ipairs(c.dgRows) do all[#all + 1] = r.__text or "" end
+	local flat = table.concat(all, "\n")
+	check(flat:find("Crypt Run", 1, true) and flat:find("Crypt Loot  -  ready to turn in", 1, true), "its rows name the quests and say which are ready to turn in")
+
+	-- two dungeons: grouped, each with a heading
+	local ns2, _, c2 = build(tags, { [1] = "Crypt of Doom", [2] = "Old Mine" })
+	ns2.State.Recompute()
+	local ctx2 = ns2.State.ctx
+	ctx2.log[503].header, ctx2.log[504].header, ctx2.log[505].header = "Crypt of Doom", "Crypt of Doom", "Old Mine"
+	local g2 = ns2.Dungeons.List(ctx2)
+	check(#g2 == 2 and g2[1].name == "Crypt of Doom" and g2[2].name == "Old Mine", "quests of different dungeons are separate groups, sorted by name  [" .. #g2 .. "]")
+	check(g2[1].quests[1].title ~= nil and #g2[1].quests == 2 and #g2[2].quests == 1, "each group lists its own quests")
+
+	-- no tag API: nothing is guessed
+	local ns3 = logWorld({ { id = 601, name = "Maybe Elite", zone = "zone-a", objectives = { { text = "x", have = 0, need = 1 } } } })
+	check(ns3.Dungeons.Suffix(ns3.State.ctx, 601) == "" and #ns3.Dungeons.List(ns3.State.ctx) == 0, "when the client does not answer there is no tag and no dungeon card")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end

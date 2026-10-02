@@ -43,6 +43,9 @@ local function distanceTo(a, ctx)
 	return E.Distance(ctx, { map = loc.map, x = loc.x, y = loc.y, world = loc.world or false }, pos)
 end
 
+local function suffix(ctx, quest) return ns.Dungeons and ns.Dungeons.Suffix(ctx, quest) or "" end
+local function inDungeonCard(ctx, quest) return ns.Dungeons ~= nil and ns.Dungeons.IsDungeon(ctx, quest) end
+
 local function unfinishedOf(a)
 	local out = {}
 	local os = a.objectiveState
@@ -100,7 +103,7 @@ function Ov.List(plan, ctx)
 		local refMap = (now.kind == "TURN_IN" and me and me.map) or (nowPos and nowPos.map) or (me and me.map) or nil
 		local pool = {}
 		for _, a in ipairs(plan.objectives or {}) do
-			if a.kind == "OBJECTIVE" and a.quest and not seen[a.quest] and not (P and a.skipKey and P.IsSkipped(a.skipKey)) and not a.unknown then pool[#pool + 1] = a end
+			if a.kind == "OBJECTIVE" and a.quest and not seen[a.quest] and not (P and a.skipKey and P.IsSkipped(a.skipKey)) and not a.unknown and not inDungeonCard(ctx, a.quest) then pool[#pool + 1] = a end
 		end
 		local cand = {}
 		for _, a in ipairs(pool) do
@@ -116,15 +119,15 @@ function Ov.List(plan, ctx)
 			if #out >= Ov.MAX_QUESTS then break end
 			if not seen[c.a.quest] then
 				seen[c.a.quest] = true
-				out[#out + 1] = { kind = "objective", title = questName(c.a), objectives = c.todo, fraction = c.fraction, quest = c.a.quest }
+				out[#out + 1] = { kind = "objective", title = questName(c.a) .. suffix(ctx, c.a.quest), objectives = c.todo, fraction = c.fraction, quest = c.a.quest }
 			end
 		end
 	end
 	-- the planner's own ALSO DO: a pickup or hand-in at the same stop, or a located objective, already checked for a small detour
 	local also = plan.alsoDo
-	if also and not (also.quest and seen[also.quest]) then
+	if also and not (also.quest and seen[also.quest]) and not inDungeonCard(ctx, also.quest) then
 		if also.kind == "OBJECTIVE" and #unfinishedOf(also) > 0 then
-			out[#out + 1] = { kind = "objective", title = questName(also), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest }
+			out[#out + 1] = { kind = "objective", title = questName(also) .. suffix(ctx, also.quest), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest }
 		elseif also.type ~= "FLIGHT" and also.kind ~= "TURN_IN" then
 			local d = distanceTo(also, ctx)
 			if d == nil or d <= Ov.ALSO_ACTION_YD then
@@ -148,11 +151,11 @@ function Ov.Ready(plan, ctx)
 	local P = ns.Prefs
 	local nowId = plan.now and plan.now.id
 	for _, a in ipairs(plan.turnIns or {}) do
-		if a.id ~= nowId and not (P and a.skipKey and P.IsSkipped(a.skipKey)) then
+		if a.id ~= nowId and not (P and a.skipKey and P.IsSkipped(a.skipKey)) and not inDungeonCard(ctx, a.quest) then
 			local d = distanceTo(a, ctx)
 			if d and d >= E.DIFFERENT_CONTINENT then d = nil end
 			local short = Ov.ShortWhere(d)
-			out[#out + 1] = { title = questName(a), who = a.giver, where = short, quest = a.quest, dist = d }
+			out[#out + 1] = { title = questName(a) .. suffix(ctx, a.quest), who = a.giver, where = short, quest = a.quest, dist = d }
 		end
 	end
 	table.sort(out, function(x, y)

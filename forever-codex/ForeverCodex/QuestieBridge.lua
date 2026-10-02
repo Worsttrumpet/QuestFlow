@@ -228,6 +228,7 @@ function QB.Record(id)
 		-- tell that an in-progress quest is "around here" even when its exact objective spot is not known
 		local zs = v[K.zoneOrSort]
 		if type(zs) == "number" and zs > 0 then
+			r.areaId = zs                                  -- kept for naming a dungeon quest's dungeon (the game names the area)
 			local zm = areaToMap(zs)
 			if zm then r.zoneMap = zm end
 		elseif type(zs) == "number" and zs < 0 then

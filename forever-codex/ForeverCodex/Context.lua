@@ -126,12 +126,14 @@ function reader.questLog()
 	if type(entries) ~= "number" then
 		return log, 0, false
 	end
+	local header
 	for i = 1, entries do
 		local info = try(C_QuestLog.GetInfo, i)
+		if type(info) == "table" and info.isHeader then header = type(info.title) == "string" and info.title or nil end
 		if type(info) == "table" and not info.isHeader and type(info.questID) == "number" then
 			local id = info.questID
 			local complete = try(C_QuestLog.IsComplete, id) == true or try(C_QuestLog.ReadyForTurnIn, id) == true
-			log[id] = { id = id, title = info.title, complete = complete, objectives = readObjectives(id) }
+			log[id] = { id = id, title = info.title, complete = complete, objectives = readObjectives(id), header = header }
 			n = n + 1
 		end
 	end
@@ -151,6 +153,30 @@ function reader.questPoints(map)
 		end
 	end
 	return out
+end
+
+--- The game's own tag for a quest (Elite, Dungeon, Raid, ...): { id, name } or nil. READ-ONLY and UNVERIFIED on Forever: both the modern table form
+-- (C_QuestLog.GetQuestTagInfo) and the older two-value form (GetQuestTagInfo) are tried; nothing is guessed when neither answers.
+function reader.questTag(id)
+	if type(id) ~= "number" then return nil end
+	if type(C_QuestLog) == "table" and type(C_QuestLog.GetQuestTagInfo) == "function" then
+		local t = try(C_QuestLog.GetQuestTagInfo, id)
+		if type(t) == "table" and type(t.tagID) == "number" then
+			return { id = t.tagID, name = type(t.tagName) == "string" and t.tagName or nil }
+		end
+	end
+	if type(GetQuestTagInfo) == "function" then
+		local tid, tname = try(GetQuestTagInfo, id)
+		if type(tid) == "number" then return { id = tid, name = type(tname) == "string" and tname or nil } end
+	end
+	return nil
+end
+
+--- The game's name for an area id (a dungeon's AreaID from the quest data), or nil.
+function reader.areaName(areaId)
+	if type(areaId) ~= "number" or type(C_Map) ~= "table" or type(C_Map.GetAreaInfo) ~= "function" then return nil end
+	local n = try(C_Map.GetAreaInfo, areaId)
+	return type(n) == "string" and n ~= "" and n or nil
 end
 
 function reader.isCompleted(id)
@@ -187,6 +213,18 @@ function Ctx.Build(r)
 	ctx.questPoints = (r.questPoints and ctx.loc and ctx.loc.map) and r.questPoints(ctx.loc.map) or {}
 	ctx.group = r.group()
 	ctx.prefs = P.Char()
+
+	local tagCache, areaCache = {}, {}
+	ctx.questTag = function(id)
+		local v = tagCache[id]
+		if v == nil then v = r.questTag(id) or false; tagCache[id] = v end
+		return v or nil
+	end
+	ctx.areaName = function(areaId)
+		local v = areaCache[areaId]
+		if v == nil then v = r.areaName(areaId) or false; areaCache[areaId] = v end
+		return v or nil
+	end
 
 	local completedCache = {}
 	ctx.isCompleted = function(id)

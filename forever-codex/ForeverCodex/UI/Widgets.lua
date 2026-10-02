@@ -131,6 +131,7 @@ W.SOFT_GREEN = { 0.56, 0.80, 0.52 }          -- distance / good news: muted, not
 --- Card styles. bg = fill, edge = 1 px border, accent = the 2 px edge, label = section label colour, side = which edge carries the accent.
 W.STYLE_NOW  = { bg = { 0.17, 0.13, 0.07, 0.92 }, edge = { 0.52, 0.40, 0.14, 0.95 }, accent = { 0.92, 0.70, 0.20, 1 }, label = { 0.92, 0.74, 0.30 }, side = "left" }
 W.STYLE_NEAR = { bg = { 0.08, 0.09, 0.14, 0.88 }, edge = { 0.22, 0.23, 0.36, 0.85 }, accent = { 0.46, 0.42, 0.78, 0.95 }, label = { 0.62, 0.60, 0.86 }, side = "left" }
+W.STYLE_DUNGEON = { bg = { 0.15, 0.07, 0.07, 0.90 }, edge = { 0.46, 0.17, 0.15, 0.90 }, accent = { 0.85, 0.30, 0.26, 0.95 }, label = { 0.93, 0.44, 0.40 }, side = "left" }   -- dungeon quests: red
 W.STYLE_READY = { bg = { 0.07, 0.12, 0.08, 0.88 }, edge = { 0.20, 0.34, 0.22, 0.85 }, accent = { 0.45, 0.72, 0.42, 0.95 }, label = { 0.56, 0.80, 0.52 }, side = "left" }
 W.STYLE_NEW  = { bg = { 0.12, 0.11, 0.08, 0.88 }, edge = { 0.38, 0.33, 0.20, 0.85 }, accent = { 0.74, 0.64, 0.32, 0.95 }, label = { 0.82, 0.72, 0.40 }, side = "top" }
 

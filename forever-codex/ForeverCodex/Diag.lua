@@ -298,6 +298,11 @@ function D.PlaytestLines(snap, lines)
 		for _, o in ipairs(card.now and card.now.objectives or {}) do
 			add(string.format("    unfinished: %s %s/%s", tostring(o.text), tostring(o.have), tostring(o.need)))
 		end
+		for _, g in ipairs(card.dungeons or {}) do
+			for _, q in ipairs(g.quests) do
+				add(string.format("DUNGEON QUEST: %s (Q:%s) | %s%s | dungeon named by: %s", tostring(q.title), tostring(q.quest), tostring(g.name), q.complete and " | ready to turn in" or "", g.via == "area" and "the game's area name" or (g.via == "log" and "the quest log heading" or "nothing (unknown)")))
+			end
+		end
 		if #(card.ready or {}) == 0 then add("READY TO TURN IN: nothing") end
 		for _, r in ipairs(card.ready or {}) do
 			add(string.format("READY TO TURN IN: %s (Q:%s) | %s | %s", tostring(r.title), tostring(r.quest), tostring(r.who or "turn-in NPC unknown"), tostring(r.where or "distance unknown")))
@@ -519,7 +524,18 @@ function D.PlaytestLines(snap, lines)
 		for _, o in ipairs(e.objectives or {}) do
 			obj[#obj + 1] = string.format("%s %s/%s", tostring(o.text or "?"), tostring(o.numFulfilled or "?"), tostring(o.numRequired or "?"))
 		end
-		add(string.format("  %s %s%s%s", tostring(id), tostring(e.title), e.complete and " [READY TO TURN IN]" or "", #obj > 0 and (" | " .. table.concat(obj, "; ")) or ""))
+		local tg = ctx.questTag and ctx.questTag(id)
+		add(string.format("  %s %s%s%s%s", tostring(id), tostring(e.title), e.complete and " [READY TO TURN IN]" or "", tg and string.format(" [tag %s %s]", tostring(tg.id), tostring(tg.name)) or "", #obj > 0 and (" | " .. table.concat(obj, "; ")) or ""))
+	end
+	do
+		local api = (type(C_QuestLog) == "table" and type(C_QuestLog.GetQuestTagInfo) == "function") and "C_QuestLog.GetQuestTagInfo" or (type(GetQuestTagInfo) == "function" and "GetQuestTagInfo" or "none found")
+		local tagged, dungeon = 0, 0
+		for _, id in ipairs(ids) do
+			local tg = ctx.questTag and ctx.questTag(id)
+			if tg then tagged = tagged + 1 end
+			if ns.Dungeons and ns.Dungeons.IsDungeon(ctx, id) then dungeon = dungeon + 1 end
+		end
+		add(string.format("quest tags (game, unverified on Forever): API %s | %d of %d logged quests came back tagged | %d dungeon-style | area-name API %s", api, tagged, #ids, dungeon, (type(C_Map) == "table" and type(C_Map.GetAreaInfo) == "function") and "present" or "absent"))
 	end
 	local sk = P.SkippedKeys()
 	add("skipped: " .. (#sk > 0 and table.concat(sk, " ") or "none"))

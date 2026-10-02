@@ -78,7 +78,7 @@ function Pr.Where(a, ctx)
 end
 
 local function describe(a, plan, ctx, icon)
-	local name = questName(a)
+	local name = questName(a) .. (ns.Dungeons and ns.Dungeons.Suffix(ctx, a.quest) or "")
 	local it = { kind = a.kind, icon = icon, where = Pr.Where(a, ctx), progress = Pr.Progress(a) }
 	-- the tracker's short form of the same distance ("Here", "Nearby", "750 yd away"); nil when it cannot be said
 	local pos0 = Pl.Locate(a)
@@ -140,6 +140,7 @@ function Pr.Card(plan, ctx)
 		card.empty = { title = "Nothing to recommend right now", lines = lines }
 		card.also, card.ready = {}, ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
 		card.slots = Pr.Slots(ctx)
+		card.dungeons = ns.Dungeons and ns.Dungeons.List(ctx) or {}
 		return card
 	end
 	card.now = describe(plan.now, plan, ctx, "star")
@@ -148,6 +149,7 @@ function Pr.Card(plan, ctx)
 	-- READY TO TURN IN: finished quests waiting for the right moment (never promoted to NOW just because they are finished)
 	card.ready = ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
 	card.slots = Pr.Slots(ctx)
+	card.dungeons = ns.Dungeons and ns.Dungeons.List(ctx) or {}
 	if plan.alsoDo then
 		card.alsoDo = describe(plan.alsoDo, plan, ctx, plan.alsoDo.type == "FLIGHT" and "triangle" or "diamond")
 	end
