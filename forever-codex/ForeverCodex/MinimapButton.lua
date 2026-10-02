@@ -29,7 +29,8 @@
 -- outcomes actually happens has NOT been observed yet; see docs/M8_5_COMPLETION_REPORT.md's real-client
 -- test section for what was actually seen, once run.
 --
--- The icon is a plain colored square with a letter on it (the same CreateTexture/CreateFontString pattern
+-- (0.2.8: the icon is now a round picture, see build(). The older note that follows is kept for history.)
+-- The icon was a plain colored square with a letter on it (the same CreateTexture/CreateFontString pattern
 -- as every button already in this addon) rather than a game icon texture path, since no icon path has been
 -- confirmed to exist on Forever and this addon has never needed one before. Self-contained on purpose
 -- (a single small file, one exported function) so it can be swapped for a more sophisticated icon/dragging
@@ -51,6 +52,7 @@ local addonName, ns = ...
 local DEFAULT = { point = "TOPLEFT", rel = "TOPRIGHT", x = 6, y = -34 }   -- on the Minimap, 34 px down so the Quest Guide's button is not covered
 
 local MM = { DEFAULT = DEFAULT }
+MM.ICON = "Interface\\AddOns\\ForeverCodex\\Media\\CodexIcon.tga"
 ns.MinimapButton = MM
 
 --- Anchors the button at its saved spot, or the default when none (or an unusable one) is saved.
@@ -106,27 +108,17 @@ end
 
 local function build()
 	local btn = CreateFrame("Button", "ForeverCodexMinimapButton", Minimap)
-	btn:SetSize(28, 28)
+	btn:SetSize(32, 32)
 	MM.button = btn
 	MM.Apply(btn)
 	btn:SetFrameStrata("MEDIUM")
 
-	btn.bg = btn:CreateTexture(nil, "BACKGROUND")
-	btn.bg:SetAllPoints()
-	btn.bg:SetColorTexture(0.1, 0.1, 0.1, 0.9)
-
-	btn.border = btn:CreateTexture(nil, "BORDER")
-	btn.border:SetPoint("TOPLEFT", -1, 1)
-	btn.border:SetPoint("BOTTOMRIGHT", 1, -1)
-	btn.border:SetColorTexture(1, 0.82, 0, 1)
-
-	btn.label = btn:CreateFontString(nil, "OVERLAY")
-	local okFont = ns.Safe(btn.label.SetFontObject, btn.label, GameFontNormal)
-	if not okFont then
-		ns.Safe(btn.label.SetFont, btn.label, "Fonts\\FRIZQT__.TTF", 14, "")
-	end
-	btn.label:SetPoint("CENTER")
-	btn.label:SetText("C")
+	-- a round badge: a gold ring around a "C" on an open book. The whole circle is one picture drawn for Codex (Media/CodexIcon.tga, made by
+	-- generator/make_icon.py: 64 x 64, transparent outside the ring), so it needs no game texture path and no other addon's art.
+	btn.icon = btn:CreateTexture(nil, "ARTWORK")
+	btn.icon:SetAllPoints()
+	ns.Safe(btn.icon.SetTexture, btn.icon, MM.ICON)
+	ns.Safe(btn.icon.SetAlpha, btn.icon, 0.92)
 
 	-- drag to move
 	btn:SetMovable(true)
@@ -153,9 +145,11 @@ local function build()
 	end)
 
 	btn:SetScript("OnEnter", function(self)
+		ns.Safe(self.icon.SetAlpha, self.icon, 1)          -- brighter under the mouse
 		MM.ShowTooltip(self)
 	end)
-	btn:SetScript("OnLeave", function()
+	btn:SetScript("OnLeave", function(self)
+		ns.Safe(self.icon.SetAlpha, self.icon, 0.92)
 		if GameTooltip then
 			ns.Safe(GameTooltip.Hide, GameTooltip)
 		end

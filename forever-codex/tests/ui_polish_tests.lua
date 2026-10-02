@@ -507,3 +507,31 @@ do
 	check(not src:find("SetParent", 1, true) and not src:find("UnregisterAllEvents", 1, true) and not src:find("SetAlpha", 1, true) and not src:find("EnableMouse", 1, true), "it never reparents, unregisters events or touches anything but Hide / Show")
 	_G.hooksecurefunc = nil
 end
+
+section("0.2.8: no 'not on the map' list in the window; the minimap button is a round badge drawn from Codex's own art")
+do
+	local PLACED = { id = 1, name = "Placed pickup", zone = "zone-a", map = 9001, x = 0.52, y = 0.5, giverName = "G" }
+	local MYSTERY = { id = 2, name = "Rear Guard Patrol", zone = "zone-a", objectives = { { text = "Thing", have = 1, need = 5 } } }
+	local ns, W, c = logWorld({ PLACED, MYSTERY })
+	local card = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	local all = {}
+	for _, f in ipairs(W.frames) do for _, fs in ipairs(f.__regions or {}) do if fs.__text then all[#all + 1] = fs.__text end end end
+	local flat = table.concat(all, "\\n")
+	check(not flat:find("Not on the map", 1, true) and not flat:find("not placed", 1, true) and c.reminderFS == nil, "the window does not list quests that are not on the map")
+	local text
+	rawset(ns.UI, "ShowReport", function(t) text = t end)
+	H.slash("report")
+	check(text and text:find("NOT PLACED", 1, true) and text:find("Q:2", 1, true), "the report still has them, with where the missing location could come from")
+	-- the minimap button
+	local MM = ns.MinimapButton
+	check(MM.ICON == "Interface\\AddOns\\ForeverCodex\\Media\\CodexIcon.tga", "its picture is a file shipped inside the addon")
+	local f = io.open(H.addonDir .. "/Media/CodexIcon.tga", "rb")
+	local bytes = f and f:read("*a") or ""
+	if f then f:close() end
+	check(#bytes == 18 + 64 * 64 * 4 and bytes:byte(3) == 2 and bytes:byte(13) == 64 and bytes:byte(15) == 64 and bytes:byte(17) == 32, "the file is a 64 x 64, 32-bit uncompressed TGA (a power of two, with alpha)")
+	check(bytes:byte(18 + 4) == 0, "and its corners are transparent, so the button is a circle")
+	local btn = MM.button
+	check(btn and btn.__w == 32 and btn.icon and btn.icon.__texture == MM.ICON, "the button is 32 px and shows that picture")
+	check(not btn.label and not btn.border, "the old yellow square and letter are gone")
+	check(#ns.errors == 0, "no errors")
+end

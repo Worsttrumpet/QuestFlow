@@ -81,7 +81,6 @@ local function build(page)
 	c.nfyRows = {}
 	for i = 1, 3 do c.nfyRows[i] = W.Line(c.nfyBox, 12, W.TEXT, "LEFT", true) end
 
-	c.reminderFS = W.Line(page, 11, W.DIM, "LEFT", true)
 	c.partyHead = W.Line(page, 11, W.WARM_GOLD, "LEFT")
 	c.partyRows = {}
 	for i = 1, 2 do c.partyRows[i] = { head = W.Line(page, 11, W.TEXT, "LEFT") } end
@@ -289,19 +288,8 @@ local function refresh()
 		c.nfyBox:Hide()
 	end
 
-	-- below the cards: quests Codex cannot place, then the party card
+	-- below the cards: the party card (quests Codex cannot place are not listed here: they are in /codex report)
 	local y = bottom + 6
-	if #card.reminders > 0 and card.now then
-		c.reminderFS:SetText("Not on the map: " .. table.concat(card.reminders, ", "))
-		c.reminderFS:ClearAllPoints()
-		c.reminderFS:SetPoint("TOPLEFT", c.page, "TOPLEFT", 0, -y)
-		c.reminderFS:SetWidth(FULL)
-		c.reminderFS:Show()
-		y = y + W.TextHeight(c.reminderFS, FULL) + 4
-	else
-		c.reminderFS:SetText("")
-		c.reminderFS:Hide()
-	end
 	local pv = ns.Party.View(ctx)
 	if #pv.lines > 0 then
 		c.partyHead:SetText("Party")
