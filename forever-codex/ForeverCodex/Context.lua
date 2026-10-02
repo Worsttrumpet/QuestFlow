@@ -138,6 +138,21 @@ function reader.questLog()
 	return log, n, true
 end
 
+--- The game's own quest-map points for ONE map (the map the player is on; the call only answers for a map): { [questID] = { map, x, y } }.
+-- Read-only and unverified: they are where the game's quest map puts the quest (an area's centre or the turn-in), not an NPC or a spawn.
+function reader.questPoints(map)
+	local out = {}
+	if type(map) ~= "number" or type(C_QuestLog) ~= "table" or type(C_QuestLog.GetQuestsOnMap) ~= "function" then return out end
+	local list = try(C_QuestLog.GetQuestsOnMap, map)
+	if type(list) ~= "table" then return out end
+	for _, e in ipairs(list) do
+		if type(e) == "table" and type(e.questID) == "number" and type(e.x) == "number" and type(e.y) == "number" and (e.x ~= 0 or e.y ~= 0) and out[e.questID] == nil then
+			out[e.questID] = { map = map, x = e.x, y = e.y }
+		end
+	end
+	return out
+end
+
 function reader.isCompleted(id)
 	if type(C_QuestLog) ~= "table" then return nil end
 	local v = try(C_QuestLog.IsQuestFlaggedCompleted, id)
@@ -169,6 +184,7 @@ function Ctx.Build(r)
 	ctx.char = c
 	ctx.loc = r.location()
 	ctx.log, ctx.logCount, ctx.logAvailable = r.questLog()
+	ctx.questPoints = (r.questPoints and ctx.loc and ctx.loc.map) and r.questPoints(ctx.loc.map) or {}
 	ctx.group = r.group()
 	ctx.prefs = P.Char()
 

@@ -132,6 +132,8 @@ local function newWorld(opts)
 		IsQuestFlaggedCompleted = function(id) return W.completed[id] == true end,
 		-- real shape (M8.9): an array of { text, type, finished, numFulfilled, numRequired }; nil for an unknown quest
 		GetQuestObjectives = function(id) return W.objectives and W.objectives[id] or nil end,
+		-- the game's own quest-map points for a map: an array of { questID, x, y } (real shape, seen on the Forever client in the v0.2.10 report)
+		GetQuestsOnMap = function(map) return (W.questPoints and W.questPoints[map]) or {} end,
 	}
 	-- the stub client must never be asked to change quest state
 	for _, f in ipairs({ "AcceptQuest", "CompleteQuest", "GetQuestReward", "AbandonQuest", "SelectGossipOption" }) do

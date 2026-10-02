@@ -564,3 +564,80 @@ do
 	ns4.UI.Open("codex")
 	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
 end
+
+-- ================================================================ the game's own quest-map points (real report: v0.2.10, Tirisfal)
+
+section("game quest-map points: a quest with no known place gets one from the game's own quest map (provenance 'game', never verified)")
+do
+	local work, workLog = unplaced(50, "Rear Guard Patrol", 2, 8)
+	local ns, W = world(6, 9001, { work }, { log = { [50] = workLog } })
+	local p0 = plan(ns)
+	check(p0.now and p0.now.quest == 50 and p0.now.target == nil and ns.Navigation.Target() == nil, "(setup) without the game's point the quest has no place: no arrow destination")
+	W.questPoints = { [9001] = { { questID = 50, x = 0.56, y = 0.5 } } }
+	local p = plan(ns)
+	check(p.now and p.now.quest == 50 and p.now.target and math.abs(p.now.target.x - 0.56) < 1e-9 and p.now.target.src == "game" and p.now.target.verified == false, "with it, NOW has a place from the game's quest map, labelled 'game' and unverified")
+	check(p.diag.reason ~= "LOCAL_WORK", "it is planned as located work now, not as 'work somewhere here'")
+	local tgt = ns.Navigation.Target()
+	check(tgt and math.abs(tgt.x - 0.56) < 1e-9, "the arrow has a destination (it no longer disappears for this quest)")
+	local card = ns.Presenter.Card(p, ns.State.ctx)
+	check(card.now.where ~= nil, "and the card can say how far it is")
+	-- the answer is for one map only
+	W.questPoints = { [9002] = { { questID = 50, x = 0.56, y = 0.5 } } }
+	check(plan(ns).now.target == nil, "a point on another map is not used")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("game quest-map points: quests the data does not know, and hand-ins whose NPC position is unknown, are placed too")
+do
+	-- an unknown (Forever-only) quest in the log: no pack knows it
+	local ns, W = world(6, 9001, {}, { log = { [91209] = { title = "A new Forever quest", objectives = { { text = "Thing", have = 1, need = 4 } } } } })
+	local pU = plan(ns)
+	check(pU.now == nil or pU.now.target == nil, "(setup) an unknown quest has no place")
+	W.questPoints = { [9001] = { { questID = 91209, x = 0.52, y = 0.5 } } }
+	local p = plan(ns)
+	check(p.now and p.now.quest == 91209 and p.now.target and p.now.target.src == "game", "an unknown quest is placed from the game's point")
+	-- an unknown finished quest: its hand-in is placed (and shown with a distance in READY TO TURN IN)
+	local work, workLog = unplaced(50, "Rear Guard Patrol", 2, 8)
+	local ns2, W2 = world(6, 9001, { work }, { log = { [50] = workLog, [91282] = { title = "A Second Home", complete = true } } })
+	W2.questPoints = { [9001] = { { questID = 91282, x = 0.92, y = 0.5 } } }
+	local p2 = plan(ns2)
+	local card = ns2.Presenter.Card(p2, ns2.State.ctx)
+	check(#card.ready == 1 and card.ready[1].title == "A Second Home" and card.ready[1].where ~= nil, "a finished quest of unknown hand-in place shows how far it is (before: 'distance unknown')")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end
+
+section("game quest-map points: a known turn-in NPC position is never replaced, and overlap uses the real distance")
+do
+	local f = H.fake.new({ version = "1.0.4" })
+	f.mapArea(9001, 9001)
+	f.addNpc(8201, { name = "Giver", spawns = { [9001] = { { 51.0, 50.0 } } }, zoneID = 9001, friendlyToFaction = "H" })
+	f.addNpc(8202, { name = "Taker With A Place", spawns = { [9001] = { { 80.0, 50.0 } } }, zoneID = 9001, friendlyToFaction = "H" })
+	f.addQuest(97201, { name = "Hand me in", startedBy = { { 8201 } }, finishedBy = { { 8202 } }, requiredLevel = 1 })
+	f.install()
+	local ns = boot({ char = { level = 6, class = "Paladin", classToken = "PALADIN", race = "Orc", raceToken = "Orc", faction = "Horde" }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	local W = H.world()
+	W.log, W.objectives, W.completed = { { questID = 97201, title = "Hand me in", complete = true } }, {}, {}
+	W.questPoints = { [9001] = { { questID = 97201, x = 0.2, y = 0.2 } } }
+	ns.Prefs.FinishSetup()
+	local p = plan(ns)
+	check(p.now and p.now.id == "Q:97201:TURN_IN" and math.abs(p.now.target.x - 0.80) < 1e-9 and p.now.target.src == "questiedb", "the turn-in NPC's own position wins over the game's point")
+	f.uninstall()
+	-- overlap: with real points, only objectives on the same patch of ground
+	local a, aLog = unplaced(50, "Primary work", 5, 8)
+	local near, nearLog = unplaced(51, "Near work", 1, 4)
+	local far, farLog = unplaced(52, "Far work", 1, 4)
+	local ns2, W2 = world(6, 9001, { a, near, far }, { log = { [50] = aLog, [51] = nearLog, [52] = farLog } })
+	W2.questPoints = { [9001] = { { questID = 50, x = 0.50, y = 0.55 }, { questID = 51, x = 0.52, y = 0.57 }, { questID = 52, x = 0.95, y = 0.9 } } }
+	local p2 = plan(ns2)
+	local titles = {}
+	for _, it in ipairs(ns2.Overlap.List(p2, ns2.State.ctx)) do titles[#titles + 1] = it.title end
+	local flat = table.concat(titles, ",")
+	check(p2.now.quest == 50 and flat:find("Near work", 1, true) and not flat:find("Far work", 1, true), "ALSO COMPLETE THIS offers the quest on the same patch of ground, not the one across the zone  [" .. flat .. "]")
+	-- the report no longer lists placed quests as 'not placed'
+	local text
+	rawset(ns2.UI, "ShowReport", function(t) text = t end)
+	H.slash("report")
+	local np = text and text:match("%-%-%- NOT PLACED.-\n%-%-%- QUEST LOG") or ""
+	check(not np:find("Q:50 ", 1, true) and not np:find("Q:51 ", 1, true), "placed quests are not in the NOT PLACED list")
+	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
+end

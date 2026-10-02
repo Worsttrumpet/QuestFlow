@@ -167,6 +167,11 @@ end
 
 --- The targets of one quest action. `t` is the LEGACY target the action already carries (or nil).
 local function questTargets(a, view, t)
+	local fromGame = t and t.src == "game"
+	if a.kind == "TURN_IN" and fromGame then
+		-- the game's quest map says where this hand-in is (used only when no turn-in NPC position is known)
+		return { K.FromLegacyTarget(t, "TURN_IN", { entity = giverEntity(view), status = "approx", kind = "game_point" }) }
+	end
 	if a.kind == "ACCEPT" then
 		return { K.FromLegacyTarget(t, "GIVER", { entity = giverEntity(view) }) }
 	elseif a.kind == "TURN_IN" then
@@ -186,6 +191,10 @@ local function questTargets(a, view, t)
 		if type(oc.map) == "number" and type(oc.x) == "number" and type(oc.y) == "number" then pts[#pts + 1] = { map = oc.map, x = oc.x, y = oc.y } end
 	end
 	local src = view and view.prov and view.prov.objCoords or "att"
+	if #pts == 0 and fromGame then
+		pts[1] = { map = t.map, x = t.x, y = t.y }          -- no objective coordinates anywhere else: the game's own quest-map point
+		src = "game"
+	end
 	local target = K.Target({ role = "OBJECTIVE", entity = { kind = "area" }, where = K.Where("approx", pts, "area"), prov = K.Prov(src) })
 	if target.where.status ~= "unknown" then target.where.indexed = false end
 	if target.where.status == "unknown" then target.entity = { kind = "unknown" }; target.prov = { src = "unknown", verified = false } end
@@ -255,6 +264,20 @@ local function progressAction(view, entry, pinned, ctx)
 		if oc then
 			t = { map = oc.map, x = oc.x, y = oc.y, label = "objective area (" .. R.MapLabel(oc.map) .. ")", src = "att", verified = false }
 			lines[#lines + 1] = "Objective area: " .. coordText(oc) .. " (ATT, unverified)"
+		else
+			local gp = ctx.questPoints and ctx.questPoints[entry.id]
+			if gp then
+				t = { map = gp.map, x = gp.x, y = gp.y, label = "objective area (game quest map)", src = "game", verified = false }
+				lines[#lines + 1] = "Objective area: where the game's quest map shows it."
+			end
+		end
+	end
+	if complete and ctx.questPoints and ctx.questPoints[entry.id] then
+		local kind0 = turnInPlace(view)
+		if kind0 ~= "known" then
+			local gp = ctx.questPoints[entry.id]
+			t = { map = gp.map, x = gp.x, y = gp.y, label = "hand-in (game quest map)", src = "game", verified = false }
+			lines[#lines + 1] = "Hand-in: where the game's quest map shows it."
 		end
 	end
 	return attach(R.NewAction({
@@ -269,12 +292,14 @@ end
 --- A quest in the player's log that no pack knows: still worth a reminder (e.g. turn-in), never a guess at where.
 local function unknownLogAction(entry, ctx)
 	local complete = entry.complete
+	local gp = ctx.questPoints and ctx.questPoints[entry.id]
+	local t = gp and { map = gp.map, x = gp.x, y = gp.y, label = (complete and "hand-in" or "objective area") .. " (game quest map)", src = "game", verified = false } or nil
 	return attach(R.NewAction({
 		id = "Q:" .. entry.id .. (complete and ":TURN_IN" or ":OBJECTIVE"), type = "QUEST", kind = complete and "TURN_IN" or "OBJECTIVE",
 		quest = entry.id, skipKey = "QT:" .. entry.id, name = entry.title, title = (complete and "Turn in: " or "Continue: ") .. (entry.title or ("quest " .. entry.id)),
-		lines = { "This quest is not in Codex data yet, so there is no location to show." }, src = "log", verified = false,
-		noLocation = true, unknown = true,
-	}), entry.id, nil, ctx, nil)
+		lines = { t and "This quest is not in Codex data; the game's quest map shows where it is." or "This quest is not in Codex data yet, so there is no location to show." },
+		target = t, src = t and "game" or "log", verified = false, noLocation = t == nil, unknown = not t and true or nil, unknownData = true,
+	}), entry.id, nil, ctx, t)
 end
 
 local function addedUnknown(id, ctx)
