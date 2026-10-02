@@ -44,7 +44,7 @@ function UI.ShowOnMap(a)
 	elseif t.verified then
 		note = "Position observed on Forever."
 	else
-		note = "ATT-derived position, unverified on Forever."
+		note = (t.src == "questiedb" and "QuestieDB position" or "ATT-derived position") .. ", unverified on Forever."
 	end
 	local ok, why = ns.MapPin.Place(t.map, t.x, t.y, t.label or a.title, note)
 	if not ok then ns.Say("Could not place a map pin: " .. tostring(why)) end
@@ -321,6 +321,8 @@ end
 function UI.ProvenanceText(a)
 	if a.src == "att" then
 		return "Source: ATT (AllTheThings) - unverified on Forever", W.ORANGE
+	elseif a.src == "questiedb" then
+		return "Source: QuestieDB - unverified on Forever", W.ORANGE
 	elseif a.src == "observed" then
 		return "Source: observed on Forever", W.GREEN
 	elseif a.src == "player" or a.src == "log" then
@@ -461,7 +463,7 @@ function UI.Refresh()
 	end
 	renderSystems()
 	local st = R.Stats()
-	w.footerFS:SetText(ns.Trunc(string.format("Data: %d quests (ATT, unverified + observed) | %d flight nodes. Recommendations are suggestions only.", st.quests, st.flightNodes), 100))
+	w.footerFS:SetText(ns.Trunc(string.format("Data: %d quests (third-party baseline, unverified + observed) | %d flight nodes. Recommendations are suggestions only.", st.quests, st.flightNodes), 100))
 	w.footer2FS:SetText("Bug or feedback? /codex diag  (or /codex report for a copyable box)")
 end
 

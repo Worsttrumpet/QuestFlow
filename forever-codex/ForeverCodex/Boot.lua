@@ -40,6 +40,11 @@ end
 
 local function onLogin()
 	P.SetCharKey(characterKey())
+	-- quest knowledge from the optional QuestieDB addon; when it is not usable, say why once (Codex still works on its own small data)
+	if ns.QuestieBridge then
+		ns.Safe(ns.QuestieBridge.Init)
+		if not ns.QuestieBridge.Available() then ns.Say(ns.QuestieBridge.Status().message) end
+	end
 	if ns.MinimapButton and ns.MinimapButton.Build then
 		local ok, err = pcall(ns.MinimapButton.Build)
 		if not ok then

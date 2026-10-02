@@ -62,6 +62,19 @@ function C.RegisterPack(kind, name, pack)
 	return true
 end
 
+--- Removes one pack by name (used when an optional data source turns out to be unusable). Returns true when it was there.
+function R.RemovePack(kind, name)
+	local list = packs[kind] or {}
+	for i, p in ipairs(list) do
+		if p.name == name then
+			table.remove(list, i)
+			invalidate()
+			return true
+		end
+	end
+	return false
+end
+
 --- Test seam: forget every pack of a kind (or all). Never used in-game.
 function R.ClearPacks(kind)
 	if kind then
@@ -81,7 +94,8 @@ end
 local function layersFor(id)
 	local layers = {}
 	for _, p in ipairs(packs.quests) do
-		local rec = p.quests and p.quests[id]
+		-- a pack is either a table of records (`quests`) or a live source: `get(id)` returns one record or nil (see QuestieBridge)
+		local rec = p.get and p.get(id) or (p.quests and p.quests[id])
 		if rec then
 			layers[#layers + 1] = { pack = p, rec = rec, src = p.meta.src or "unknown", verified = p.meta.verified == true }
 		end
@@ -122,11 +136,25 @@ local function merge(id, layers)
 	take("name"); take("level"); take("objectives"); take("giverNpc"); take("giverName"); take("zone")
 	take("req"); take("prereq"); take("faction"); take("races"); take("classes"); take("repeatable")
 	take("breadcrumb"); take("objCoords"); take("restrictionUnparsed")
-	-- location: ATT giver coordinate first, observed player position only as a labelled fallback.
-	for _, l in ipairs(layers) do
+	take("prereqAll"); take("turnIn"); take("raceMask"); take("classMask")
+	-- location: the giver coordinate of the first layer that has one, observed player position only as a labelled fallback.
+	-- A pack that sets meta.guardGiver (QuestieDB) is skipped when a higher layer names a DIFFERENT giver NPC: its coordinate
+	-- belongs to the other NPC (the Forever-changed-the-giver case), so it must not be attached to the observed one.
+	for i, l in ipairs(layers) do
 		if l.rec.map and l.rec.x and l.rec.y then
-			v.loc = { map = l.rec.map, x = l.rec.x, y = l.rec.y, src = l.src, verified = l.verified, kind = "giver" }
-			break
+			local contradicted
+			if l.pack.meta.guardGiver and l.rec.giverNpc then
+				for j = 1, i - 1 do
+					local g = layers[j].rec.giverNpc
+					if g and g ~= l.rec.giverNpc then contradicted = { giverNpc = g, by = layers[j].src, ignored = l.src, ignoredGiverNpc = l.rec.giverNpc } break end
+				end
+			end
+			if contradicted then
+				v.locConflict = contradicted
+			else
+				v.loc = { map = l.rec.map, x = l.rec.x, y = l.rec.y, src = l.src, verified = l.verified, kind = "giver" }
+				break
+			end
 		end
 	end
 	if not v.loc then
@@ -171,6 +199,14 @@ function R.QuestIds()
 			if not seen[id] then
 				seen[id] = true
 				ids[#ids + 1] = id
+			end
+		end
+		if p.ids then
+			for _, id in ipairs(p.ids() or {}) do
+				if type(id) == "number" and not seen[id] then
+					seen[id] = true
+					ids[#ids + 1] = id
+				end
 			end
 		end
 	end
@@ -276,9 +312,14 @@ function R.Stats()
 	for _, kind in ipairs({ "quests", "flight" }) do
 		for _, p in ipairs(packs[kind] or {}) do
 			local n, withLoc = 0, 0
-			for _, rec in pairs(p.quests or p.nodes or {}) do
-				n = n + 1
-				if rec.map or rec.pos then withLoc = withLoc + 1 end
+			if p.stats then
+				local st = p.stats()
+				n, withLoc = st.count or 0, st.withLocation or 0
+			else
+				for _, rec in pairs(p.quests or p.nodes or {}) do
+					n = n + 1
+					if rec.map or rec.pos then withLoc = withLoc + 1 end
+				end
 			end
 			out.packs[#out.packs + 1] = { kind = kind, name = p.name, src = p.meta.src, verified = p.meta.verified == true,
 				count = n, withLocation = withLoc, label = p.meta.label, sourceRef = p.meta.sourceRef }

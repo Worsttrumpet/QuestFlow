@@ -23,6 +23,7 @@ local function helpLines()
 	say("  /codex sys <key> on|off   toggle a system;  /codex hardcore on|off")
 	say("  /codex telemetry [status|summary|events|on|off|reset]   observation log (does not affect recommendations)")
 	say("  /codex planner [on|off]   the sequence planner (default on); off = the previous one-action-at-a-time engine")
+	say("  /codex questiedb [quest id] [npc id]   whether the QuestieDB addon is in use, and a check of what it knows")
 	say("  /codex minimap reset   put the (draggable) minimap button back at its default spot")
 	say("  /codex where | reset | help")
 end
@@ -144,6 +145,21 @@ local function handle(msg)
 			say(string.format("  facing convention learned: %s (%d samples this session). Walk in a few directions to learn it. Unproven on the real client. Usage: /codex arrow on|off|flip|reset|test",
 				cal and string.format("yes, %d samples", cal.n or 0) or "no", i.samples))
 		end
+	elseif cmd == "questiedb" then
+		-- /codex questiedb [quest id] [npc id]: what QuestieDB is, and a development check of the bridge. The defaults below are only the
+		-- ids this check was written with (a Forever-only quest and its giver): nothing in the planner or product logic uses them.
+		local QB = ns.QuestieBridge
+		local st = QB.Status()
+		if st.state ~= "available" then
+			say("QuestieDB is NOT in use (" .. tostring(st.state) .. "). " .. tostring(st.message))
+		else
+			say(string.format("QuestieDB is in use: version %s, build %s, mode %s, flavor %s, contract %s, %s quests known.", tostring(st.version or "?"), tostring(st.commit or "?"),
+				tostring(st.mode or "?"), tostring(st.flavor or "?"), tostring(st.contract or "?"), tostring(st.quests or "?")))
+			say("It is a baseline, unverified on Forever. A quest missing from it is UNKNOWN to Codex, never 'does not exist'.")
+		end
+		local q, n = restLower:match("^(%d+)%s*(%d*)$")
+		for _, line in ipairs(QB.Smoke(tonumber(q) or 98298, tonumber(n) or 1938)) do say("  " .. line) end
+		say("  (a stable QuestieDB release lacks some Forever-only quests that a newer build has: absent here is expected, not an error)")
 	elseif cmd == "minimap" then
 		if restLower == "reset" then
 			if ns.MinimapButton and ns.MinimapButton.button then

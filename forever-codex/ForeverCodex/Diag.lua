@@ -59,6 +59,11 @@ function D.Snapshot()
 		apis = D.Apis(), data = R.Stats(), choices = {}, errors = {}, time = type(GetTime) == "function" and GetTime() or 0,
 		computeCount = ns.State and ns.State.computeCount or 0,
 	}
+	if ns.QuestieBridge then
+		local st = ns.QuestieBridge.Status()
+		snap.questiedb = { state = st.state, message = st.message, version = st.version, commit = st.commit, mode = st.mode, flavor = st.flavor,
+			contract = st.contract, minContract = st.minContract, quests = st.quests, stats = ns.QuestieBridge.Stats() }
+	end
 	local c = P.Char()
 	snap.choices = { charKey = P.CharKey(), style = c.style, routeZone = c.routeZone, hardcore = c.hardcore == true,
 		skipped = #P.SkippedKeys(), added = #P.AddedList(), systems = {} }
@@ -147,6 +152,16 @@ function D.Lines(s)
 	L[#L + 1] = string.format("Data: %d quests (%d in both ATT and observed), %d flight nodes, %d zones", d.quests, d.observedAndAtt, d.flightNodes, d.zones)
 	for _, p in ipairs(d.packs) do
 		L[#L + 1] = string.format("  pack %s: src=%s verified=%s, %d records (%d with location)", p.name, tostring(p.src), tostring(p.verified), p.count, p.withLocation)
+	end
+	if s.questiedb then
+		local q = s.questiedb
+		if q.state == "available" then
+			L[#L + 1] = string.format("QuestieDB: IN USE | version %s, build %s | mode %s, flavor %s, contract %s (supports from %s) | %s quests known; %d records read so far, %d with a location, %d errors | unverified on Forever; a quest missing from it is UNKNOWN, not absent",
+				tostring(q.version or "?"), tostring(q.commit or "?"), tostring(q.mode or "?"), tostring(q.flavor or "?"), tostring(q.contract or "?"), tostring(q.minContract or "?"),
+				tostring(q.quests or "?"), q.stats.built, q.stats.withLocation, q.stats.errors)
+		else
+			L[#L + 1] = "QuestieDB: NOT in use (" .. tostring(q.state) .. "). " .. tostring(q.message)
+		end
 	end
 	if s.player then
 		local p = s.player

@@ -60,6 +60,9 @@ local function run(sc, over)
 		ForeverCodex.RegisterPack("quests", "att:eval-illustrative", {
 			meta = { src = "att", verified = false, priority = 20, label = "evaluation fixture (ILLUSTRATIVE placement; test-only)" }, zones = {}, quests = sc.illustrative })
 	end
+	-- the same facts, read through the QuestieDB bridge (a fake QuestieDB built from the baseline just registered)
+	local needsAtt
+	if sc.bridge then _, needsAtt = H.fake.fromRegistry(ns, sc.bridge) end
 	local W = H.world()
 	W.log, W.objectives, W.completed = {}, {}, {}
 	for id, e in pairs(sc.log or {}) do
@@ -82,7 +85,7 @@ local function run(sc, over)
 	local plan = ns.Planner.Compute(ctx, c, { trace = true })
 	local titles = {}
 	for _, l in ipairs({ c.candidates, c.inProgress, c.hints }) do for _, a in ipairs(l) do titles[a.id] = a.title end end
-	return { ns = ns, ctx = ctx, c = c, plan = plan, diag = plan.diag, titles = titles, sc = sc }
+	return { ns = ns, ctx = ctx, c = c, plan = plan, diag = plan.diag, titles = titles, sc = sc, needsAtt = needsAtt }
 end
 
 -- ---------------------------------------------------------------- the report
@@ -669,6 +672,41 @@ do
 		check(sig(plain) == sig(r.plan), "[" .. sc.name:match("^(%S+)") .. "] the same plan with and without the trace")
 		check(plain.diag.items == nil and plain.diag.params == nil, "[" .. sc.name:match("^(%S+)") .. "] and no trace data is built when it is off")
 	end
+end
+
+-- ---------------------------------------------------------------- the QuestieDB bridge: equivalent records, the same plan
+
+-- Every scenario is run three ways: with the existing packs only (the baseline), with a fake QuestieDB holding the same facts layered
+-- over them, and (where the bridge reads everything the scenario uses) with the fake QuestieDB as the only quest source besides the
+-- observed pack. The Planner must make the identical decision each time: it consumes the records, it does not care where they came from.
+section("planner evaluation: the QuestieDB bridge feeds the Planner equivalent records (same decisions)")
+do
+	local function sig(r)
+		local d = r.diag
+		return table.concat({ summary(r), table.concat(d.sequence or {}, ">"), string.format("%.4f", d.net or 0), string.format("%.2f", d.seconds or 0), tostring(d.stops),
+			tostring(d.candidates), tostring(d.unlocated), #r.plan.reminders }, " | ")
+	end
+	local layered, only, skipped = 0, 0, 0
+	for _, sc in ipairs(scenarios) do
+		local tag = "[" .. sc.name:match("^(%S+)") .. "] "
+		local base = run(sc)
+		local lay = run(sc, { bridge = "layered" })
+		local st = lay.ns.QuestieBridge.Status()
+		check(st.state == "available" and lay.ns.QuestieBridge.Stats().built > 0, tag .. "the bridge was in use and read records")
+		check(sig(lay) == sig(base), tag .. "QuestieDB layered over the existing data: the same plan" .. (sig(lay) ~= sig(base) and ("\n    base:    " .. sig(base) .. "\n    bridged: " .. sig(lay)) or ""))
+		check(#lay.ns.errors == 0, tag .. "no caught errors through the bridge")
+		layered = layered + 1
+		local o = run(sc, { bridge = "only" })
+		if o.needsAtt then
+			skipped = skipped + 1
+		else
+			check(sig(o) == sig(base), tag .. "QuestieDB as the only quest source (plus observed): the same plan" .. (sig(o) ~= sig(base) and ("\n    base:    " .. sig(base) .. "\n    bridged: " .. sig(o)) or ""))
+			only = only + 1
+		end
+		H.fake.new().uninstall()
+	end
+	print(string.format("  bridge equivalence: %d scenarios layered, %d as the only source (%d need ATT-only data the bridge does not read: objective areas, race lists)", layered, only, skipped))
+	check(only >= 8, "the bridge-only comparison covers a meaningful share of the scenarios (" .. only .. "; the rest use objective areas or race lists that only the existing packs carry)")
 end
 
 -- ---------------------------------------------------------------- the Phase 2.5 baseline, pinned

@@ -55,6 +55,12 @@ function Q.Eligibility(view, ctx, strategy)
 		end
 		if not any then return false, "prereq" end
 	end
+	-- a quest that needs SEVERAL earlier quests (QuestieDB's "group" prerequisites): all of them
+	if view.prereqAll then
+		for _, pid in ipairs(view.prereqAll) do
+			if not ctx.isCompleted(pid) then return false, "prereq" end
+		end
+	end
 	return true
 end
 
@@ -70,7 +76,11 @@ local function coordText(loc)
 	return string.format("%.1f, %.1f", loc.x * 100, loc.y * 100)
 end
 
---- Provenance wording shown to the player. ATT data is "unverified"; nothing here says "confirmed" about it.
+--- The player-facing name of a data source (never says "confirmed": only observed Forever data is ever treated as verified).
+local SRC_NAMES = { att = "ATT", questiedb = "QuestieDB" }
+local function srcName(src) return SRC_NAMES[src] or tostring(src or "unknown source") end
+
+--- Provenance wording shown to the player. Third-party data is "unverified"; nothing here says "confirmed" about it.
 local function provenanceLines(view)
 	local lines = {}
 	local loc = view.loc
@@ -78,11 +88,11 @@ local function provenanceLines(view)
 		if loc.src == "observed" then
 			lines[#lines + 1] = "Location: approx " .. coordText(loc) .. " (player position seen on Forever, not the NPC)"
 		else
-			lines[#lines + 1] = "Location: " .. coordText(loc) .. " (ATT, unverified on Forever)"
+			lines[#lines + 1] = "Location: " .. coordText(loc) .. " (" .. srcName(loc.src) .. ", unverified on Forever)"
 		end
 	end
 	if view.req then
-		lines[#lines + 1] = "Requires level " .. view.req .. " (ATT, unverified)"
+		lines[#lines + 1] = "Requires level " .. view.req .. " (" .. srcName(view.prov and view.prov.req) .. ", unverified)"
 	end
 	if view.level and view.prov.level == "observed" then
 		lines[#lines + 1] = "Quest level " .. view.level .. " (observed on Forever)"
@@ -240,7 +250,11 @@ function Q.Generate(ctx, env)
 		local view = R.Quest(id)
 		local entry = ctx.log[id]
 		local pinned = added[id] == true
-		if entry then
+		if not view then
+			-- a live source (QuestieDB) can list an id it then cannot read: unknown, skipped here. (A quest in the player's log or added
+			-- by the player is still handled below as one no pack knows.)
+			bump(stats, "unreadable")
+		elseif entry then
 			if P.IsSkipped("QT:" .. id) then
 				bump(stats, "skipped")
 			else

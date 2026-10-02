@@ -675,7 +675,9 @@ SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objective
   questing_only  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
   completionist  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
 == planner evaluation: the trace changes nothing ==
+== planner evaluation: the QuestieDB bridge feeds the Planner equivalent records (same decisions) ==
+  bridge equivalence: 22 scenarios layered, 9 as the only source (13 need ATT-only data the bridge does not read: objective areas, race lists)
 == planner evaluation: the Phase 2.5 baseline is unchanged ==
 
-1158 passed, 0 failed
+1372 passed, 0 failed
 ```

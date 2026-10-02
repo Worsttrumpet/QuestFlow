@@ -1349,7 +1349,8 @@ do
 	local H = { boot = boot, check = check, section = section, slash = slash, newWorld = newWorld, attPack = attPack,
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua" }) do
+	H.fake = dofile(dir .. "/fake_questiedb.lua")
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)
