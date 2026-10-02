@@ -530,3 +530,37 @@ do
 	check(#ns.errors == 0, "no errors")
 	f.uninstall()
 end
+
+section("tracker: a quest-log counter (14/40) on the header line, quiet normally, gold at 38+, red at 40/40")
+do
+	local function filled(n)
+		local quests, log = {}, {}
+		for i = 1, n do
+			local id = 1000 + i
+			local q = Q(id, "Filler " .. i, 9001, nil, nil, { zone = "zone-a" })
+			q.map, q.x, q.y = nil, nil, nil
+			quests[#quests + 1] = q
+			log[id] = { title = "Filler " .. i, objectives = { { text = "Thing", have = 0, need = 5 } } }
+		end
+		return quests, log
+	end
+	local function counter(n)
+		local q, l = filled(n)
+		local ns = world(6, 9001, q, { log = l })
+		plan(ns)
+		ns.UI.Open("codex")
+		return ns, ns.UI.main.codex
+	end
+	local ns, c = counter(14)
+	check(c.slots.__text == "14/40" and c.slots.__justify == "RIGHT", "it reads 14/40, right-aligned on the character line")
+	local quiet = c.slots.__color
+	local ns2, c2 = counter(39)
+	check(c2.slots.__text == "39/40" and c2.slots.__color ~= quiet, "at 39/40 it turns gold")
+	local ns3, c3 = counter(40)
+	check(c3.slots.__text == "40/40" and c3.slots.__color ~= c2.slots.__color, "at 40/40 it turns red")
+	check(c.header.__text:find("Thrall", 1, true) ~= nil, "the character line is still there")
+	local ns4 = world(6, 9001, {}, {})
+	ns4.State.ctx.logAvailable = false
+	ns4.UI.Open("codex")
+	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
+end

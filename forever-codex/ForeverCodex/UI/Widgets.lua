@@ -100,6 +100,7 @@ W.PAD, W.GAP = 10, 8                         -- inner padding of a card, space b
 W.TEXT = { 0.93, 0.91, 0.84 }                -- body text: warm off-white
 W.DIM = { 0.62, 0.60, 0.54 }                 -- supporting detail and metadata
 W.WARM_GOLD = { 1, 0.84, 0.36 }              -- the primary action: gold, not yellow
+W.ALERT = { 0.92, 0.38, 0.32 }                 -- a full quest log
 W.SOFT_GREEN = { 0.56, 0.80, 0.52 }          -- distance / good news: muted, not neon
 
 --- Card styles. bg = fill, edge = 1 px border, accent = the 2 px edge, label = section label colour, side = which edge carries the accent.

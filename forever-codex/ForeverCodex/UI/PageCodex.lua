@@ -32,7 +32,10 @@ local function build(page)
 	local c = { page = page }
 	UI.main.codex = c
 	c.header = W.Line(page, 12, W.DIM, "LEFT")
-	W.Place(c.header, page, 0, -2, FULL)
+	W.Place(c.header, page, 0, -2, FULL - 72)
+	-- the quest-log counter, right-aligned on the same line: "14/40" (the normal quest log holds 40; a finished quest still holds its slot)
+	c.slots = W.Line(page, 12, W.DIM, "RIGHT")
+	W.Place(c.slots, page, FULL - 70, -2, 70)
 
 	-- NOW: the strongest card
 	c.nowBox = W.Card(page, FULL, NOW_MIN, W.STYLE_NOW)
@@ -250,6 +253,14 @@ local function refresh()
 	local nfy = ns.NewForYou.Active()
 	UI.main.nfyShown = nfy ~= nil
 	local card = ns.Presenter.Card(plan, ctx)
+
+	local sl = card.slots
+	if sl then
+		c.slots:SetText(string.format("%d/%d", sl.used, sl.max))
+		W.SetColor(c.slots, sl.full and W.ALERT or (sl.free <= 2 and W.WARM_GOLD or W.DIM))      -- quiet normally, gold at 38+, red when full
+	else
+		c.slots:SetText("")
+	end
 
 	local nowH = drawNow(c, card)
 	placeCard(c, c.nowBox, TOP, FULL, nowH)

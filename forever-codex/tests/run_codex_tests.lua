@@ -55,6 +55,7 @@ local function widget(kind)
 		if k == "SetFont" then return function(self, path, size, flags) self.__font = { path = path, size = size, flags = flags } end end
 		if k == "SetHeight" then return function(self, ht) self.__h = ht end end
 		if k == "SetTexture" then return function(self, path) self.__texture = path end end
+		if k == "SetTextColor" then return function(self, r, g, b) self.__color = string.format("%.2f,%.2f,%.2f", r or 0, g or 0, b or 0) end end
 		if k == "SetMovable" then return function(self, v) self.__movable = v end end
 		if k == "EnableMouse" then return function(self, v) self.__mouse = v end end
 		if k == "RegisterForDrag" then return function(self, ...) self.__drag = { ... } end end

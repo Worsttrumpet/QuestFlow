@@ -221,3 +221,6 @@ Real-client checks: right click on the badge, the tabs, the settings tab, the tr
 * **Event quests are candidates.** Lunar Festival "the Elder" quests, Winter Veil, Darkmoon Faire and Valentine's quests show up as current pickups (far away, so they lose on value; none was chosen). There is no seasonal-availability filter; whether QuestieDB exposes an event field is not yet checked.
 * The plan itself (NOW 350 yd away in Undercity, then the Silverpine pickups and the Silverpine hand-in) is consistent: the in-log Tirisfal quests all have 0 progress and are not in the area, so nothing was deferred.
 **0.2.10 (report only, no behaviour change).** The report's "Travel to X" line for a hand-in named the quest GIVER (it said Apothecary Johaan for a hand-in that is at the turn-in NPC); it now names the turn-in NPC. The report now lists READY TO TURN IN, and notes that the objective NPC counts are a ceiling.
+
+## 24. Release 0.2.11: the quest-log counter
+The tracker shows the quest-log count at the right end of the character line: "14/40". Grey normally, gold at 38/40 and above, red at 40/40; hidden when the quest log cannot be read (nothing is guessed). It is the count the quest log itself reports (a finished quest still holds its slot); 40 is the figure given by the project owner, not probed from the client. The same count is in `/codex report`.
