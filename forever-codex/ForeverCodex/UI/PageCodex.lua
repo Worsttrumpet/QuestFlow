@@ -47,6 +47,7 @@ local function build(page)
 	c.nowSkip:SetPoint("TOPRIGHT", c.nowBox, "TOPRIGHT", -PAD + 4, -PAD + 3)
 	c.nowLabel = W.Label(c.nowBox, "NOW", W.STYLE_NOW.label)
 	c.nowLabel:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX, -PAD)
+	c.nowKindIcon = W.Icon(c.nowBox, 16)                -- "!" for a pickup, "?" for a hand-in; nothing for objectives
 	c.nowTitle = W.Line(c.nowBox, 16, W.WARM_GOLD, "LEFT", true)
 	c.nowWho = W.Line(c.nowBox, 12, W.TEXT, "LEFT")
 	c.nowDetail = W.Line(c.nowBox, 11, W.DIM, "LEFT", true)
@@ -70,8 +71,11 @@ local function build(page)
 	c.readyBox = W.Card(page, FULL, 40, W.STYLE_READY)
 	c.readyLabel = W.Label(c.readyBox, "READY TO TURN IN", W.STYLE_READY.label)
 	c.readyLabel:SetPoint("TOPLEFT", c.readyBox, "TOPLEFT", c.readyBox.insetX, -PAD + 2)
-	c.readyRows = {}
-	for i = 1, 5 do c.readyRows[i] = W.Line(c.readyBox, 12, W.TEXT, "LEFT") end
+	c.readyRows, c.readyIcons = {}, {}
+	for i = 1, 5 do
+		c.readyRows[i] = W.Line(c.readyBox, 12, W.TEXT, "LEFT")
+		c.readyIcons[i] = W.Icon(c.readyBox, 14)
+	end
 	c.readyMore = W.Line(c.readyBox, 11, W.DIM, "LEFT")
 
 	-- NEW FOR YOU: secondary, fits its content; present only while active
@@ -128,7 +132,14 @@ local function drawNow(c, card)
 	if n then c.nowSkip:Show() else c.nowSkip:Hide() end
 	c.thenFS:SetText(card.thenLine and ("Then: " .. card.thenLine) or "")
 	st:Skip(18)                                       -- the NOW label row
-	st:Add(c.nowTitle, 3, nil, inner - 4)
+	local kindIcon = n and (n.kind == "ACCEPT" and "bang" or (n.kind == "TURN_IN" and "query")) or nil
+	c.nowKindIcon:Set(kindIcon)
+	if kindIcon then
+		c.nowKindIcon:Place(box, box.insetX, st.y + 1)
+		st:Add(c.nowTitle, 3, box.insetX + 20, inner - 24)
+	else
+		st:Add(c.nowTitle, 3, nil, inner - 4)
+	end
 	st:Add(c.nowWho, 3)
 	st:Add(c.nowDetail, 4)
 	local left = drawObjectives(box, st, c.nowRows, objectives, inner, box.insetX)
@@ -222,7 +233,14 @@ local function drawReady(c, items)
 	for i, row in ipairs(c.readyRows) do
 		local it = items[i]
 		row:SetText(it and (it.title .. (it.where and ("  -  " .. it.where) or "")) or "")
-		st:Add(row, 2)
+		local y0 = st.y
+		st:Add(row, 2, box.insetX + 18, inner - 18)
+		if it then
+			c.readyIcons[i]:Set("query")
+			c.readyIcons[i]:Place(box, box.insetX, y0 + 0)
+		else
+			c.readyIcons[i]:Set(nil)
+		end
 	end
 	left = #items - #c.readyRows
 	c.readyMore:SetText(left > 0 and string.format("+ %d more", left) or "")

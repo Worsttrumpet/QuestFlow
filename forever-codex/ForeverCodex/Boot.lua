@@ -55,6 +55,7 @@ local function onLogin()
 	if ns.Navigation then ns.Safe(ns.Navigation.Restore) end
 	if ns.Party then ns.Safe(ns.Party.Register) end
 	if ns.BlizzardTracker then ns.Safe(ns.BlizzardTracker.Apply) end
+	if ns.WorldMapButton then ns.Safe(ns.WorldMapButton.Apply) end
 	ns.State.Recompute()
 	-- the tracker comes back after a reload / login unless the player closed it
 	if P.SetupDone() and P.TrackerShown() and ns.UI and ns.UI.Open then ns.Safe(ns.UI.Open, "codex") end

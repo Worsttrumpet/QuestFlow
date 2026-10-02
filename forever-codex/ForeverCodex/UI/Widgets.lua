@@ -39,8 +39,32 @@ function W.SetColor(fs, color)
 	ns.Safe(fs.SetTextColor, fs, color[1], color[2], color[3], 1)
 end
 
+--- While true, W.Button makes the game's own red button (UIPanelButtonTemplate: the one Questie's and most addons' options use). The options
+-- window turns it on while it builds its pages; the compact tracker keeps the small flat buttons. If the template cannot be created, the flat button is used.
+W.useBlizzardButtons = false
+
+local function blizzardButton(parent, w, h, label, onClick)
+	local ok, b = pcall(CreateFrame, "Button", nil, parent, "UIPanelButtonTemplate")
+	if not ok or type(b) ~= "table" then return nil end
+	b:SetSize(w, h)
+	pcall(b.SetText, b, label or "")
+	local okF, fs = pcall(b.GetFontString, b)
+	b.text = (okF and type(fs) == "table") and fs or W.Text(b, W.GOLD)
+	if not (okF and type(fs) == "table") then b.text:SetPoint("CENTER"); b.text:SetText(label or "") end
+	b.enabled = true
+	b.templated = true
+	b:SetScript("OnClick", function(self)
+		if self.enabled and onClick then onClick(self) end
+	end)
+	return b
+end
+
 --- A clickable button: dark background, centred label. `onClick` runs on a left click.
 function W.Button(parent, w, h, label, onClick)
+	if W.useBlizzardButtons then
+		local t = blizzardButton(parent, w, h, label, onClick)
+		if t then return t end
+	end
 	local b = CreateFrame("Button", nil, parent)
 	b:SetSize(w, h)
 	b.bg = b:CreateTexture(nil, "BACKGROUND")
@@ -66,6 +90,7 @@ end
 --- Enables or greys out a button. A disabled button ignores clicks.
 function W.SetEnabled(b, enabled)
 	b.enabled = enabled and true or false
+	if b.templated then pcall(enabled and b.Enable or b.Disable, b) return end
 	W.SetColor(b.text, enabled and W.GOLD or W.GREY)
 end
 
@@ -348,4 +373,36 @@ function W.ProgressRow(parent)
 	end
 	r:Clear()
 	return r
+end
+
+-- ---------------------------------------------------------------- Codex's own small icons (Media/*.tga, drawn by generator/make_art.py)
+-- White pictures with a dark outline: the addon tints them (gold "!" to pick a quest up, gold "?" to hand one in, green check).
+W.ICONS = {
+	bang = "Interface\\AddOns\\ForeverCodex\\Media\\IconBang.tga",
+	query = "Interface\\AddOns\\ForeverCodex\\Media\\IconQuery.tga",
+	check = "Interface\\AddOns\\ForeverCodex\\Media\\IconCheck.tga",
+}
+W.ICON_TINT = { bang = { 1, 0.82, 0 }, query = { 1, 0.82, 0 }, check = { 0.45, 0.9, 0.4 } }
+
+--- A small picture on a frame. icon:Place(card, x, y) puts it at an offset (y is the distance below the top); icon:Set(key) swaps or hides it (nil hides).
+function W.Icon(parent, size)
+	local t = parent:CreateTexture(nil, "ARTWORK")
+	t:SetSize(size, size)
+	function t:Place(card, x, y)
+		self:ClearAllPoints()
+		self:SetPoint("TOPLEFT", card, "TOPLEFT", x, -y)
+	end
+	function t:Set(key)
+		self.key = key
+		if key and W.ICONS[key] then
+			ns.Safe(self.SetTexture, self, W.ICONS[key])
+			local c = W.ICON_TINT[key]
+			ns.Safe(self.SetVertexColor, self, c[1], c[2], c[3])
+			self:Show()
+		else
+			self:Hide()
+		end
+	end
+	t:Hide()
+	return t
 end

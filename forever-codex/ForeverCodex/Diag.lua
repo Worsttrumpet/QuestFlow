@@ -174,6 +174,10 @@ function D.Lines(s)
 			local b = ns.BlizzardTracker.Status()
 			L[#L + 1] = string.format("  game quest tracker: Codex hides it = %s | frame %s | state %s%s (UNVERIFIED on Forever)", b.setting and "on" or "off", tostring(b.frame or "not found"), tostring(b.state), b.hooked and ", re-hide hook installed" or "")
 		end
+		if ns.WorldMapButton then
+			local wm = ns.WorldMapButton.Status()
+			L[#L + 1] = string.format("  world map button: setting %s | %s%s (UNVERIFIED on Forever)", wm.setting and "on" or "off", tostring(wm.status), wm.slot and (", slot " .. wm.slot) or "")
+		end
 		if p.party then
 			L[#L + 1] = string.format("  party news: %s | addon messages %s | party chat %s | shared items this session %d", p.party.mode,
 				p.party.addonMessages and "available" or "UNAVAILABLE", p.party.chat and "available" or "UNAVAILABLE", p.party.feed)

@@ -188,7 +188,7 @@ do
 	local p = UI.frame.__points
 	check(p[1] == "TOPRIGHT" and p[4] < 0 and p[5] < -150, "its default place is the right side where the quest tracker sits, below the minimap  [" .. tostring(p[1]) .. " " .. tostring(p[4]) .. "," .. tostring(p[5]) .. "]")
 	UI.ShowPage("journey")
-	check(UI.options.__w == UI.WIDTH and UI.options.__h == UI.HEIGHT and UI.frame.__w == UI.COMPACT_WIDTH, "the other pages live in the full-size options window; the tracker stays compact")
+	check(UI.options.__w == UI.OPTIONS_W and UI.options.__h == UI.OPTIONS_H and UI.frame.__w == UI.COMPACT_WIDTH, "the other pages live in the full-size options window; the tracker stays compact")
 	UI.ShowPage("codex")
 	check(UI.frame.__w == UI.COMPACT_WIDTH, "and the tracker is still compact")
 	-- an old saved position (from the big window) is dropped once; a new one is kept
@@ -305,6 +305,7 @@ do
 	local function arrow(savedVars)
 		local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" }, savedVars = savedVars })
 		H.attPack(ns, QUEST, nil)
+		ns.Arrow.SIZE_DEFAULT = 40                    -- (these drag / resize tests use the original 40 px default; 0.2.13's own default is checked below)
 		ns.Prefs.FinishSetup()
 		ns.State.Recompute()
 		ns.Arrow.Demo(10)
@@ -439,7 +440,7 @@ do
 	local h1 = UI.frame.__h
 	check(h1 < UI.HEIGHT and h1 >= UI.HEIGHT_MIN, "with a short page the tracker is shorter than the full height  [" .. tostring(h1) .. "]")
 	UI.ShowPage("journey")
-	check(UI.options.__h == UI.HEIGHT and UI.frame.__h == h1, "other pages open in their own full-size window and do not resize the tracker")
+	check(UI.options.__h == UI.OPTIONS_H and UI.frame.__h == h1, "other pages open in their own full-size window and do not resize the tracker")
 	-- the corner: a CENTER-anchored tracker keeps its top-left when its size changes
 	local f = UI.frame
 	local function corner() local p = f.__points; return p[4] - f.__w / 2, p[5] + f.__h / 2 end
@@ -519,15 +520,15 @@ do
 	check(text and text:find("NOT PLACED", 1, true) and text:find("Q:2", 1, true), "the report still has them, with where the missing location could come from")
 	-- the minimap button
 	local MM = ns.MinimapButton
-	check(MM.ICON == "Interface\\AddOns\\ForeverCodex\\Media\\CodexIcon.tga", "its picture is a file shipped inside the addon")
-	local f = io.open(H.addonDir .. "/Media/CodexIcon.tga", "rb")
+	check(MM.ICON == "Interface\\AddOns\\ForeverCodex\\Media\\CodexLogo.tga", "its picture is a file shipped inside the addon")
+	local f = io.open(H.addonDir .. "/Media/CodexLogo.tga", "rb")
 	local bytes = f and f:read("*a") or ""
 	if f then f:close() end
 	check(#bytes == 18 + 64 * 64 * 4 and bytes:byte(3) == 2 and bytes:byte(13) == 64 and bytes:byte(15) == 64 and bytes:byte(17) == 32, "the file is a 64 x 64, 32-bit uncompressed TGA (a power of two, with alpha)")
 	check(bytes:byte(18 + 4) == 0, "and its corners are transparent, so the button is a circle")
 	local btn = MM.button
-	check(btn and btn.__w == MM.SIZE and MM.SIZE <= 30 and btn.icon and btn.icon.__texture == MM.ICON, "the button is small (28 px) and shows that picture")
-	check(not btn.label and not btn.border, "the old yellow square and letter are gone")
+	check(btn and btn.__w == MM.SIZE and MM.SIZE == 31 and btn.icon and btn.icon.__texture == MM.ICON, "the button is the usual 31 px and shows that picture")
+	check(not btn.label and btn.border and btn.border.__texture == "Interface\\Minimap\\MiniMap-TrackingBorder" and btn.background.__texture == "Interface\\Minimap\\UI-Minimap-Background", "the old yellow square and letter are gone: the game's own ring and disc surround the logo")
 	check(#ns.errors == 0, "no errors")
 end
 
@@ -634,4 +635,129 @@ do
 	local fresh = boot({ char = { level = 6 }, synthetic = true })
 	check(fresh.UI.frame == nil and fresh.UI.options == nil, "a brand-new character is not shown a window until it asks for one")
 	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
+end
+
+section("0.2.13: the arrow has its own pictures and colours, easy to see by default, and the player can choose")
+do
+	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	local A = ns.Arrow
+	check(A.SIZE_DEFAULT == 48, "the default size is bigger (48)")
+	check(A.Style().key == "head" and A.Color().key == "gold", "by default: the bold arrowhead in gold")
+	for _, st in ipairs(A.STYLES) do
+		if st.key ~= "classic" then
+			local f = io.open(H.addonDir .. "/Media/" .. st.texture:match("([^\\]+)$"), "rb")
+			local bytes = f and f:read("*a") or ""
+			if f then f:close() end
+			check(#bytes == 18 + 64 * 64 * 4 and bytes:byte(3) == 2 and bytes:byte(17) == 32, st.label .. ": the shipped picture is a 64 x 64 32-bit TGA")
+		end
+	end
+	ns.Prefs.FinishSetup()
+	ns.State.Recompute()
+	A.Update(ns.State.ctx)
+	local f = A.Frame()
+	check(f and f.tex.__texture == A.Style().texture, "the arrow frame uses the chosen picture")
+	ns.Prefs.SetArrowStyle("classic"); ns.Prefs.SetArrowColor("white")
+	A.ApplyStyle()
+	check(f.tex.__texture == A.TEXTURE, "choosing Classic brings the game's own arrow back")
+	ns.Prefs.SetArrowStyle("nonsense"); ns.Prefs.SetArrowColor("nonsense")
+	check(A.Style().key == "head" and A.Color().key == "gold", "an unknown saved choice falls back to the default")
+	-- the picker in the options changes and saves it
+	ns.UI.Open("options")
+	local w = ns.UI.main.settingsPanel.w
+	check(w.arrowStyle ~= nil and w.arrowColor ~= nil, "the settings page has the two pickers")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("0.2.13: small icons - a gold ! on a pickup, a gold ? on a hand-in (NOW and READY TO TURN IN), none on objectives")
+do
+	local ns, W, c = logWorld({ GRAVE })
+	check(c.nowKindIcon.key == nil and not c.nowKindIcon.__shown, "an objective has no icon (it has its progress rows)")
+	for _, name in ipairs({ "IconBang.tga", "IconQuery.tga", "IconCheck.tga" }) do
+		local f = io.open(H.addonDir .. "/Media/" .. name, "rb")
+		local bytes = f and f:read("*a") or ""
+		if f then f:close() end
+		check(#bytes == 18 + 32 * 32 * 4 and bytes:byte(3) == 2 and bytes:byte(17) == 32, name .. " is a 32 x 32 32-bit TGA")
+	end
+	-- a pickup as NOW
+	local nsP, WP, cP = uiWorld({ Q(1, "A pickup", 20, 0, { giverName = "Someone" }) }, {})
+	check(cP.nowKindIcon.key == "bang" and cP.nowKindIcon.__texture == nsP.Widgets.ICONS.bang, "a pickup shows the gold ! beside its title")
+	-- a hand-in as NOW, and a finished quest in the READY list
+	local ready = { id = 60, name = "Graverobbers", zone = "zone-a", complete = true, objectives = { { text = "Thing", have = 5, need = 5 } }, map = 9001, x = 0.5, y = 0.62 }
+	local ns2, W2, c2 = logWorld({ ready })
+	check(c2.nowKindIcon.key == "query", "a hand-in shows the gold ? beside its title")
+	local work = { id = 50, name = "Doom Weed", zone = "zone-a", objectives = { { text = "Doom Weed", have = 9, need = 10 } } }
+	local ready2 = { id = 61, name = "Far ready", zone = "zone-a", complete = true, objectives = { { text = "Thing", have = 5, need = 5 } }, map = 9001, x = 0.5, y = 0.9 }
+	local ns3, W3, c3 = logWorld({ work, ready2 })
+	check(c3.readyBox.__shown and c3.readyIcons[1].key == "query" and c3.readyIcons[2].key == nil, "each READY TO TURN IN row has a ? (and unused rows do not)")
+	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
+end
+
+section("0.2.13: the options window is built from the game's own dialog pieces (frame, title plate, tabs, pane, red buttons, check boxes)")
+do
+	local ns, W, c = logWorld({ GRAVE })
+	ns.Prefs.FinishSetup()
+	ns.UI.Open("options")
+	local UI = ns.UI
+	local used = {}
+	for _, f in ipairs(W.frames) do
+		if f.__backdrop then used[#used + 1] = f.__backdrop.bgFile end
+	end
+	check(UI.options and UI.main.pane and UI.main.optionsTitle, "(setup) the options window has its title plate and pane")
+	local src = H.readFile(H.addonDir .. "/UI/Main.lua")
+	for _, path in ipairs({ "UI-DialogBox-Background", "UI-DialogBox-Border", "UI-DialogBox-Header", "UI-OptionsFrame-ActiveTab", "UI-OptionsFrame-InActiveTab", "UI-Tooltip-Border" }) do
+		check(src:find(path, 1, true) ~= nil, "it uses the game's " .. path)
+	end
+	check(UI.main.tabs.options.selected == true and not UI.main.tabs.world.selected, "the current tab is the selected one")
+	UI.ShowPage("world")
+	check(UI.main.tabs.world.selected and not UI.main.tabs.options.selected, "choosing another tab moves the selection")
+	check(UI.main.tabs.world.text.__text == "World" and UI.main.optionsClose.text.__text == "Close", "tabs and the Close button carry their labels")
+	-- red buttons only inside the options window; the tracker keeps its small flat ones
+	check(UI.main.optionsClose.templated == true and UI.main.optionsButton.templated ~= true and UI.main.close.templated ~= true, "the options window uses the game's red buttons; the tracker's buttons stay small and flat")
+	check(not W.useBlizzardButtons, "(the red-button mode is switched off again after the options are built)")
+	-- check boxes
+	UI.ShowPage("options")
+	local panel = UI.main.settingsPanel
+	check(panel.w.nav.checkTex ~= nil and panel.w.nav.text.__text == "Waypoint follows what Codex recommends", "settings are check boxes with plain labels (no [x] text)")
+	check(panel.w.nav.on == ns.Prefs.NavigationOn(), "and the box follows the setting")
+	panel.w.nav.__scripts.OnClick(panel.w.nav)
+	check(panel.w.nav.on == ns.Prefs.NavigationOn() and panel.w.nav.on == false, "clicking flips it")
+	-- Escape closes it
+	check(rawget(_G, "ForeverCodexOptionsFrame") == UI.options, "it has a global name so Escape can close it (UISpecialFrames)")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("0.2.13: a Codex button on the world map (left click the tracker, right click the options), feature-checked")
+do
+	local made
+	_G.WorldMapFrame = { GetCanvasContainer = function(self) return self end }
+	local ns = boot({ char = { level = 6 }, synthetic = true })
+	local WM = ns.WorldMapButton
+	check(ns.Prefs.WorldMapButtonOn(), "on by default")
+	local r = WM.Apply()
+	local btn = WM.Button()
+	check(r.status == "shown" and btn and btn.__shown and btn.__parent == _G.WorldMapFrame or (btn and btn.__shown), "it is built on the world map and shown")
+	local p = btn.__points
+	check(p[1] == "TOPRIGHT" and p[3] == "TOPRIGHT" and p[4] == -4, "it sits in the first slot of the map's top-right corner")
+	check(btn.icon.__texture:find("CodexLogo", 1, true) and btn.border.__texture == "Interface\\Minimap\\MiniMap-TrackingBorder", "it wears the Codex logo in the game's ring")
+	_G.Questie = {}
+	WM.Apply()
+	check(btn.__points[4] == -36, "with Questie loaded it takes the next slot (it does not sit on top of Questie's button)")
+	_G.Questie = nil
+	ns.UI.Toggle = function() ns._toggled = (ns._toggled or 0) + 1 end
+	ns.UI.ToggleOptions = function() ns._opts = (ns._opts or 0) + 1 end
+	btn.__scripts.OnClick(btn, "LeftButton"); btn.__scripts.OnClick(btn, "RightButton")
+	check(ns._toggled == 1 and ns._opts == 1, "left click toggles the tracker, right click the options")
+	ns.Prefs.SetWorldMapButton(false)
+	WM.Apply()
+	check(not btn.__shown and WM.Status().status == "off", "the setting hides it")
+	-- no world map frame on this client: said plainly, nothing raised
+	_G.WorldMapFrame = nil
+	local ns2 = boot({ char = { level = 6 }, synthetic = true })
+	ns2.WorldMapButton._Reset()
+	_G.WorldMapFrame = nil
+	local r2 = ns2.WorldMapButton.Apply()
+	check(r2.status == "no world map frame" and #ns2.errors == 0, "no map frame: it says so and nothing breaks")
+	local src = H.readFile(H.addonDir .. "/WorldMapButton.lua"):gsub("%-%-[^\n]*", "")
+	check(not src:find("SetParent", 1, true) and not src:find("overlayFrames", 1, true) and not src:find("AddOverlayFrame", 1, true), "it adds nothing to the map itself: a plain button, no overlays")
+	check(#ns.errors == 0, "no errors")
 end

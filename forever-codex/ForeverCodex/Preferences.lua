@@ -103,9 +103,17 @@ function P.SetNavigation(on) P.Char().navigation = on == true end
 --- Hides the game's own quest tracker so the Codex tracker can take its place (off by default; see BlizzardTracker.lua).
 function P.HideBlizzardTracker() return root().ui.hideBlizzardTracker == true end
 function P.SetHideBlizzardTracker(on) root().ui.hideBlizzardTracker = on == true end
+--- A small Codex button on the world map (on by default).
+function P.WorldMapButtonOn() return root().ui.worldMapButton ~= false end
+function P.SetWorldMapButton(on) root().ui.worldMapButton = on == true end
 function P.ArrowOn() return P.Char().arrow ~= false end
 function P.SetArrow(on) P.Char().arrow = on == true end
 function P.ArrowFlip() return root().ui.arrowFlip == true end
+--- The arrow's picture and colour (keys; Arrow.lua knows the list and falls back to its default for anything unknown).
+function P.ArrowStyle() return root().ui.arrowStyle end
+function P.SetArrowStyle(k) root().ui.arrowStyle = type(k) == "string" and k or nil end
+function P.ArrowColor() return root().ui.arrowColor end
+function P.SetArrowColor(k) root().ui.arrowColor = type(k) == "string" and k or nil end
 function P.SetArrowFlip(on) root().ui.arrowFlip = on == true end
 
 --- The player window's saved anchor: { point, relPoint, x, y } or nil.

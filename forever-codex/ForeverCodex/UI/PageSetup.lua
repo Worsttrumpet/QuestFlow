@@ -57,15 +57,33 @@ local function picker(frame, y, label, onStep)
 	return value, prev, nxt
 end
 
+--- A check box with its label on the right (the standard check-box pictures of the game; no template): b:SetOn(on, label).
 local function toggle(frame, y, onClick)
-	local b = W.Button(frame, WIDTH, 20, "", onClick)
-	b:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y + 4)
-	b.text:SetPoint("LEFT", b, "LEFT", 6, 0)
+	local b = CreateFrame("Button", nil, frame)
+	b:SetSize(WIDTH, 24)
+	b:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y + 5)
+	b.box = b:CreateTexture(nil, "ARTWORK")
+	b.box:SetSize(24, 24)
+	b.box:SetPoint("LEFT", b, "LEFT", 0, 0)
+	ns.Safe(b.box.SetTexture, b.box, "Interface\\Buttons\\UI-CheckBox-Up")
+	b.checkTex = b:CreateTexture(nil, "OVERLAY")
+	b.checkTex:SetSize(24, 24)
+	b.checkTex:SetPoint("LEFT", b, "LEFT", 0, 0)
+	ns.Safe(b.checkTex.SetTexture, b.checkTex, "Interface\\Buttons\\UI-CheckBox-Check")
+	b.checkTex:Hide()
+	ns.Safe(b.SetHighlightTexture, b, "Interface\\Buttons\\UI-CheckBox-Highlight", "ADD")
+	b.text = W.Text(b, W.WHITE)
+	b.text:SetPoint("LEFT", b, "LEFT", 28, 0)
 	ns.Safe(b.text.SetJustifyH, b.text, "LEFT")
+	b.enabled = true
+	b:SetScript("OnClick", function(self) if self.enabled and onClick then onClick(self) end end)
+	function b:SetOn(on, label)
+		self.on = on and true or false
+		self.text:SetText(label or "")
+		if self.on then self.checkTex:Show() else self.checkTex:Hide() end
+	end
 	return b
 end
-
-local function box(on, text) return (on and "[x] " or "[ ] ") .. text end
 
 --- Builds the panel into `parent`. mode: "setup" (first run) or "settings". Returns { frame, Refresh, w }.
 function UI.BuildSetup(parent, mode)
@@ -120,8 +138,15 @@ function UI.BuildSetup(parent, mode)
 		w.nav = toggle(f, y, function() P.SetNavigation(not P.NavigationOn()); recompute() end)
 		y = y - 22
 		w.arrow = toggle(f, y, function() P.SetArrow(not P.ArrowOn()) end)
-		y = y - 22
+		y = y - 26
+		local function cycle(list, current, dir) local keys = {} for _, e in ipairs(list) do keys[#keys + 1] = e.key end return step(keys, current, dir) end
+		w.arrowStyle = picker(f, y, "Arrow style", function(dir) P.SetArrowStyle(cycle(ns.Arrow.STYLES, ns.Arrow.Style().key, dir)); ns.Arrow.ApplyStyle(); UI.Refresh() end)
+		y = y - 26
+		w.arrowColor = picker(f, y, "Arrow colour", function(dir) P.SetArrowColor(cycle(ns.Arrow.COLORS, ns.Arrow.Color().key, dir)); ns.Arrow.ApplyStyle(); UI.Refresh() end)
+		y = y - 30
 		w.blizz = toggle(f, y, function() P.SetHideBlizzardTracker(not P.HideBlizzardTracker()); ns.BlizzardTracker.Apply() end)
+		y = y - 22
+		w.worldMap = toggle(f, y, function() P.SetWorldMapButton(not P.WorldMapButtonOn()); ns.WorldMapButton.Apply() end)
 		y = y - 22
 		w.hardcore = toggle(f, y, function() P.SetHardcore(not P.IsHardcore()); recompute() end)
 		y = y - 26
@@ -136,12 +161,15 @@ function UI.BuildSetup(parent, mode)
 		w.char:SetText(ctx and ns.Presenter.Header(ctx) or "")
 		w.zone:SetText(zoneLabel(P.GetRouteZone()))
 		w.style:SetText(styleLabel(P.GetStyle()))
-		for _, b in ipairs(w.sys) do b.text:SetText(box(P.IsSystemOn(b.sysKey), b.sysLabel)) end
+		for _, b in ipairs(w.sys) do b:SetOn(P.IsSystemOn(b.sysKey), b.sysLabel) end
 		if not isSetup then
-			w.nav.text:SetText(box(P.NavigationOn(), "Waypoint follows what Codex recommends"))
-			w.arrow.text:SetText(box(P.ArrowOn(), "Small direction arrow"))
-			w.blizz.text:SetText(box(P.HideBlizzardTracker(), "Hide the game's quest tracker"))
-			w.hardcore.text:SetText(box(P.IsHardcore(), "This is a Hardcore character"))
+			w.nav:SetOn(P.NavigationOn(), "Waypoint follows what Codex recommends")
+			w.arrow:SetOn(P.ArrowOn(), "Small direction arrow")
+			w.arrowStyle:SetText(ns.Arrow.Style().label)
+			w.arrowColor:SetText(ns.Arrow.Color().label)
+			w.blizz:SetOn(P.HideBlizzardTracker(), "Hide the game's quest tracker")
+			w.worldMap:SetOn(P.WorldMapButtonOn(), "Codex button on the world map")
+			w.hardcore:SetOn(P.IsHardcore(), "This is a Hardcore character")
 			w.party:SetText(PARTY_LABEL[P.PartyNotify()] or P.PartyNotify())
 		end
 	end

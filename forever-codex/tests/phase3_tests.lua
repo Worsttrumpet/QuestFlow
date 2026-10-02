@@ -132,7 +132,7 @@ do
 	H.attPack(ns, { Q(1, "Pickup", 30, 0, { giverName = "Someone" }) }, nil)
 	local W = H.world()
 	H.slash("")
-	check(ns.UI.IsShown() and ns.UI.options and ns.UI.options.__name == "ForeverCodexOptions" and ns.UI.frame == nil, "first run: /codex opens the options window (where setup is), not the tracker")
+	check(ns.UI.IsShown() and ns.UI.options and ns.UI.frame == nil, "first run: /codex opens the options window (where setup is), not the tracker")
 	check(ns.DevUI.frame == nil, "the developer window is not built for a normal player")
 	local setup = ns.UI.main.setupPanel
 	check(not ns.Prefs.SetupDone() and setup.frame.__shown and ns.UI.optionsKey == "options", "first run: the setup panel is shown on the Codex Options tab")

@@ -261,14 +261,14 @@ do
 	A.Update(ns.State.ctx)
 	check(not A.state.visible and A.state.reason == "arrow off", "the arrow has its own switch")
 	ns.Prefs.SetArrow(true)
-	-- a waypoint of the player's: Codex pauses, the arrow stays quiet, the pin is untouched
+	-- a waypoint of someone else's (the player's, or one a quest addon sets): Codex's WAYPOINT pauses and their pin is untouched, but the arrow is Codex's own and keeps pointing
 	local ns2, W2, st2 = arrowWorld(-1, 0)
 	ns2.Navigation._Reset()
 	W2.waypoint = { uiMapID = 9001, x = 0.11, y = 0.22 }
 	ns2.State.Recompute()
 	st2.facing = 0
 	ns2.Arrow.Update(ns2.State.ctx)
-	check(ns2.Navigation.Status() == "paused-foreign" and not ns2.Arrow.state.visible and W2.waypoint.x == 0.11 and W2.clears == 0, "with a waypoint of the player's own the arrow is hidden and their pin is untouched")
+	check(ns2.Navigation.Status() == "paused-foreign" and ns2.Arrow.state.visible and W2.waypoint.x == 0.11 and W2.clears == 0, "with another waypoint in place the waypoint pauses and their pin is untouched, but the arrow still points (it does not depend on the waypoint)")
 	-- no destination
 	local ns3, W3, st3 = arrowWorld(-1, 0)
 	H.world().log = {}

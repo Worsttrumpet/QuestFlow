@@ -143,12 +143,13 @@ local function checkArrival(ctx)
 	end
 end
 
---- The destination Codex's own arrow may point at: NOW's target while navigation is on and the player has neither arrived,
--- dismissed it (removed Codex's pin) nor set a waypoint of their own. Never claims or touches a waypoint.
+--- The destination Codex's own arrow may point at: NOW's target while navigation is on and the player has not arrived. Never claims or
+-- touches a waypoint. The arrow is Codex's own frame, so it does NOT depend on who owns the game's single waypoint: another pin
+-- (the player's, or one a quest addon sets when a quest is accepted) or the removal of Codex's pin pauses the WAYPOINT, not the arrow.
 function N.Target()
 	if not (lastWant and P.NavigationOn()) then return nil end
 	local st = N.state.status
-	if st == "following" or st == "unavailable" then
+	if st == "following" or st == "unavailable" or st == "paused-foreign" or st == "dismissed" then
 		return { action = lastWant.action, map = lastWant.map, x = lastWant.x, y = lastWant.y }
 	end
 	return nil

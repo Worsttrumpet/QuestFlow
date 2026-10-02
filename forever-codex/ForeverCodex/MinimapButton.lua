@@ -52,14 +52,14 @@ local addonName, ns = ...
 local DEFAULT = { point = "TOPLEFT", rel = "TOPRIGHT", x = 6, y = -34 }   -- on the Minimap, 34 px down so the Quest Guide's button is not covered
 
 local MM = { DEFAULT = DEFAULT }
-MM.ICON = "Interface\\AddOns\\ForeverCodex\\Media\\CodexIcon.tga"
+MM.ICON = "Interface\\AddOns\\ForeverCodex\\Media\\CodexLogo.tga"
 ns.MinimapButton = MM
 
 -- ON THE EDGE. When the minimap's geometry can be read, the button does not float freely: dragging slides it round the minimap's edge (it
 -- follows the mouse's angle from the minimap's centre, at the ring's radius) and only the angle is saved. When the geometry cannot be read it
 -- falls back to the free drag below.
 MM.ANGLE_DEFAULT = 225        -- bottom-left of the ring (degrees, 0 = east, counter-clockwise)
-MM.SIZE = 28
+MM.SIZE = 31
 MM.EDGE_PAD = 5               -- how far the button's centre sits outside the minimap's own radius
 
 --- The minimap's centre, width and effective scale, or nil when any of them cannot be read.
@@ -159,12 +159,21 @@ local function build()
 	MM.Apply(btn)
 	btn:SetFrameStrata("MEDIUM")
 
-	-- a round badge: a gold ring around a "C" on an open book. The whole circle is one picture drawn for Codex (Media/CodexIcon.tga, made by
-	-- generator/make_icon.py: 64 x 64, transparent outside the ring), so it needs no game texture path and no other addon's art.
+	-- the same pieces every minimap button is made of: the game's own dark disc, gold ring and hover glow (they exist on this client: other
+	-- addons' buttons use them), with Codex's own logo (a "C" on an open book, Media/CodexLogo.tga, drawn by generator/make_art.py) inside.
+	btn.background = btn:CreateTexture(nil, "BACKGROUND")
+	btn.background:SetSize(20, 20)
+	btn.background:SetPoint("TOPLEFT", 7, -5)
+	ns.Safe(btn.background.SetTexture, btn.background, "Interface\\Minimap\\UI-Minimap-Background")
 	btn.icon = btn:CreateTexture(nil, "ARTWORK")
-	btn.icon:SetAllPoints()
+	btn.icon:SetSize(21, 21)
+	btn.icon:SetPoint("TOPLEFT", 6, -5)
 	ns.Safe(btn.icon.SetTexture, btn.icon, MM.ICON)
-	ns.Safe(btn.icon.SetAlpha, btn.icon, 0.92)
+	btn.border = btn:CreateTexture(nil, "OVERLAY")
+	btn.border:SetSize(53, 53)
+	btn.border:SetPoint("TOPLEFT")
+	ns.Safe(btn.border.SetTexture, btn.border, "Interface\\Minimap\\MiniMap-TrackingBorder")
+	ns.Safe(btn.SetHighlightTexture, btn, "Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
 	-- drag to move
 	btn:SetMovable(true)
@@ -213,11 +222,9 @@ local function build()
 	end)
 
 	btn:SetScript("OnEnter", function(self)
-		ns.Safe(self.icon.SetAlpha, self.icon, 1)          -- brighter under the mouse
 		MM.ShowTooltip(self)
 	end)
-	btn:SetScript("OnLeave", function(self)
-		ns.Safe(self.icon.SetAlpha, self.icon, 0.92)
+	btn:SetScript("OnLeave", function()
 		if GameTooltip then
 			ns.Safe(GameTooltip.Hide, GameTooltip)
 		end

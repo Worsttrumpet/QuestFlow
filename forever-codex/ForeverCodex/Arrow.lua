@@ -20,7 +20,34 @@ local E = ns.Engine
 local A = {}
 ns.Arrow = A
 
-A.TEXTURE = "Interface\\Minimap\\MinimapArrow"
+A.TEXTURE = "Interface\\Minimap\\MinimapArrow"      -- the game's own arrow: proven on Forever (M8.14); the picture of the "classic" style
+
+-- What the arrow looks like, chosen in the options (Codex Options > Arrow style / Arrow colour). The Codex pictures (Media/*.tga, drawn by
+-- generator/make_art.py) are white with a dark outline and point UP, like the game's arrow, so they are rotated and tinted the same way.
+A.STYLES = {
+	{ key = "head", label = "Arrowhead", texture = "Interface\\AddOns\\ForeverCodex\\Media\\ArrowHead.tga" },
+	{ key = "pointer", label = "Pointer", texture = "Interface\\AddOns\\ForeverCodex\\Media\\ArrowPointer.tga" },
+	{ key = "classic", label = "Classic", texture = A.TEXTURE },
+}
+A.COLORS = {
+	{ key = "gold", label = "Gold", rgb = { 1, 0.82, 0 } },
+	{ key = "white", label = "White", rgb = { 1, 1, 1 } },
+	{ key = "green", label = "Green", rgb = { 0.35, 0.95, 0.35 } },
+	{ key = "cyan", label = "Cyan", rgb = { 0.35, 0.85, 1 } },
+	{ key = "red", label = "Red", rgb = { 1, 0.35, 0.3 } },
+}
+local function pick(list, key) for _, e in ipairs(list) do if e.key == key then return e end end return list[1] end
+function A.Style() return pick(A.STYLES, P.ArrowStyle()) end
+function A.Color() return pick(A.COLORS, P.ArrowColor()) end
+
+--- Puts the chosen picture and colour on the arrow (safe before the frame exists).
+function A.ApplyStyle()
+	local f = A.Frame()
+	if not (f and f.tex) then return end
+	local st, co = A.Style(), A.Color()
+	ns.Safe(f.tex.SetTexture, f.tex, st.texture)
+	ns.Safe(f.tex.SetVertexColor, f.tex, co.rgb[1], co.rgb[2], co.rgb[3])
+end
 A.MIN_STEP = 5            -- yards of movement that count as a calibration sample
 A.MIN_SAMPLES = 6
 A.MIN_FIT = 0.92          -- how tightly the samples must agree (0..1, circular mean resultant)
@@ -171,7 +198,7 @@ local frame
 -- Which of the two a drag is, is decided ONCE when the drag starts (is Shift down?) and kept until it ends, so they can never trigger each
 -- other, even if Shift is pressed or released mid-drag. If the cursor cannot be measured a Shift-drag does nothing (it never moves the arrow by accident).
 
-A.SIZE_DEFAULT, A.SIZE_MIN, A.SIZE_MAX = 40, 24, 120          -- the side of the arrow picture, in pixels
+A.SIZE_DEFAULT, A.SIZE_MIN, A.SIZE_MAX = 48, 24, 120          -- the side of the arrow picture, in pixels
 
 --- The saved arrow size, clamped to the allowed range; the default when none (or something unusable) is saved.
 function A.Size()
@@ -271,9 +298,8 @@ local function build()
 	frame.tex = frame:CreateTexture(nil, "ARTWORK")
 	frame.tex:SetPoint("TOP", frame, "TOP", 0, 0)
 	applySize(A.Size())
-	ns.Safe(frame.tex.SetTexture, frame.tex, A.TEXTURE)
-	ns.Safe(frame.tex.SetVertexColor, frame.tex, 1, 0.82, 0)
-	ns.Safe(frame.tex.SetAlpha, frame.tex, 0.9)
+	A.ApplyStyle()
+	ns.Safe(frame.tex.SetAlpha, frame.tex, 1)
 	frame.label = frame:CreateFontString(nil, "OVERLAY")
 	local okF = ns.Safe(frame.label.SetFontObject, frame.label, GameFontNormal)
 	if not okF then ns.Safe(frame.label.SetFont, frame.label, "Fonts\\FRIZQT__.TTF", 11, "") end

@@ -188,11 +188,73 @@ local function buildTracker()
 end
 
 -- ---------------------------------------------------------------- the options window
+--
+-- Built the way most addons' options are: the game's own dialog frame (UI-DialogBox background and border), a gold title plate on top, tabs
+-- along the pane's top edge (the game's options-frame tab pictures), a bordered pane for the page, and the game's red buttons. Only standard
+-- game pictures and templates are used (the ones Questie's and other addons' options windows are made of, so they exist on this client).
+-- Every piece is feature-checked: if the dialog or button template cannot be made, the flat look of the tracker is used instead.
+
+local OPTIONS_W, OPTIONS_H = 560, 520
+UI.OPTIONS_W, UI.OPTIONS_H = OPTIONS_W, OPTIONS_H
+local DIALOG_BACKDROP = {
+	bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+	tile = true, tileSize = 32, edgeSize = 32, insets = { left = 8, right = 8, top = 8, bottom = 8 },
+}
+local PANE_BACKDROP = {
+	bgFile = "Interface\\ChatFrame\\ChatFrameBackground", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+	tile = true, tileSize = 16, edgeSize = 16, insets = { left = 3, right = 3, top = 5, bottom = 3 },
+}
+local TAB_ACTIVE, TAB_INACTIVE = "Interface\\OptionsFrame\\UI-OptionsFrame-ActiveTab", "Interface\\OptionsFrame\\UI-OptionsFrame-InActiveTab"
+local HEADER = "Interface\\DialogFrame\\UI-DialogBox-Header"
+
+--- A frame with a backdrop when the game offers one (BackdropTemplate), else a plain frame (flat = true: the caller draws the flat shell).
+local function backdropFrame(parent, backdrop, r, g, b, a, br, bg_, bb)
+	local ok, f = pcall(CreateFrame, "Frame", nil, parent, "BackdropTemplate")
+	if not ok or type(f) ~= "table" then return CreateFrame("Frame", nil, parent), true end
+	local okB = pcall(f.SetBackdrop, f, backdrop)
+	if not okB then return f, true end
+	pcall(f.SetBackdropColor, f, r, g, b, a)
+	if br then pcall(f.SetBackdropBorderColor, f, br, bg_, bb) end
+	return f, false
+end
+
+--- A three-piece tab (active and inactive pictures), the label centred. tab:SetSelected(bool).
+local function makeTab(parent, label, width, onClick)
+	local tab = CreateFrame("Button", nil, parent)
+	tab:SetSize(width, 24)
+	local function slices(file, anchorPoint, dy)
+		local L = tab:CreateTexture(nil, "BORDER")
+		ns.Safe(L.SetTexture, L, file); L:SetSize(20, 24); L:SetPoint(anchorPoint, tab, anchorPoint, 0, dy); ns.Safe(L.SetTexCoord, L, 0, 0.15625, 0, 1)
+		local M = tab:CreateTexture(nil, "BORDER")
+		ns.Safe(M.SetTexture, M, file); M:SetSize(width - 40, 24); M:SetPoint("LEFT", L, "RIGHT"); ns.Safe(M.SetTexCoord, M, 0.15625, 0.84375, 0, 1)
+		local R = tab:CreateTexture(nil, "BORDER")
+		ns.Safe(R.SetTexture, R, file); R:SetSize(20, 24); R:SetPoint("LEFT", M, "RIGHT"); ns.Safe(R.SetTexCoord, R, 0.84375, 1, 0, 1)
+		return { L, M, R }
+	end
+	tab.off = slices(TAB_INACTIVE, "TOPLEFT", 0)
+	tab.on = slices(TAB_ACTIVE, "BOTTOMLEFT", -3)
+	tab.text = W.Line(tab, 12, W.GOLD, "CENTER")
+	tab.text:SetPoint("CENTER", tab, "CENTER", 0, -3)
+	tab.text:SetText(label)
+	tab:SetScript("OnClick", function() if onClick then onClick() end end)
+	function tab:SetSelected(on)
+		self.selected = on and true or false
+		for _, t in ipairs(self.on) do if on then t:Show() else t:Hide() end end
+		for _, t in ipairs(self.off) do if on then t:Hide() else t:Show() end end
+		W.SetColor(self.text, on and W.WHITE or W.GOLD)
+		self.text:ClearAllPoints()
+		self.text:SetPoint("CENTER", self, "CENTER", 0, on and -2 or -3)
+	end
+	tab:SetSelected(false)
+	return tab
+end
 
 local function buildOptions()
-	local frame = CreateFrame("Frame", "ForeverCodexOptions", UIParent)
-	frame:SetSize(UI.WIDTH, UI.HEIGHT)
-	frame:SetFrameStrata("DIALOG")
+	local frame, flat = backdropFrame(UIParent, DIALOG_BACKDROP, 0, 0, 0, 1)
+	pcall(frame.SetFrameStrata, frame, "FULLSCREEN_DIALOG")
+	pcall(frame.SetToplevel, frame, true)
+	pcall(frame.SetFrameLevel, frame, 100)
+	frame:SetSize(OPTIONS_W, OPTIONS_H)
 	frame:SetMovable(true)
 	frame:EnableMouse(true)
 	frame:RegisterForDrag("LeftButton")
@@ -201,33 +263,58 @@ local function buildOptions()
 	ns.Safe(frame.SetClampedToScreen, frame, true)
 	frame:ClearAllPoints()
 	frame:SetPoint("CENTER")
-	shell(frame)
+	if flat then shell(frame) end
 	UI.options = frame
-	-- tabs along the top, like the options of most addons
+	W.useBlizzardButtons = true
+	-- the gold title plate on the top edge
+	local plate = frame:CreateTexture(nil, "OVERLAY")
+	ns.Safe(plate.SetTexture, plate, HEADER); ns.Safe(plate.SetTexCoord, plate, 0.31, 0.67, 0, 0.63)
+	plate:SetPoint("TOP", 0, 12); plate:SetSize(180, 40)
+	local plateL = frame:CreateTexture(nil, "OVERLAY")
+	ns.Safe(plateL.SetTexture, plateL, HEADER); ns.Safe(plateL.SetTexCoord, plateL, 0.21, 0.31, 0, 0.63)
+	plateL:SetPoint("RIGHT", plate, "LEFT"); plateL:SetSize(30, 40)
+	local plateR = frame:CreateTexture(nil, "OVERLAY")
+	ns.Safe(plateR.SetTexture, plateR, HEADER); ns.Safe(plateR.SetTexCoord, plateR, 0.67, 0.77, 0, 0.63)
+	plateR:SetPoint("LEFT", plate, "RIGHT"); plateR:SetSize(30, 40)
+	local title = W.Line(frame, 12, W.GOLD, "CENTER")
+	title:SetPoint("TOP", plate, "TOP", 0, -14)
+	title:SetWidth(170)
+	title:SetText("Forever Codex v" .. tostring(ForeverCodex and ForeverCodex.VERSION or "?"))
+	UI.main.optionsTitle = title
+	-- the bordered pane the pages live in, and the tabs on its top edge
+	local pane, paneFlat = backdropFrame(frame, PANE_BACKDROP, 0.1, 0.1, 0.1, 0.5, 0.4, 0.4, 0.4)
+	pane:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -58)
+	pane:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -16, 50)
+	UI.main.pane = pane
 	UI.main.tabs = {}
-	local x = 8
+	local x = 6
 	for _, key in ipairs(OPTION_TABS) do
 		local def = defOf(key)
 		if def then
-			local width = key == "options" and 110 or 84
-			local tab = W.Button(frame, width, 22, def.label, function() UI.ShowPage(key) end)
-			tab:SetPoint("TOPLEFT", frame, "TOPLEFT", x, -6)
+			local width = key == "options" and 130 or (key == "appendices" and 110 or 90)
+			local tab = makeTab(frame, def.label, width, function() UI.ShowPage(key) end)
+			tab:SetPoint("BOTTOMLEFT", pane, "TOPLEFT", x, -3)
 			UI.main.tabs[key] = tab
-			x = x + width + 4
-			buildPage(def, frame)
+			x = x + width - 4
+			local pf = buildPage(def, pane)
+			pf.frame:ClearAllPoints()
+			pf.frame:SetPoint("TOPLEFT", pane, "TOPLEFT", 14, -14)
+			pf.frame:SetSize(OPTIONS_W - 32 - 28, OPTIONS_H - 58 - 50 - 28)
 		end
 	end
-	local close = W.Button(frame, 18, 18, "x", function() frame:Hide() end)
-	close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)
+	-- the red Close button on the bottom edge
+	local close = W.Button(frame, 100, 22, "Close", function() frame:Hide() end)
+	close:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -24, 18)
 	UI.main.optionsClose = close
+	W.useBlizzardButtons = false
+	-- Escape closes it, like the other addons' options
+	if type(UISpecialFrames) == "table" and type(tinsert) == "function" then ns.Safe(tinsert, UISpecialFrames, "ForeverCodexOptionsFrame") end
+	rawset(_G, "ForeverCodexOptionsFrame", frame)
 	frame:Hide()
 end
 
 local function selectTab(key)
-	for k, tab in pairs(UI.main.tabs or {}) do
-		W.SetColor(tab.text, k == key and W.WHITE or W.GOLD)
-		tab.bg:SetColorTexture(k == key and 0.30 or 0.22, k == key and 0.28 or 0.22, k == key and 0.12 or 0.22, 0.95)
-	end
+	for k, tab in pairs(UI.main.tabs or {}) do tab:SetSelected(k == key) end
 	for k, pg in pairs(UI.pages) do
 		if isOptionsPage(k) then if k == key then pg.frame:Show() else pg.frame:Hide() end end
 	end
