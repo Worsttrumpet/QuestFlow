@@ -488,11 +488,12 @@ function UI.Toggle()
 	end
 end
 
---- Copyable report box (multi-line EditBox). Raises if the client cannot build it; Diag falls back to chat.
+--- Copyable report window: a scrolling, read-friendly box whose text is already selected, so Ctrl+C is all it takes. Escape closes it.
+-- Raises if the client cannot build it; Diag falls back to chat.
 function UI.ShowReport(text)
 	if not UI.report then
 		local f = CreateFrame("Frame", "ForeverCodexReport", UIParent)
-		f:SetSize(620, 340)
+		f:SetSize(680, 440)
 		f:SetPoint("CENTER")
 		f:SetFrameStrata("DIALOG")
 		f:SetMovable(true)
@@ -504,22 +505,32 @@ function UI.ShowReport(text)
 		f.bg:SetAllPoints()
 		f.bg:SetColorTexture(0, 0, 0, 0.92)
 		local hdr = W.Text(f, W.GOLD)
-		W.Place(hdr, f, 10, -8, 560)
-		hdr:SetText("Forever Codex report - select all (Ctrl+A), copy (Ctrl+C), then paste it where you are reporting.")
-		local box = CreateFrame("EditBox", nil, f)
+		W.Place(hdr, f, 10, -9, 480)
+		hdr:SetText("Forever Codex report: press Ctrl+C now (the text is selected), then paste it into the chat.")
+		local sf = CreateFrame("ScrollFrame", "ForeverCodexReportScroll", f, "UIPanelScrollFrameTemplate")
+		sf:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -32)
+		sf:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -30, 10)
+		local box = CreateFrame("EditBox", nil, sf)
 		box:SetMultiLine(true)
-		box:SetSize(596, 280)
-		box:SetPoint("TOPLEFT", f, "TOPLEFT", 10, -28)
+		box:SetWidth(630)
 		box:SetAutoFocus(false)
 		box:SetFontObject(GameFontNormal)
-		box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-		f.box = box
-		local close = W.Button(f, 70, 20, "Close", function() f:Hide() end)
-		close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -6, -4)
+		box:SetScript("OnEscapePressed", function() f:Hide() end)
+		sf:SetScrollChild(box)
+		f.box, f.scroll = box, sf
+		local close = W.Button(f, 60, 20, "Close", function() f:Hide() end)
+		close:SetPoint("TOPRIGHT", f, "TOPRIGHT", -6, -5)
+		local sel = W.Button(f, 90, 20, "Select all", function() box:SetFocus(); box:HighlightText() end)
+		sel:SetPoint("RIGHT", close, "LEFT", -6, 0)
+		ns.Safe(tinsert, UISpecialFrames or {}, "ForeverCodexReport")
 		UI.report = f
 	end
-	UI.report.box:SetText(text)
+	local box = UI.report.box
+	box:SetText(text)
 	UI.report:Show()
+	ns.Safe(box.SetFocus, box)
+	ns.Safe(box.HighlightText, box)
+	ns.Safe(UI.report.scroll.SetVerticalScroll, UI.report.scroll, 0)
 end
 
 --- Test seam: builds the window without showing it.

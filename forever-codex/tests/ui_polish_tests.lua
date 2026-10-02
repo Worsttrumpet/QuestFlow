@@ -401,3 +401,21 @@ do
 	check(math.abs(top() - before) < 1e-6, "and when it fits again")
 	check(#ns.errors == 0 and #ns2.errors == 0, "no errors")
 end
+
+section("report: /codex report builds one copyable playtest report (what is shown, why, the quest log), changes nothing, is plain ASCII")
+do
+	local ns, W = uiWorld(QUEST, { [QUEST_ID or 1] = { title = "A quest", objectives = { { text = "Thing slain", have = 2, need = 5 } } } })
+	local captured
+	rawset(ns.UI, "ShowReport", function(t) captured = t end)
+	local before = ns.State.plan.now and ns.State.plan.now.id
+	H.slash("report")
+	if os.getenv("SHOW_REPORT") then print(captured) end
+	check(type(captured) == "string" and captured:find("PLAYTEST REPORT v" .. ForeverCodex.VERSION, 1, true) ~= nil, "the report opens with the addon version")
+	for _, head in ipairs({ "WHAT THE WINDOW SHOWS", "WHY (planner trace)", "QUEST LOG", "FULL DIAGNOSTICS", "NEW FOR YOU: hidden" }) do
+		check(captured and captured:find(head, 1, true) ~= nil, "it has the section: " .. head)
+	end
+	check(captured and captured:find("flags:", 1, true) and captured:find("reason=", 1, true), "it carries the planner flags and reason")
+	check(captured and not captured:find("[\128-\255]"), "it is plain ASCII")
+	check((ns.State.plan.now and ns.State.plan.now.id) == before, "building it does not change the live plan")
+	check(#ns.errors == 0, "no errors")
+end

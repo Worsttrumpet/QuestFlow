@@ -1,7 +1,7 @@
 -- ForeverCodex.Diag: everything a tester (or a developer reading a screenshot) needs to understand a report.
 --
 --   /codex diag     prints the snapshot to chat and stores it (last 5) in ForeverCodexDB.diag
---   /codex report   shows the same text in a copyable box (best effort; falls back to chat)
+--   /codex report   the playtest report (what the window shows, why, the quest log, the full diagnostics) in a copyable box (falls back to chat)
 --
 -- The snapshot carries: addon/client versions, which APIs exist on this client, the character, location,
 -- the player's choices, which data packs are loaded (with provenance), the current plan and WHY, filter counts,
@@ -258,17 +258,113 @@ function D.Print()
 	return snap, lines
 end
 
---- Best-effort copyable report box.
+--- The playtest report: what the window shows, why the planner chose it, the quest log, and the full diagnostics, as plain lines to copy.
+-- It re-runs the planner on the CURRENT context with the trace on (the same inputs as the live plan: it changes nothing and the live plan is kept).
+function D.PlaytestLines(snap, lines)
+	local L = {}
+	local ctx, plan = ns.State and ns.State.ctx, ns.State and ns.State.plan
+	local function add(s) L[#L + 1] = s end
+	local function num(v, f) return type(v) == "number" and string.format(f or "%.1f", v) or "?" end
+	add(string.format("=== FOREVER CODEX PLAYTEST REPORT v%s ===", tostring(C.VERSION)))
+	if not (ctx and plan) then
+		add("(the plan has not been computed yet: open /codex once and run the report again)")
+		for _, l in ipairs(lines) do add(l) end
+		return L
+	end
+	local c, l = ctx.char or {}, ctx.loc or {}
+	add(string.format("%s | level %s %s %s (%s) | map %s at %s, %s | %s / %s", tostring(c.name), tostring(c.level), tostring(c.race), tostring(c.class), tostring(c.faction),
+		tostring(l.map), l.x and num(l.x * 100) or "?", l.y and num(l.y * 100) or "?", tostring(l.zone), tostring(l.subzone)))
+
+	-- what the window shows
+	add("")
+	add("--- WHAT THE WINDOW SHOWS ---")
+	local okC, card = pcall(ns.Presenter.Card, plan, ctx)
+	if okC and card then
+		local function show(label, it)
+			if not it then return end
+			add(string.format("%s: %s | who: %s | where: %s | detail: %s | why: %s", label, tostring(it.title), tostring(it.who), tostring(it.where), tostring(it.detail), tostring(it.why)))
+			if it.progress then add("    progress: " .. tostring(type(it.progress) == "table" and (tostring(it.progress.have) .. "/" .. tostring(it.progress.need)) or it.progress)) end
+		end
+		if card.now then show("NOW", card.now) else add("NOW: " .. tostring(card.empty and card.empty.title or "nothing")) end
+		show("ALSO DO", card.alsoDo)
+		if card.thenLine then add("THEN: " .. tostring(card.thenLine)) end
+		local okN, near = pcall(ns.Nearby.List, plan, ctx)
+		if okN and #near > 0 then
+			for _, n in ipairs(near) do add(string.format("NEARBY: %s | %s | %s", tostring(n.title), tostring(n.detail), tostring(n.where))) end
+		else
+			add("NEARBY: nothing")
+		end
+		if #card.reminders > 0 then add("In your log, not placed on the map: " .. table.concat(card.reminders, ", ")) end
+	end
+	local nfy = ns.NewForYou and ns.NewForYou.Active()
+	add("NEW FOR YOU: " .. (nfy and (#nfy.items .. " item(s) at level " .. tostring(nfy.level)) or "hidden"))
+	if ns.UI and ns.UI.main then add(string.format("Window height: %s", tostring(ns.UI.main.height))) end
+
+	-- why the planner chose it (a traced re-run on the same context)
+	add("")
+	add("--- WHY (planner trace) ---")
+	local okT, traced = pcall(ns.PlanAdapter.Compute, ctx, { prevNowId = plan.now and plan.now.id or nil, trace = true })
+	local d = okT and traced and traced.diag or plan.diag
+	if d then
+		local flags = {}
+		for _, k in ipairs({ "localOnly", "localWork", "turnInFirst", "stuck", "pinnedFirst", "routeZoneOnly" }) do if d[k] then flags[#flags + 1] = k end end
+		add(string.format("reason=%s | flags: %s | net %s over ~%s s | unknown legs %s | %s stops, %s sequences", tostring(d.reason), #flags > 0 and table.concat(flags, ",") or "none",
+			num(d.net), num(d.seconds, "%.0f"), tostring(d.unknownLegs), tostring(d.stops), tostring(d.sequences)))
+		add("sequence: " .. (d.sequence and #d.sequence > 0 and table.concat(d.sequence, " > ") or "(none)"))
+		local me = l.available and { map = l.map, x = l.x, y = l.y, world = l.world or false } or nil
+		for _, st in ipairs(d.stopList or {}) do
+			local dist = me and ns.Engine.Distance(ctx, me, { map = st.map, x = st.x, y = st.y }) or nil
+			local first = d.bestByFirst and d.bestByFirst[st.id]
+			add(string.format("  stop %s [%s] map %s | %s yd away | best plan starting here: net %s over %s s%s", tostring(st.id), table.concat(st.items, ","), tostring(st.map),
+				dist and (dist >= 1e8 and "unmeasurable" or string.format("%.0f", dist)) or "?", first and num(first.net) or "?", first and num(first.secs, "%.0f") or "?",
+				first and first.unknown > 0 and (" (" .. first.unknown .. " unknown legs)") or ""))
+		end
+		local rej = {}
+		for _, r in ipairs(d.rejected or {}) do rej[#rej + 1] = r.id .. ":" .. r.code .. (r.seconds and ("(" .. r.seconds .. "s)") or "") end
+		if #rej > 0 then add("rejected ALSO DO: " .. table.concat(rej, " ")) end
+		if d.unlocatedIds and #d.unlocatedIds > 0 then add("no location (reminders): " .. table.concat(d.unlocatedIds, " ")) end
+		add("params: " .. (d.params and string.format("timeValue=%s stickiness=%s", tostring(d.params.timeValue), tostring(d.params.stickiness)) or "?"))
+	end
+
+	-- the quest log
+	add("")
+	add("--- QUEST LOG (" .. tostring(ctx.logCount) .. ") ---")
+	local ids = {}
+	for id in pairs(ctx.log or {}) do ids[#ids + 1] = id end
+	table.sort(ids)
+	for _, id in ipairs(ids) do
+		local e = ctx.log[id]
+		local obj = {}
+		for _, o in ipairs(e.objectives or {}) do
+			obj[#obj + 1] = string.format("%s %s/%s", tostring(o.text or "?"), tostring(o.numFulfilled or "?"), tostring(o.numRequired or "?"))
+		end
+		add(string.format("  %s %s%s%s", tostring(id), tostring(e.title), e.complete and " [READY TO TURN IN]" or "", #obj > 0 and (" | " .. table.concat(obj, "; ")) or ""))
+	end
+	local sk = P.SkippedKeys()
+	add("skipped: " .. (#sk > 0 and table.concat(sk, " ") or "none"))
+
+	add("")
+	add("--- FULL DIAGNOSTICS ---")
+	for _, line in ipairs(lines) do add(line) end
+	return L
+end
+
+--- Takes a fresh snapshot and shows the playtest report in a copyable window (falls back to chat when the window cannot be built).
 function D.Report()
 	if ns.State then ns.State.Recompute() end
 	local snap = D.Snapshot()
 	local lines = D.Lines(snap)
 	D.Store(snap)
-	local text = table.concat(lines, "\n")
+	local okL, report = pcall(D.PlaytestLines, snap, lines)
+	if not okL then
+		ns.RecordError("report", report)
+		report = lines
+	end
+	local text = table.concat(report, "\n")
 	if ns.UI and ns.UI.ShowReport then
 		local ok = pcall(ns.UI.ShowReport, text)
-		if ok then return snap, lines end
+		if ok then return snap, report end
 	end
-	for _, l in ipairs(lines) do ns.Say(l) end
-	return snap, lines
+	for _, line in ipairs(report) do ns.Say(line) end
+	return snap, report
 end

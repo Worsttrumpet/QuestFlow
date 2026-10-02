@@ -2,7 +2,7 @@
 ## Title: Forever Codex
 ## Notes: A dynamic, character-aware progression companion for WoW Classic Forever. Recommends what to do next from your class, race, faction, level and location; you stay in control (choose your route zone and style, skip, add, toggle systems). Read-only: never accepts, completes or turns in quests. Data is partial and ATT-derived data is shown as UNVERIFIED. Local development build.
 ## Author: WoW Forever open database project
-## Version: 0.2.3
+## Version: 0.2.4
 ## OptionalDeps: QuestieDB
 ## SavedVariables: ForeverCodexDB
 
