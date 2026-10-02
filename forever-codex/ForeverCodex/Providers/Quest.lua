@@ -39,6 +39,9 @@ end
 function Q.Eligibility(view, ctx, strategy)
 	local ch = ctx.char
 	if view.repeatable then return false, "repeatable" end
+	-- a holiday / world-event quest is only possible while its event is on, and Codex cannot tell that: it is not offered. (A quest in the
+	-- log, or one the player added, never comes through here, so those still show.)
+	if view.event then return false, "event" end
 	if view.faction and ch.faction and view.faction ~= ch.faction then return false, "faction" end
 	if view.races and ch.raceKey and not contains(view.races, ch.raceKey) then return false, "race" end
 	if view.classes and ch.classToken and not contains(view.classes, ch.classToken:upper()) then return false, "class" end

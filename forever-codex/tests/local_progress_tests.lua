@@ -665,3 +665,76 @@ do
 	check(ns.Navigation.Target() ~= nil and math.abs(ns.Navigation.Target().x - 0.22) < 0.01, "the arrow points at the objective area beside you")
 	check(#ns.errors == 0, "no errors")
 end
+
+-- ================================================================ holiday / world-event quests (seasonal filter)
+
+section("seasonal filter: holiday and world-event quests (a QuestSort category, from QuestieDB) are not offered; quests in the log or added still are")
+do
+	local f = H.fake.new({ version = "1.0.4" })
+	f.mapArea(9001, 9001)
+	for i, p in ipairs({ { 8301, 51.0 }, { 8302, 52.0 }, { 8303, 53.0 }, { 8304, 54.0 }, { 8305, 55.0 }, { 8306, 56.0 } }) do
+		f.addNpc(p[1], { name = "NPC " .. i, spawns = { [9001] = { { p[2], 50.0 } } }, zoneID = 9001, friendlyToFaction = "H" })
+	end
+	f.addQuest(97301, { name = "Highpeak the Elder", startedBy = { { 8301 } }, finishedBy = { { 8301 } }, requiredLevel = 1, zoneOrSort = -366 })     -- Lunar Festival
+	f.addQuest(97302, { name = "Greatfather Winter is Here!", startedBy = { { 8302 } }, finishedBy = { { 8302 } }, requiredLevel = 1, zoneOrSort = -22 })  -- Seasonal
+	f.addQuest(97303, { name = "A plain local pickup", startedBy = { { 8303 } }, finishedBy = { { 8303 } }, requiredLevel = 1, zoneOrSort = 9001 })
+	f.addQuest(97304, { name = "A Paladin class quest", startedBy = { { 8304 } }, finishedBy = { { 8304 } }, requiredLevel = 1, zoneOrSort = -141 })     -- a class category, NOT an event
+	f.addQuest(97305, { name = "A professions quest", startedBy = { { 8305 } }, finishedBy = { { 8305 } }, requiredLevel = 1, zoneOrSort = -181 })
+	f.addQuest(97306, { name = "Midsummer in the log", startedBy = { { 8306 } }, finishedBy = { { 8306 } }, requiredLevel = 1, zoneOrSort = -369 })
+	f.install()
+	local function fresh(o)
+		local ns = boot({ char = { level = 6, class = "Paladin", classToken = "PALADIN", race = "Orc", raceToken = "Orc", faction = "Horde" }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+		local W = H.world()
+		W.log, W.objectives, W.completed = o and o.log or {}, {}, {}
+		ns.Prefs.FinishSetup()
+		for _, id in ipairs(o and o.added or {}) do ns.Prefs.Add(id) end
+		return ns, W
+	end
+	local function ids(ns)
+		local p = ns.State.Recompute()
+		local out = {}
+		for _, a in ipairs(p.sequence) do if a.quest then out[a.quest] = true end end
+		return p, out
+	end
+	local ns = fresh()
+	local p, offered = ids(ns)
+	check(not offered[97301] and not offered[97302], "the Lunar Festival and Seasonal quests are not offered")
+	check(offered[97303] or p.now and p.now.quest == 97303, "a plain pickup is")
+	check((p.stats.filtered.event or 0) == 3, "and the three event quests (Lunar Festival, Seasonal, Midsummer) are counted as filtered for the report  [" .. tostring(p.stats.filtered.event) .. "]")
+	local all = {}
+	for _, a in ipairs(p.sequence) do all[#all + 1] = a.quest end
+	check(ns.QuestieBridge.EVENT_SORTS[-366] and ns.QuestieBridge.EVENT_SORTS[-22] and ns.QuestieBridge.EVENT_SORTS[-369] and not ns.QuestieBridge.EVENT_SORTS[-141] and not ns.QuestieBridge.EVENT_SORTS[-181] and not ns.QuestieBridge.EVENT_SORTS[9001],
+		"class (-141) and profession (-181) categories and real areas are not events")
+	-- class and profession categories are offered as normal
+	local anyClass = ns.Registry.Quest(97304)
+	check(anyClass and not anyClass.event and anyClass.sort == -141, "a class quest keeps its category but is not an event")
+	-- an event quest the player is already on still shows (it is in the log)
+	local ns2, W2 = fresh({ log = { { questID = 97306, title = "Midsummer in the log", complete = false } } })
+	W2.objectives[97306] = { { text = "Thing", type = "monster", finished = false, numFulfilled = 1, numRequired = 4 } }
+	local p2 = ns2.State.Recompute()
+	local seen = false
+	for _, a in ipairs(p2.objectives or {}) do if a.quest == 97306 then seen = true end end
+	check(seen, "an event quest already in the log is still tracked (only OFFERING new ones is stopped)")
+	-- one the player added themselves is their call
+	local ns3 = fresh({ added = { 97301 } })
+	local p3, offered3 = ids(ns3)
+	check(offered3[97301] or (p3.now and p3.now.quest == 97301), "an event quest the player added is offered")
+	-- the report says how many were filtered
+	local text
+	rawset(ns.UI, "ShowReport", function(t) text = t end)
+	ns = fresh()
+	rawset(ns.UI, "ShowReport", function(t) text = t end)
+	ns.State.Recompute()
+	H.slash("report")
+	check(text and text:find("holiday / world-event quests (only possible while their event runs, so not offered): 3", 1, true) ~= nil, "/codex report counts them in the candidate funnel")
+	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
+	f.uninstall()
+end
+
+section("tracker: the pickup line under ALSO DO uses the short distance (no cut-off text)")
+do
+	local a = { id = "Q:7:ACCEPT", type = "QUEST", kind = "ACCEPT", quest = 7, name = "Escorting Erland", title = "Accept: Escorting Erland" }
+	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	check(ns.Overlap.ShortWhere(10) == "here" and ns.Overlap.ShortWhere(100) == "nearby" and ns.Overlap.ShortWhere(1750) == "1750 yd" and ns.Overlap.ShortWhere(4999) == "5000 yd" and ns.Overlap.ShortWhere(5000) == nil and ns.Overlap.ShortWhere(nil) == nil,
+		"here / nearby / '1750 yd' and nothing when the distance is unknown or in another area")
+end

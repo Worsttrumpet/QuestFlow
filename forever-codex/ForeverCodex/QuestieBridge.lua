@@ -50,6 +50,15 @@ local K = {}
 for i, k in ipairs(QUEST_KEYS) do K[k] = i end
 local NPC_KEYS = { "name", "spawns", "zoneID", "friendlyToFaction" }
 
+-- QuestSort ids (the game's own quest categories, which QuestieDB stores as a NEGATIVE zoneOrSort) that mean "a holiday or world event": the
+-- seasonal festivals (Winter Veil, Harvest Festival, Children's Week, Love is in the Air, Pilgrim's Bounty, Noblegarden, Brewfest, Midsummer,
+-- Lunar Festival, Darkmoon Faire, Day of the Dead, Hallow's End), the generic "Seasonal" category, and the Scourge Invasion / Ahn'Qiraj war effort
+-- world events. A small fixed set of game categories, NOT a list of quests. Not verified against the Forever client itself; the ids are the ones
+-- QuestieDB's Forever data uses for these quests (for example "Highpeak the Elder" is -366, "Greatfather Winter is Here!" is -22).
+local EVENT_SORTS = {}
+for _, id in ipairs({ -404, -402, -378, -376, -375, -374, -370, -369, -366, -364, -41, -22, -21, -368, -365 }) do EVENT_SORTS[id] = true end
+QB.EVENT_SORTS = EVENT_SORTS
+
 -- standard WoW class ids; the class mask bit for class id n is 2^(n-1) (the same convention QuestieDB's data uses)
 local CLASS_TOKENS = { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "DEATHKNIGHT", "SHAMAN", "MAGE", "WARLOCK", "MONK", "DRUID", "DEMONHUNTER" }
 
@@ -221,6 +230,9 @@ function QB.Record(id)
 		if type(zs) == "number" and zs > 0 then
 			local zm = areaToMap(zs)
 			if zm then r.zoneMap = zm end
+		elseif type(zs) == "number" and zs < 0 then
+			r.sort = zs
+			if EVENT_SORTS[zs] then r.event = true end      -- a holiday / world-event quest: only possible while its event runs
 		end
 		-- who gives it (and where they stand); who takes it back
 		local giver = npcInfo(N, firstNpc(v[K.startedBy]))

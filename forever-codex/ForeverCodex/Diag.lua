@@ -443,6 +443,7 @@ function D.PlaytestLines(snap, lines)
 		add(string.format("known quests in the data: %d (this is a universe to filter, not a route)", known))
 		add(string.format("in your quest log: %s (active work, from the quest log itself)", tostring(ctx.logCount)))
 		add(string.format("not for this character: faction %d, race %d, class %d, repeatable %d | completed already %d | skipped by you %d", n("faction"), n("race"), n("class"), n("repeatable"), n("completed"), n("skipped")))
+		add(string.format("holiday / world-event quests (only possible while their event runs, so not offered): %d", n("event")))
 		add(string.format("FUTURE (known, not actionable yet): level too high %d, earlier quest in the chain not finished %d | too low to be useful %d | no usable location %d | quest log full %d",
 			n("level"), n("prereq"), n("tooLow"), n("noLocation"), n("logFull")))
 		add(string.format("CURRENT: %d pickups, %d objectives, %d hand-ins -> %s stops -> %s sequences searched%s", kinds.ACCEPT, kinds.OBJECTIVE, kinds.TURN_IN, tostring(d.stops), tostring(d.sequences),

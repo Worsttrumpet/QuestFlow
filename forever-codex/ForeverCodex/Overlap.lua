@@ -26,6 +26,21 @@ ns.Overlap = Ov
 Ov.MAX_QUESTS = 3
 Ov.OVERLAP_YD = 300
 
+--- "here" / "nearby" / "350 yd": the short distance text of the tracker (nil when the distance is unknown or not on this continent).
+function Ov.ShortWhere(d)
+	if type(d) ~= "number" or d >= E.DIFFERENT_CONTINENT then return nil end
+	if d < 30 then return "here" end
+	if d < 150 then return "nearby" end
+	return string.format("%d yd", math.floor(d / 50 + 0.5) * 50)
+end
+
+local function distanceTo(a, ctx)
+	local pos = Pl.Locate(a)
+	local loc = ctx and ctx.loc
+	if not (pos and loc and loc.available) then return nil end
+	return E.Distance(ctx, { map = loc.map, x = loc.x, y = loc.y, world = loc.world or false }, pos)
+end
+
 local function unfinishedOf(a)
 	local out = {}
 	local os = a.objectiveState
@@ -108,7 +123,7 @@ function Ov.List(plan, ctx)
 			out[#out + 1] = { kind = "objective", title = questName(also), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest }
 		elseif also.type ~= "FLIGHT" then
 			local it = ns.Presenter.Describe(also, plan, ctx, "diamond")
-			out[#out + 1] = { kind = "action", title = it.title, where = it.where, quest = also.quest }
+			out[#out + 1] = { kind = "action", title = it.title, where = Ov.ShortWhere(distanceTo(also, ctx)), quest = also.quest }
 		end
 	end
 	return out
@@ -127,15 +142,9 @@ function Ov.Ready(plan, ctx)
 	local nowId = plan.now and plan.now.id
 	for _, a in ipairs(plan.turnIns or {}) do
 		if a.id ~= nowId and not (P and a.skipKey and P.IsSkipped(a.skipKey)) then
-			local pos = Pl.Locate(a)
-			local loc = ctx and ctx.loc
-			local d
-			if pos and loc and loc.available then
-				d = E.Distance(ctx, { map = loc.map, x = loc.x, y = loc.y, world = loc.world or false }, pos)
-				if d and d >= E.DIFFERENT_CONTINENT then d = nil end
-			end
-			local short
-			if d then short = d < 30 and "here" or (d < 150 and "nearby" or string.format("%d yd", math.floor(d / 50 + 0.5) * 50)) end
+			local d = distanceTo(a, ctx)
+			if d and d >= E.DIFFERENT_CONTINENT then d = nil end
+			local short = Ov.ShortWhere(d)
 			out[#out + 1] = { title = questName(a), who = a.giver, where = short, quest = a.quest, dist = d }
 		end
 	end
