@@ -502,3 +502,31 @@ do
 		and text:find("CURRENT:", 1, true) and text:find("CONDITIONAL", 1, true), "/codex report lays out the funnel: known -> not for this character -> FUTURE -> CURRENT -> CONDITIONAL")
 	check(#ns1.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
 end
+
+section("report: a hand-in's travel line names the TURN-IN NPC, and READY TO TURN IN is listed")
+do
+	local f = H.fake.new({ version = "1.0.4" })
+	f.mapArea(9001, 9001)
+	f.addNpc(8101, { name = "The Giver", spawns = { [9001] = { { 51.0, 50.0 } } }, zoneID = 9001, friendlyToFaction = "H" })
+	f.addNpc(8102, { name = "The Taker", spawns = { [9001] = { { 80.0, 50.0 } } }, zoneID = 9001, friendlyToFaction = "H" })
+	f.addQuest(97101, { name = "Deliver it", startedBy = { { 8101 } }, finishedBy = { { 8102 } }, requiredLevel = 1 })
+	f.install()
+	local ns = boot({ char = { level = 6, class = "Paladin", classToken = "PALADIN", race = "Orc", raceToken = "Orc", faction = "Horde" }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	local W = H.world()
+	W.log, W.objectives, W.completed = { { questID = 97101, title = "Deliver it", complete = true } }, {}, {}
+	ns.Prefs.FinishSetup()
+	ns.State.Recompute()
+	local text
+	rawset(ns.UI, "ShowReport", function(t) text = t end)
+	H.slash("report")
+	check(text and text:find("Travel to The Taker", 1, true) and not text:find("Travel to The Giver", 1, true), "the travel line for a hand-in names the turn-in NPC, not the giver")
+	-- with other work NOW the finished quest is listed as READY
+	W.log[#W.log + 1] = { questID = 97102, title = "Work", complete = false }
+	W.objectives[97102] = { { text = "Thing", type = "monster", finished = false, numFulfilled = 2, numRequired = 5 } }
+	f.addQuest(97102, { name = "Work", startedBy = { { 8101 } }, finishedBy = { { 8101 } }, requiredLevel = 1, zoneOrSort = 9001 })
+	ns.State.Recompute()
+	H.slash("report")
+	check(text and text:find("READY TO TURN IN:", 1, true) ~= nil, "the report has a READY TO TURN IN line")
+	check(#ns.errors == 0, "no errors")
+	f.uninstall()
+end

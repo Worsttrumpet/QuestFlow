@@ -294,6 +294,10 @@ function D.PlaytestLines(snap, lines)
 		for _, o in ipairs(card.now and card.now.objectives or {}) do
 			add(string.format("    unfinished: %s %s/%s", tostring(o.text), tostring(o.have), tostring(o.need)))
 		end
+		if #(card.ready or {}) == 0 then add("READY TO TURN IN: nothing") end
+		for _, r in ipairs(card.ready or {}) do
+			add(string.format("READY TO TURN IN: %s (Q:%s) | %s | %s", tostring(r.title), tostring(r.quest), tostring(r.who or "turn-in NPC unknown"), tostring(r.where or "distance unknown")))
+		end
 		if #(card.also or {}) == 0 then add("ALSO COMPLETE THIS: nothing") end
 		for _, it in ipairs(card.also or {}) do
 			if it.kind == "objective" then
@@ -382,7 +386,9 @@ function D.PlaytestLines(snap, lines)
 					local items = itemsOf(e.st)
 					local qid = tostring(items[1] or ""):match("^Q:(%d+)")
 					local v = qid and R.Quest(tonumber(qid)) or nil
-					local who = v and (v.giverName or (v.turnIn and v.turnIn.name)) or nil
+					-- a hand-in is at the TURN-IN NPC (not the giver); a pickup is at the giver
+					local kind = tostring(items[1] or ""):match(":([%u_]+)$")
+					local who = v and (kind == "TURN_IN" and ((v.turnIn and v.turnIn.name) or v.giverName) or (v.giverName or (v.turnIn and v.turnIn.name))) or nil
 					add(string.format("%d. Travel to %s%s", n, who and tostring(who) or "the next stop", e.measured and string.format(" (%.0f yd from you)", e.dist) or " (distance not measured)"))
 					for _, id in ipairs(items) do add("   " .. sentence(id)) end
 				end
@@ -459,6 +465,7 @@ function D.PlaytestLines(snap, lines)
 				poiState = okP and "returned nothing usable" or "error"
 			end
 		end
+		if #unplaced > 0 then add("(objective slot meaning is unverified on Forever: a number that is really an item id can coincide with an NPC id, so the NPC counts are a ceiling, not a fact)") end
 		if #unplaced > 0 then add(string.format("game quest-map points on map %s (C_QuestLog.GetQuestsOnMap): %s, %d quest(s)", tostring(l.map), poiState, poiCount)) end
 		for _, id in ipairs(unplaced) do
 			add(label(id))
