@@ -206,6 +206,77 @@ do
 	check(#ns.errors + #ns2.errors + #ns3.errors + #ns4.errors == 0, "no errors")
 end
 
+-- 0.4.5: every reward choice of the open dialog is inspected and reported one by one (the real 0.4.4 report showed the field tallies mixed
+-- with equipped/bag items; the To Valanaar dialog has three choices)
+local CHOICE_ITEMS = {
+	[5101] = { name = "Traveler's Wraps", quality = 2, ilvl = 12, minLevel = 8, type = "Armor", subType = "Cloth", equipLoc = "INVTYPE_WRIST", sell = 310, classID = 4, subClassID = 1, stats = { ITEM_MOD_STAMINA_SHORT = 3, RESISTANCE0_NAME = 4 } },
+	[5102] = { name = "Adventurer's Cloak", quality = 2, ilvl = 12, minLevel = 8, type = "Armor", subType = "Cloth", equipLoc = "INVTYPE_CLOAK", sell = 280, classID = 4, subClassID = 1, stats = {} },
+	[5103] = { name = "Hiking Boots", quality = 2, ilvl = 13, minLevel = 9, type = "Armor", subType = "Leather", equipLoc = "INVTYPE_FEET", sell = 410, classID = 4, subClassID = 2, stats = { ITEM_MOD_AGILITY_SHORT = 2, ITEM_MOD_STAMINA_SHORT = 1 } },
+}
+for k, v in pairs(ITEMS) do CHOICE_ITEMS[k] = v end
+
+local function joined(lines) return table.concat(lines, "\n") end
+
+section("item probe 0.4.5: every reward choice of the open dialog is reported one by one")
+do
+	local ns = fresh()
+	install({ items = CHOICE_ITEMS, questId = 4881, choices = { { id = 5101 }, { id = 5102 }, { id = 5103 } }, equipped = { [8] = 4915, [16] = 25 }, bags = { 4914, 900 } })
+	local text = joined(ns.ItemProbe.ChoiceLines())
+	check(text:find("read from the dialog open now, Q:4881", 1, true), "the report reads the dialog that is open now")
+	check(text:find("Reward choices: 3 | guaranteed rewards: 0", 1, true), "it says how many choices there are")
+	for i, name in ipairs({ "Traveler's Wraps", "Adventurer's Cloak", "Hiking Boots" }) do
+		check(text:find("Choice " .. i .. ": " .. name, 1, true), "choice " .. i .. " is listed by name: " .. name)
+	end
+	check(text:find("id PROVEN 5101 (GetQuestItemInfo and link, agree) | name PROVEN | link PROVEN | info PROVEN", 1, true), "the first choice shows id, name, link and info as PROVEN")
+	check(text:find("class PROVEN Armor/Cloth (4/1) | item level PROVEN 12 | equip slot PROVEN INVTYPE_WRIST | required level PROVEN 8 | vendor value PROVEN 3s 10c", 1, true), "and the item-facts fields the reader supports")
+	check(text:find("stats PROVEN STAMINA=3 RESISTANCE0_NAME=4", 1, true), "the stats are listed")
+	check(text:find("stats EMPTY", 1, true), "the cloak's empty stat table is EMPTY, not PROVEN and not FAILED")
+	check(text:find("stats PROVEN AGILITY=2 STAMINA=1", 1, true), "the boots' stats are listed")
+	check(not text:find("Soft Wool Boots", 1, true) and not text:find("Worn Shortsword", 1, true) and not text:find("Grinning Skull", 1, true), "equipped and bag items do not appear in the choice details")
+	local n, _, dialogs = ns.ItemProbe.RewardStats()
+	check(n == 0 and dialogs == 0, "reading the open dialog for the report stores nothing and counts nothing (only the quest events do)")
+	-- the stored observation, from the event, keeps all three
+	ns.ItemProbe.OnEvent("QUEST_COMPLETE")
+	local _, newest = ns.ItemProbe.RewardStats()
+	check(#newest.choices == 3 and newest.choices[3].id == 5103 and newest.choices[3].name == "Hiking Boots", "the quest event stores all three choices in the cache")
+	-- once the dialog is closed the last one seen is still reported
+	_G.GetNumQuestChoices = function() return 0 end
+	local closed = joined(ns.ItemProbe.ChoiceLines())
+	check(closed:find("from the last dialog seen this session (closed now): Q:4881 at QUEST_COMPLETE", 1, true) and closed:find("Choice 3: Hiking Boots", 1, true), "with the dialog closed the last dialog seen is reported, labelled as such")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("item probe 0.4.5: a choice whose item data is not loaded yet is UNPROVEN, then completed by GET_ITEM_INFO_RECEIVED")
+do
+	local ns = fresh()
+	local loaded = { [5102] = false }
+	install({ items = CHOICE_ITEMS, loaded = loaded, questId = 4881, choices = { { id = 5101 }, { id = 5102 }, { id = 5103 } } })
+	ns.ItemProbe.OnEvent("QUEST_DETAIL")
+	local text = joined(ns.ItemProbe.ChoiceLines())
+	check(text:find("Choice 2: (name not loaded yet)", 1, true), "the unloaded choice has no name yet")
+	check(text:find("name UNPROVEN blank so far (loads later) | link PROVEN | info UNPROVEN waiting for item data", 1, true), "its name and info are UNPROVEN (waiting), not FAILED; the id and link are PROVEN")
+	check(text:find("stats UNPROVEN waiting for item data", 1, true), "and so are its stats: blank is not proof of 'no info'")
+	check(text:find("Choice 1: Traveler's Wraps", 1, true) and text:find("Choice 3: Hiking Boots", 1, true), "the other two choices are unaffected")
+	loaded[5102] = true
+	ns.ItemProbe.OnEvent("GET_ITEM_INFO_RECEIVED", 5102, true)
+	local after = joined(ns.ItemProbe.ChoiceLines())
+	check(after:find("Choice 2: Adventurer's Cloak", 1, true) and not after:find("name not loaded yet", 1, true), "after the late data arrived the choice is complete")
+	check(after:find("equip slot PROVEN INVTYPE_CLOAK", 1, true) and after:find("stats EMPTY", 1, true), "with its item facts")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("item probe 0.4.5: stats that cannot be read are FAILED, an item that is not equipment has no equip slot to find")
+do
+	local ns = fresh()
+	install({ items = CHOICE_ITEMS, statsNil = true, questId = 6, choices = { { id = 5103 } }, rewards = { { id = 900 } } })
+	local text = joined(ns.ItemProbe.ChoiceLines())
+	check(text:find("stats FAILED returned nothing", 1, true), "GetItemStats returning nothing is FAILED")
+	check(text:find("Reward 1: Grinning Skull", 1, true) and text:find("equip slot PROVEN (not equipment)", 1, true), "a guaranteed non-equipment item is listed too, and its empty equip slot is expected")
+	local ns2 = fresh()
+	install({ items = CHOICE_ITEMS, questId = 1 })
+	check(joined(ns2.ItemProbe.ChoiceLines()):find("no reward dialog seen this session", 1, true), "with no reward dialog the section says so")
+end
+
 section("item probe: the character (equipped items, bags, skill lines)")
 do
 	local ns = fresh()

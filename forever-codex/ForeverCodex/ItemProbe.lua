@@ -226,14 +226,16 @@ end
 
 local function entryUnresolved(e) return (e.name == nil or e.name == "") or e.info == nil end
 
-local function queueRetry(qid, kind, e, ref)
+local function queueRetry(qid, kind, e, ref, detail)
 	if not ref then return end
 	for _, p in ipairs(pending) do if p.entry == e then return end end
-	pending[#pending + 1] = { qid = qid, kind = kind, entry = e, ref = ref, tries = 0 }
+	pending[#pending + 1] = { qid = qid, kind = kind, entry = e, ref = ref, detail = detail, tries = 0 }
 end
 
---- Reads the open quest reward dialog and stores what was seen. event is the client event that opened or refreshed it.
-function P.CaptureDialog(event)
+--- Reads the open quest reward dialog. event is the client event that opened or refreshed it. persist = true also stores the observation in the
+-- reward cache and counts the dialog; false (the report's own read of a dialog that is still open) only refreshes the in-memory detail P.dialog.
+-- P.dialog = { q, at, t, choices = { detail }, rewards = { detail } }; detail = { kind, i, e = the stored entry, link, idNote, facts = the Items.Read result }.
+local function readDialog(event, persist)
 	local s = store()
 	if not s then return end
 	local okQ, rq = I.Call(GetQuestID or function() end)
@@ -253,14 +255,19 @@ function P.CaptureDialog(event)
 	else
 		note("rewardCounts", "fail", nil, "api absent")
 	end
-	s.dialogs = s.dialogs + 1
+	if persist then s.dialogs = s.dialogs + 1 end
 
 	local obs = { src = "CODEX_OBSERVED", q = qid, at = event, last = wall(), build = build(), choices = {}, rewards = {} }
+	local dlg = { q = qid, at = event, t = wall(), choices = {}, rewards = {} }
+	P.dialog = dlg
 	local getInfo, getLink = type(GetQuestItemInfo) == "function" and GetQuestItemInfo, type(GetQuestItemLink) == "function" and GetQuestItemLink
 	for _, spec in ipairs({ { "choice", nChoice, obs.choices }, { "reward", nReward, obs.rewards } }) do
 		local kind, n, list = spec[1], spec[2] or 0, spec[3]
+		local detailList = kind == "choice" and dlg.choices or dlg.rewards
 		for i = 1, n do
 			local e = { i = i }
+			local d = { kind = kind, i = i, e = e }
+			detailList[#detailList + 1] = d
 			-- name, texture, count, quality, usable flag, item id (the order the Forever recorder saw; the 5th value's meaning is unknown)
 			if not getInfo then
 				note("rewardInfo", "fail", nil, "GetQuestItemInfo absent")
@@ -283,34 +290,42 @@ function P.CaptureDialog(event)
 				if ok and type(r[1]) == "string" and r[1]:find("item:", 1, true) then link = r[1]; note("rewardLink", "ok", "item link (" .. #link .. " chars)")
 				else note("rewardLink", "fail", nil, ok and "no item link returned" or ("error: " .. r)) end
 			end
+			d.link = link
 			local linkId = I.IdFromLink(link)
 			if e.id and linkId and e.id ~= linkId then
-				note("rewardId", "fail", nil, string.format("id from GetQuestItemInfo (%d) differs from the link (%d)", e.id, linkId))
+				d.idErr = string.format("id from GetQuestItemInfo (%d) differs from the link (%d)", e.id, linkId)
+				note("rewardId", "fail", nil, d.idErr)
 			elseif e.id or linkId then
-				note("rewardId", "ok", string.format("%d via %s", e.id or linkId, (e.id and linkId) and "GetQuestItemInfo and link, agree" or (e.id and "GetQuestItemInfo" or "link")))
+				d.idNote = (e.id and linkId) and "GetQuestItemInfo and link, agree" or (e.id and "GetQuestItemInfo" or "link")
+				note("rewardId", "ok", string.format("%d via %s", e.id or linkId, d.idNote))
 			else
-				note("rewardId", "fail", nil, "no item id from GetQuestItemInfo or the link")
+				d.idErr = "no item id from GetQuestItemInfo or the link"
+				note("rewardId", "fail", nil, d.idErr)
 			end
 			e.id = e.id or linkId
 			local ref = link or e.id
 			if ref then
 				local facts = I.Read(ref)
+				d.facts = facts
 				local state = tallyItem(facts)
 				e.info = compact(facts)
 				if (e.name == nil or e.name == "") and facts.f.name then e.name = facts.f.name end
-				if state == "unloaded" or entryUnresolved(e) then queueRetry(qid, kind, e, ref) end
+				if state == "unloaded" or entryUnresolved(e) then queueRetry(qid, kind, e, ref, d) end
 			end
 			list[#list + 1] = e
 		end
 	end
 	-- the stored form keeps no item links (they are long and carry per-item data): only ids, names, counts and the small info table
 	local stored = { src = obs.src, q = obs.q, at = obs.at, last = obs.last, build = obs.build, choices = obs.choices, rewards = obs.rewards }
-	saveObservation(stored)
+	if persist then saveObservation(stored) end
 	if #pending > 0 then
 		P.ArmRetry()
 	end
 	return stored
 end
+
+--- Reads the open reward dialog and stores what was seen in the reward cache (the three quest events call this).
+function P.CaptureDialog(event) return readDialog(event, true) end
 
 -- ---------------------------------------------------------------- late-loading item data
 
@@ -319,6 +334,7 @@ local function resolvePending()
 	for _, p in ipairs(pending) do
 		local e = p.entry
 		local facts = I.Read(p.ref)
+		if p.detail then p.detail.facts = facts end
 		local hadName = e.name ~= nil and e.name ~= ""
 		local state = tallyItem(facts)
 		if state == "loaded" then
@@ -450,6 +466,98 @@ function P.RewardStats()
 	return n, newest, s and s.dialogs or 0
 end
 
+-- ---------------------------------------------------------------- the reward dialog, choice by choice (report)
+
+--- True when a reward dialog looks open right now: the count calls answer, something is offered, and (if the frame can be asked) it is shown.
+local function dialogOpen()
+	if type(GetNumQuestChoices) ~= "function" or type(GetNumQuestRewards) ~= "function" then return false end
+	local ok1, r1 = I.Call(GetNumQuestChoices)
+	local ok2, r2 = I.Call(GetNumQuestRewards)
+	if not (ok1 and ok2 and type(r1[1]) == "number" and type(r2[1]) == "number") or (r1[1] + r2[1]) == 0 then return false end
+	if type(QuestFrame) == "table" and type(QuestFrame.IsShown) == "function" then
+		local okS, rs = I.Call(QuestFrame.IsShown, QuestFrame)
+		if okS and rs[1] == false then return false end
+	end
+	return true
+end
+
+local function statList(stats)
+	local keys = {}
+	for k in pairs(stats) do keys[#keys + 1] = k end
+	table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+	local out = {}
+	for i = 1, math.min(#keys, 8) do
+		local k = keys[i]
+		out[#out + 1] = tostring(k):gsub("^ITEM_MOD_", ""):gsub("_SHORT$", "") .. "=" .. tostring(stats[k])
+	end
+	return table.concat(out, " ") .. (#keys > 8 and (" +" .. (#keys - 8) .. " more") or "")
+end
+
+--- "PROVEN <value>" / "UNPROVEN waiting for item data" / "FAILED <why>" for an item-info field of one choice.
+local function infoField(d, present, value, why)
+	local facts = d.facts
+	if facts == nil then return "UNPROVEN not read" end
+	if facts.unloaded then return "UNPROVEN waiting for item data" end
+	if facts.err.info then return "FAILED " .. facts.err.info end
+	if present then return "PROVEN " .. tostring(value) end
+	return "FAILED " .. (why or "not returned")
+end
+
+--- The detail lines (two or three) for one reward item.
+local function choiceLines(label, d)
+	local e = d.e
+	local f = d.facts and d.facts.f or {}
+	local idWord = d.idErr and ("FAILED " .. d.idErr) or (e.id and string.format("PROVEN %d (%s)", e.id, d.idNote or "?")) or "FAILED not returned"
+	local nameWord
+	if type(e.name) == "string" and e.name ~= "" then nameWord = "PROVEN"
+	elseif d.facts == nil or d.facts.unloaded then nameWord = "UNPROVEN blank so far (loads later)"
+	else nameWord = "FAILED blank" end
+	local linkWord = d.link and "PROVEN" or "FAILED not returned"
+	local infoWord = d.facts == nil and "UNPROVEN not read" or (d.facts.unloaded and "UNPROVEN waiting for item data") or (d.facts.err.info and ("FAILED " .. d.facts.err.info)) or "PROVEN"
+	local L = {}
+	L[#L + 1] = string.format("%s: %s", label, (type(e.name) == "string" and e.name ~= "") and e.name or "(name not loaded yet)")
+	L[#L + 1] = string.format("  id %s | name %s | link %s | info %s", idWord, nameWord, linkWord, infoWord)
+	local cls = infoField(d, type(f.classID) == "number", string.format("%s/%s (%s/%s)", tostring(f.type), tostring(f.subType), tostring(f.classID), tostring(f.subClassID)), "no class id")
+	local ilvl = infoField(d, type(f.level) == "number", f.level)
+	local slot
+	if d.facts and not d.facts.unloaded and not d.facts.err.info and type(f.equipLoc) == "string" and f.equipLoc == "" and not (f.classID == 2 or f.classID == 4) then slot = "PROVEN (not equipment)"
+	elseif d.facts and not d.facts.unloaded and not d.facts.err.info and (f.classID == 2 or f.classID == 4) and (type(f.equipLoc) ~= "string" or f.equipLoc == "") then slot = "FAILED weapon/armor with no equip slot"
+	else slot = infoField(d, type(f.equipLoc) == "string" and f.equipLoc ~= "", f.equipLoc, "no equip slot returned") end
+	local req = infoField(d, type(f.minLevel) == "number", f.minLevel)
+	local sell = infoField(d, type(f.sellPrice) == "number", type(f.sellPrice) == "number" and I.Money(f.sellPrice) or nil, "no sell price")
+	L[#L + 1] = string.format("  class %s | item level %s | equip slot %s | required level %s | vendor value %s", cls, ilvl, slot, req, sell)
+	local stats
+	if d.facts == nil then stats = "UNPROVEN not read"
+	elseif d.facts.unloaded then stats = "UNPROVEN waiting for item data"
+	elseif d.facts.err.stats then stats = "FAILED " .. d.facts.err.stats
+	elseif type(f.stats) == "table" and next(f.stats) ~= nil then stats = "PROVEN " .. statList(f.stats)
+	else stats = "EMPTY the client returned an empty stat table" end
+	L[#L + 1] = "  stats " .. stats
+	return L
+end
+
+--- The REWARD CHOICE DETAILS lines: every choice (and guaranteed item) of the open reward dialog, or of the last dialog seen this session.
+function P.ChoiceLines()
+	local L = {}
+	local live = false
+	if dialogOpen() then
+		local ok, err = pcall(readDialog, "REPORT", false)
+		if ok then live = true elseif ns.RecordError then ns.RecordError("itemprobe live dialog", err) end
+	end
+	local dlg = P.dialog
+	if not dlg then
+		L[#L + 1] = "REWARD CHOICE DETAILS: no reward dialog seen this session (open a quest reward dialog, then run /codex report)"
+		return L
+	end
+	local src = live and ("read from the dialog open now, Q:" .. tostring(dlg.q))
+		or string.format("from the last dialog seen this session (closed now): Q:%s at %s, %ds ago", tostring(dlg.q), tostring(dlg.at), math.max(0, wall() - (dlg.t or 0)))
+	L[#L + 1] = string.format("REWARD CHOICE DETAILS (%s)", src)
+	L[#L + 1] = string.format("Reward choices: %d | guaranteed rewards: %d", #dlg.choices, #dlg.rewards)
+	for i, d in ipairs(dlg.choices) do for _, l in ipairs(choiceLines("Choice " .. i, d)) do L[#L + 1] = l end end
+	for i, d in ipairs(dlg.rewards) do for _, l in ipairs(choiceLines("Reward " .. i, d)) do L[#L + 1] = l end end
+	return L
+end
+
 -- ---------------------------------------------------------------- the report section
 
 local function eventStatus(ev)
@@ -471,11 +579,14 @@ function P.ReportLines()
 	local n, newest, dialogs = P.RewardStats()
 	L[#L + 1] = string.format("reward dialogs seen: %d | quests with a stored observation (src=CODEX_OBSERVED): %d%s", dialogs, n,
 		newest and string.format(" | latest Q:%s at %s, %d choice(s), %d guaranteed", tostring(newest.q), tostring(newest.at), #newest.choices, #newest.rewards) or "")
+	local okC, choice = pcall(P.ChoiceLines)
+	if okC then for _, l in ipairs(choice) do L[#L + 1] = l end elseif ns.RecordError then ns.RecordError("itemprobe choices", choice) end
+	L[#L + 1] = "Field tallies over every item read since install (reward items, equipped items, a few bag items):"
 	local group
 	for _, fld in ipairs(P.FIELDS) do
 		if fld.group ~= group then
 			group = fld.group
-			L[#L + 1] = (group == "reward" and "Reward dialog:") or (group == "item" and "Item data (reward items, equipped items and a few bag items):") or "Character:"
+			L[#L + 1] = (group == "reward" and "Reward dialog:") or (group == "item" and "Item data:") or "Character:"
 		end
 		local st, detail = P.Status(fld.key)
 		L[#L + 1] = string.format("  %-24s %-9s %s", fld.label, st, detail)
