@@ -556,6 +556,14 @@ function D.PlaytestLines(snap, lines)
 			add("EQUIPPED ITEM FACTS: error: " .. tostring(glines))
 		end
 	end
+	if ns.Advisor then
+		local okA, alines = pcall(ns.Advisor.ReportLines)
+		if okA then
+			for _, l in ipairs(alines) do add(l) end
+		else
+			add("REWARD ADVISOR: error: " .. tostring(alines))
+		end
+	end
 
 	add("")
 	add("--- FULL DIAGNOSTICS ---")
