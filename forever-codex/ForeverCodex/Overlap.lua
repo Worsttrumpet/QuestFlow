@@ -134,6 +134,8 @@ function Ov.List(plan, ctx)
 	local actions = 0
 	for _, o in ipairs(list or {}) do
 		local also = o.action
+		-- an item priced AFTER the last stop is near where the route ENDS, not on the way now: it stays in /codex report, not in the tracker
+		if o.relation == "AFTER_ROUTE" then also = nil end
 		if also and not (also.quest and seen[also.quest]) and not inDungeonCard(ctx, also.quest) then
 			if also.kind == "OBJECTIVE" and #unfinishedOf(also) > 0 then
 				if also.quest then seen[also.quest] = true end

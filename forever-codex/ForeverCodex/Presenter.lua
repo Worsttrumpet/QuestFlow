@@ -135,7 +135,7 @@ function Pr.AlsoWhy(plan, a)
 	for _, r in ipairs(why or {}) do
 		if r.code == "SAME_STOP" then return "Same stop." end
 		if r.code == "ON_THE_WAY" then return "On your way." end
-		if r.code == "SMALL_DETOUR" then return string.format("A short detour (about %d s).", r.seconds or 0) end
+		if r.code == "SMALL_DETOUR" then return string.format("Detour about %d s.", r.seconds or 0) end
 	end
 	return nil
 end

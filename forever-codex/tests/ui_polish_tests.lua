@@ -944,7 +944,7 @@ do
 	check(card.also[1] and card.also[1].kind == "action" and card.also[1].verb == "ACCEPT" and card.also[1].npc == "Aamelia Windfield", "ALSO row: a pickup carries its NPC")
 	check(c.alsoLabel.__text == "ALSO PICK UP", "a card of pickups is titled ALSO PICK UP, not ALSO COMPLETE THIS")
 	local sub = c.alsoSubs[1].__text
-	check(sub:find("Aamelia Windfield", 1, true) and (sub:find("same stop", 1, true) or sub:find("on your way", 1, true) or sub:find("short detour", 1, true)), "its dim line gives who and the planner's own reason: '" .. tostring(sub) .. "'")
+	check(sub:find("Aamelia Windfield", 1, true) and (sub:find("same stop", 1, true) or sub:find("on your way", 1, true) or sub:find("detour about", 1, true)), "its dim line gives who and the planner's own reason: '" .. tostring(sub) .. "'")
 	-- THEN
 	check(card.thenLine == "Accept Pickup Onward" and card.thenWhere == "700 yd - Nazgrel" and c.thenWhereFS.__text == "700 yd - Nazgrel", "THEN: the action, then how far and who ('700 yd - Nazgrel')")
 	check(#ns.errors == 0, "no errors")

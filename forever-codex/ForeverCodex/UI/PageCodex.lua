@@ -246,7 +246,7 @@ local function drawAlso(c, items)
 					local fs = c.alsoSubs[subsUsed]
 					if fs then
 						fs:SetText(sub)
-						st:Add(fs, 3)
+						st:Add(fs, 6)
 					end
 				end
 			end
@@ -258,7 +258,8 @@ local function drawAlso(c, items)
 			elseif noteWhy ~= it.why then noteSame = false end
 		end
 	end
-	c.alsoNote:SetText((nObj > 0 and noteSame and noteWhy) or "")
+	-- the shared reason describes objective rows only: shown when EVERY row is an objective (under a mix it would read as applying to the pickups)
+	c.alsoNote:SetText((nObj == #items and noteSame and noteWhy) or "")
 	st:Add(c.alsoNote, 1)
 	for i = rowsUsed + 1, #c.alsoRows do c.alsoRows[i]:Clear() end
 	c.alsoMore:SetText(left > 0 and string.format("+ %d more", left) or "")

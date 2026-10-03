@@ -514,3 +514,28 @@ do
 	Pl.ON_THE_WAY_MAX = 4
 	check(#plan2.onTheWay <= 1 and plan2.now.id == plan.now.id and (plan2.alsoDo and plan2.alsoDo.id) == (plan.alsoDo and plan.alsoDo.id), "lowering the cap changes only what is carried, never NOW or the ALSO DO")
 end
+
+section("tracker (0.6.2): an item near the END of the route is not listed as 'also'; the shared reason is for objective rows only; reasons fit the line")
+do
+	local ns = oppWorld(spec)
+	local ctx, plan = oppRun(ns)
+	local carried = {}
+	for _, o in ipairs(plan.onTheWay) do carried[o.id] = o end
+	check(carried["Q:7:ACCEPT"] and carried["Q:7:ACCEPT"].relation == "AFTER_ROUTE", "the pickup beside the last stop is still carried (it cleared both bars) and priced AFTER_ROUTE")
+	ns.State.Recompute()
+	local card = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	local listed = {}
+	for _, it in ipairs(card.also) do listed[#listed + 1] = it.quest end
+	check(not table.concat(listed, ","):find("7", 1, true) or not (function() for _, q in ipairs(listed) do if q == 7 then return true end end end)(), "but the tracker does not list it (it is near where the route ENDS, not on the way now)")
+	check(card.also[1] ~= nil, "pickups on the way are still listed")
+	for _, it in ipairs(card.also) do
+		if it.why then check(#it.why <= 22, "a reason is short enough for the line: '" .. it.why .. "'") end
+	end
+	ns.UI.Open("codex")
+	local c = ns.UI.main.codex
+	for i = 1, #c.alsoSubs do
+		local t = c.alsoSubs[i].__text
+		if t and t ~= "" then check(#t <= 56, "the dim line fits the card without cutting off: '" .. t .. "'") end
+	end
+	check(c.alsoNote.__text == "" or card.also[#card.also].kind == "objective", "the shared reason line is hidden unless every row is an objective")
+end
