@@ -261,11 +261,16 @@ local function oppProvenance(o)
 		end
 	end
 	if o.kind == "ACCEPT" and o.qid then
-		-- the only client-side evidence Codex has that a quest was OFFERED to this character: a quest dialog it saw (QUEST_DETAIL). Absence proves nothing.
-		local items = type(ForeverCodexDB) == "table" and ForeverCodexDB.items or nil
-		local seen = type(items) == "table" and type(items.rewards) == "table" and items.rewards[o.qid] or nil
-		if type(seen) == "table" and seen.at == "QUEST_DETAIL" then
-			parts[#parts + 1] = "actionability OBSERVED (a quest dialog for it was seen)"
+		-- client evidence only (never database presence): OBSERVED when the client showed the quest; a contextual negative is reported as evidence, not as a verdict
+		local act = ns.Planner.Actionability({ kind = "ACCEPT", quest = o.qid })
+		local ev = ns.Planner.OfferEvidence({ kind = "ACCEPT", quest = o.qid })
+		if act == "OBSERVED" then
+			parts[#parts + 1] = (ev and ev.via == "AVAILABLE_LIST") and "actionability OBSERVED (listed as available in an NPC dialog)" or "actionability OBSERVED (a quest dialog for it was seen)"
+		elseif act == "IN_LOG" then
+			parts[#parts + 1] = "actionability IN_LOG (the quest is in your log)"
+		elseif ev and (ev.kind == "EMPTY_AT_NPC" or ev.kind == "NOT_LISTED_AT_NPC") then
+			parts[#parts + 1] = string.format("actionability UNKNOWN | offer evidence: %s at %s (%ds ago): %s; this does not prove the quest is unavailable", ev.kind, tostring(ev.npc),
+				math.max(0, (type(time) == "function" and time() or 0) - (ev.last or 0)), ev.kind == "EMPTY_AT_NPC" and "no available quests were listed in that dialog" or "that dialog's complete list did not include this quest")
 		else
 			parts[#parts + 1] = "actionability UNKNOWN (never seen offered; database presence is not client evidence)"
 		end

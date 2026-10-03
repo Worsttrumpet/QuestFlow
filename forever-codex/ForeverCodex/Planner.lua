@@ -598,7 +598,17 @@ function Pl.Actionability(a)
 	local items = type(ForeverCodexDB) == "table" and ForeverCodexDB.items or nil
 	local seen = type(items) == "table" and type(items.rewards) == "table" and items.rewards[a.quest] or nil
 	if type(seen) == "table" and seen.at == "QUEST_DETAIL" then return "OBSERVED" end
+	-- the offered-quests probe (OfferProbe): the open offer dialog, or an available-quest list that carried the id
+	if ns.OfferProbe and ns.OfferProbe.QuestEvidence(a.quest) then return "OBSERVED" end
 	return "UNKNOWN"
+end
+
+--- The client evidence behind an actionability, for a pickup: { kind = "OBSERVED", via, npc } | { kind = "EMPTY_AT_NPC" | "NOT_LISTED_AT_NPC", npc, last } | nil.
+-- The negative kinds are CONTEXTUAL (that NPC's dialog, at that time) and leave Pl.Actionability at UNKNOWN. Nothing here is a rule or changes a plan.
+function Pl.OfferEvidence(a)
+	if not a or a.kind ~= "ACCEPT" or not a.quest or not ns.OfferProbe then return nil end
+	local view = R.Quest(a.quest)
+	return ns.OfferProbe.OfferEvidence(a.quest, view and view.giverNpc, (view and view.giverName) or a.giver)
 end
 
 function Pl.RouteRelation(cost, same, afterLast)
@@ -728,7 +738,7 @@ local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
 		-- a database record is not client evidence that this character is offered the quest (see Pl.Actionability).
 		carried[n] = { id = o.id, action = o.item.a, cost = o.cost, relation = o.rel, costClass = o.cls, net = o.net, value = o.val, dwell = o.dwell,
 			sameStop = o.same or false, stopId = o.stop, stopSize = o.stopSize, from = o.from, to = o.to, evidence = o.evidence, status = o.status,
-			actionability = Pl.Actionability(o.item.a), reason = reason, decision = o.dec }
+			actionability = Pl.Actionability(o.item.a), offer = Pl.OfferEvidence(o.item.a), reason = reason, decision = o.dec }
 	end
 	S.onTheWay = carried
 	diag.onTheWayTotal = #onTheWay

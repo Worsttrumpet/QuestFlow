@@ -933,7 +933,7 @@ do
 	local states = {}
 	for _, a in ipairs(s.obs[1].answers) do states[a.api] = a.state end
 	check(states["C_GossipInfo.GetAvailableQuests"] == "ABSENT" and states["GetNumGossipAvailableQuests"] == "ABSENT", "missing APIs are ABSENT, not 'none offered'")
-	check(table.concat(O.ReportLines(), "\n"):find("API absent", 1, true) ~= nil, "the report says which API is absent")
+	check(table.concat(O.ReportLines(), "\n"):find("absent: ", 1, true) ~= nil, "the report says which APIs are absent")
 
 	-- an NPC that lists nothing: the API ANSWERS with an empty list -> EMPTY (meaningful), and the NPC is recorded without its GUID
 	reset()
@@ -971,7 +971,7 @@ do
 	local st = ForeverCodexDB.offers.stats
 	check(st.entries == 2 and st.entriesWithId == 1 and st.entriesTitleOnly == 1, "counters: 2 entries, 1 with an id, 1 title only")
 	local text = table.concat(O.ReportLines(), "\n")
-	check(text:find("OFFERED QUESTS PROBE", 1, true) and text:find("Q:92642 Disrupting Logistics L11", 1, true) and text:find("(no id) No id here", 1, true) and text:find("PROVEN", 1, true), "the report shows the listed quests, ids and PROVEN status")
+	check(text:find("ACTIONABILITY / OFFER EVIDENCE", 1, true) and text:find("Q:92642 Disrupting Logistics | OBSERVED via AVAILABLE_LIST", 1, true) and text:find("(no id) No id here", 1, true) and text:find("PROVEN", 1, true), "the report shows the listed quests, ids and PROVEN status")
 	check(text:find("only 'not listed in that dialog at that moment'", 1, true) ~= nil, "the report states what a negative does and does not mean")
 
 	-- an unchanged repeat of the same dialog is one observation with a counter
@@ -1028,5 +1028,135 @@ do
 	check(dirtyTotal() == d0 and ns.State.perf.count == countBefore, "the probe marked nothing dirty and recomputed nothing")
 	check(#ns.errors == 0, "no errors")
 	clear()
+	reset()
+end
+
+-- ---------------------------------------------------------------- Offer evidence layer (0.6.5): OBSERVED / EMPTY_AT_NPC / NOT_LISTED_AT_NPC / UNKNOWN
+section("offer evidence: positive client evidence, contextual negatives, and UNKNOWN as the default (the planner is unchanged)")
+do
+	local NAMES = { "C_GossipInfo", "GetNumAvailableQuests", "GetAvailableTitle", "GetNumActiveQuests", "GetActiveTitle", "GetQuestID", "GetTitleText", "UnitName", "UnitGUID" }
+	local ns = boot({ char = { level = 10 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	for _, n in ipairs(NAMES) do _G[n] = nil end
+	local O, Pl = ns.OfferProbe, ns.Planner
+	-- quests whose giver is a known NPC (creature id and name), as the data layers give them
+	H.attPack(ns, {
+		{ id = 201, name = "At Valennia", map = 9001, x = 0.52, y = 0.5, req = 1, giverNpc = 7001, giverName = "Valennia Stormfist" },
+		{ id = 202, name = "Also Valennia", map = 9001, x = 0.52, y = 0.5, req = 1, giverNpc = 7001, giverName = "Valennia Stormfist" },
+		{ id = 203, name = "At Talaanis", map = 9001, x = 0.53, y = 0.5, req = 1, giverNpc = 7002, giverName = "Talaanis Shadowsong" },
+		{ id = 204, name = "Never Seen", map = 9001, x = 0.54, y = 0.5, req = 1, giverNpc = 7003, giverName = "Nobody Yet" },
+		{ id = 205, name = "Named Only", map = 9001, x = 0.55, y = 0.5, req = 1, giverName = "Name Only Npc" },
+		{ id = 206, name = "Not In List", map = 9001, x = 0.53, y = 0.5, req = 1, giverNpc = 7002, giverName = "Talaanis Shadowsong" },
+	}, nil)
+	local function pickup(id) return { kind = "ACCEPT", quest = id } end
+	local function reset() ForeverCodexDB.offers = nil; ForeverCodexDB.items = nil end
+	local function stubNpc(name, id)
+		_G.UnitName = function(u) return u == "npc" and name or nil end
+		_G.UnitGUID = function(u) return u == "npc" and id and ("Creature-0-1-2-3-" .. id .. "-ABCDEF") or nil end
+	end
+	local function gossip(avail, active)
+		_G.C_GossipInfo = { GetAvailableQuests = function() return avail end, GetActiveQuests = function() return active or {} end, GetOptions = function() return {} end }
+		O.OnEvent("GOSSIP_SHOW")
+	end
+	reset()
+
+	-- 8 / 11: no evidence -> UNKNOWN, no offer evidence, for a database pickup nobody has seen
+	check(Pl.Actionability(pickup(204)) == "UNKNOWN" and Pl.OfferEvidence(pickup(204)) == nil, "no client evidence: UNKNOWN and no offer evidence (the default stays)")
+	check(Pl.Actionability({ kind = "OBJECTIVE", quest = 204 }) == "NOT_APPLICABLE", "only pickups have an actionability")
+
+	-- 3: an empty available list at an NPC is contextual evidence for that NPC's quests, and the actionability stays UNKNOWN
+	stubNpc("Valennia Stormfist", 7001)
+	gossip({}, {})
+	local ev = Pl.OfferEvidence(pickup(201))
+	check(ev and ev.kind == "EMPTY_AT_NPC" and ev.npc == "Valennia Stormfist", "an EMPTY available list at the giver's NPC (matched by creature id) is EMPTY_AT_NPC")
+	check(Pl.Actionability(pickup(201)) == "UNKNOWN", "...and the quest's actionability is still UNKNOWN: a contextual negative is not a verdict")
+	local npcs = ForeverCodexDB.offers.npcs
+	check(npcs["id:7001"] and npcs["id:7001"].avail.state == "EMPTY" and npcs["id:7001"].active.state == "EMPTY", "the NPC context records AVAILABLE and ACTIVE as EMPTY")
+
+	-- 4: an identical repeat merges (one observation, counters rise, no new rows)
+	gossip({}, {})
+	local nObs = #ForeverCodexDB.offers.obs
+	check(nObs == 1 and ForeverCodexDB.offers.obs[1].n == 2 and npcs["id:7001"].n == 2, "an identical empty dialog merges: one observation, seen x2")
+
+	-- 5: a different NPC is a separate context
+	stubNpc("Talaanis Shadowsong", 7002)
+	gossip({}, {})
+	local count = 0
+	for _ in pairs(ForeverCodexDB.offers.npcs) do count = count + 1 end
+	check(count == 2 and ForeverCodexDB.offers.npcs["id:7002"].avail.state == "EMPTY", "a different NPC is a separate context")
+
+	-- 6: an empty answer at NPC A says nothing about a quest whose giver is B, or one observed elsewhere
+	check(Pl.OfferEvidence(pickup(204)) == nil, "an empty dialog at other NPCs does not touch a quest from an NPC never opened")
+	stubNpc("Fendaal Windstone", 7009)
+	_G.GetQuestID = function() return 203 end
+	_G.GetTitleText = function() return "At Talaanis" end
+	O.OnEvent("QUEST_DETAIL")
+	local seen = Pl.OfferEvidence(pickup(203))
+	check(seen and seen.kind == "OBSERVED" and seen.via == "QUEST_DETAIL" and seen.npc == "Fendaal Windstone", "a quest opened at ANOTHER NPC is OBSERVED there (the empty dialog at its giver does not invalidate it)")
+	check(Pl.Actionability(pickup(203)) == "OBSERVED", "and its actionability is OBSERVED")
+
+	-- 1: QUEST_DETAIL creates positive actionability; 7: a positive observation upgrades a contextual negative
+	check(Pl.Actionability(pickup(201)) == "UNKNOWN" and Pl.OfferEvidence(pickup(201)).kind == "EMPTY_AT_NPC", "before: contextual negative only")
+	_G.GetQuestID = function() return 201 end
+	_G.GetTitleText = function() return "At Valennia" end
+	stubNpc("Valennia Stormfist", 7001)
+	O.OnEvent("QUEST_DETAIL")
+	local up = Pl.OfferEvidence(pickup(201))
+	check(up.kind == "OBSERVED" and up.via == "QUEST_DETAIL" and Pl.Actionability(pickup(201)) == "OBSERVED", "after a QUEST_DETAIL for it: OBSERVED outranks the earlier contextual negative")
+	check(ForeverCodexDB.offers.npcs["id:7001"].avail.state == "EMPTY", "the QUEST_DETAIL did not rewrite what the NPC's listing said")
+	check(Pl.OfferEvidence(pickup(202)).kind == "EMPTY_AT_NPC", "the sibling quest of the same NPC is still only contextual")
+
+	-- 2: an available list that carries the quest id is positive evidence; a complete list without it is NOT_LISTED_AT_NPC
+	stubNpc("Talaanis Shadowsong", 7002)
+	gossip({ { questID = 303, title = "Elsewhere" }, { questID = 304, title = "Another" } }, {})
+	check(Pl.OfferEvidence({ kind = "ACCEPT", quest = 303 }).kind == "OBSERVED" and Pl.OfferEvidence({ kind = "ACCEPT", quest = 303 }).via == "AVAILABLE_LIST", "a quest id inside a client available list is OBSERVED via AVAILABLE_LIST")
+	local nl = Pl.OfferEvidence(pickup(203))
+	check(nl.kind == "OBSERVED", "a quest already observed stays OBSERVED even if a later list at its giver omits it (positive evidence is never erased)")
+	-- a quest from that giver that was never observed and is not in the complete list: contextual negative
+	check(Pl.OfferEvidence(pickup(206)).kind == "NOT_LISTED_AT_NPC", "a complete id list that omits the quest is NOT_LISTED_AT_NPC (contextual)")
+	check(Pl.Actionability(pickup(206)) == "UNKNOWN", "...and still UNKNOWN")
+	-- an incomplete list (an entry without an id) makes no negative claim
+	gossip({ { questID = 303, title = "Elsewhere" }, { title = "No id" } }, {})
+	check(Pl.OfferEvidence(pickup(206)) == nil, "a list with an entry that has no id makes NO negative claim (nothing is manufactured from incomplete data)")
+	-- the name-only giver (no creature id in the data) is matched by exact name, never loosely
+	stubNpc("Name Only Npc", nil)
+	gossip({}, {})
+	check(Pl.OfferEvidence(pickup(205)).kind == "EMPTY_AT_NPC", "a giver known only by name is matched by that exact name")
+
+	-- 9: no raw GUID anywhere in the saved evidence
+	local function scan(t, d) for k, v in pairs(t) do if type(v) == "string" and (v:find("Creature-", 1, true) or v:find("ABCDEF", 1, true)) then return true end if type(v) == "table" and d < 8 and scan(v, d + 1) then return true end end return false end
+	check(not scan(ForeverCodexDB.offers, 0), "no raw GUID is persisted (only the creature id)")
+
+	-- 10: bounded
+	reset()
+	for i = 1, O.MAX_QUESTS + 30 do
+		_G.GetQuestID = function() return 500000 + i end
+		_G.GetTitleText = function() return "Q" .. i end
+		stubNpc("NPC " .. i, 100000 + i)
+		O.OnEvent("QUEST_DETAIL")
+	end
+	for i = 1, O.MAX_NPCS + 30 do
+		stubNpc("List NPC " .. i, 200000 + i)
+		gossip({}, {})
+	end
+	local nq, nn = 0, 0
+	for _ in pairs(ForeverCodexDB.offers.quests) do nq = nq + 1 end
+	for _ in pairs(ForeverCodexDB.offers.npcs) do nn = nn + 1 end
+	check(nq <= O.MAX_QUESTS and nn <= O.MAX_NPCS and #ForeverCodexDB.offers.obs <= O.MAX_OBS, "quests, NPC contexts and observations are all bounded (" .. nq .. " / " .. nn .. " / " .. #ForeverCodexDB.offers.obs .. ")")
+
+	-- the report wording: concise, with the meaning stated, and the opportunity line keeps UNKNOWN
+	reset()
+	stubNpc("Valennia Stormfist", 7001)
+	gossip({}, {})
+	_G.GetQuestID = function() return 98512 end
+	_G.GetTitleText = function() return "Al'Aketh Assassins" end
+	stubNpc("Fendaal Windstone", 7010)
+	O.OnEvent("QUEST_DETAIL")
+	local text = table.concat(O.ReportLines(), "\n")
+	check(text:find("Q:98512 Al'Aketh Assassins | OBSERVED via QUEST_DETAIL | NPC Fendaal Windstone (creature 7010)", 1, true) ~= nil, "the report lists the observed quest with its NPC and source")
+	check(text:find("Valennia Stormfist (creature 7001) | AVAILABLE EMPTY", 1, true) ~= nil and text:find("NOT proof a quest is permanently unavailable", 1, true) ~= nil, "the report shows the EMPTY NPC dialog and says what it does not prove")
+	local line = ns.Diag.OpportunityLines
+	check(type(line) == "function", "the opportunity diagnostics are still available")
+	check(#ns.errors == 0, "no errors")
+	for _, n in ipairs(NAMES) do _G[n] = nil end
 	reset()
 end

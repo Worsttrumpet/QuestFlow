@@ -21,3 +21,29 @@ A negative observation means only: this character opened this NPC's dialog at th
 3. Click the quest (QUEST_DETAIL) to see the offer: expect a QUEST_DETAIL row with the id and title. Accepting is optional.
 4. Check for Lua errors (`/codex report` shows "caught errors") and that NOW / ALSO DO are unchanged.
 Worth trying once each, in this order of value: an NPC with no quests (done in 1); one quest; several quests; an NPC where you already have a quest in the log (does it appear under "active"?); an NPC with a quest ready to turn in. Anything else is optional.
+
+## 0.6.5: the evidence layer (no planner change)
+Real-client facts (user-tested on build 70205): `GOSSIP_SHOW` fires and `C_GossipInfo.GetAvailableQuests()` / `GetActiveQuests()` answer with empty tables at Valennia Stormfist and Talaanis Shadowsong; `QUEST_DETAIL` fired at Fendaal Windstone with `GetQuestID()` = 98512 and `GetTitleText()` = "Al'Aketh Assassins".
+
+The probe now normalises its observations into two bounded indexes (still `CODEX_OBSERVED`, still no raw GUIDs):
+* `quests[id]`: OBSERVED via `QUEST_DETAIL` (the offer dialog opened; the stronger source, kept when both were seen) or via `AVAILABLE_LIST` (a client available list carried the id), with the NPC, count, first / last time (cap 300).
+* `npcs[key]`: the latest answer that NPC's dialog gave, AVAILABLE and ACTIVE each `EMPTY` / `LISTED` (with the ids when every entry had one) / `NO_DATA`; keyed by creature id when the client gave one, else by name (cap 100). A `QUEST_DETAIL` never rewrites a listing, and is associated only with the NPC the client reported at that moment.
+
+`OfferProbe.OfferEvidence(quest, giverNpcId, giverName)` and `Planner.OfferEvidence(action)` return:
+* `OBSERVED` (via QUEST_DETAIL or AVAILABLE_LIST), which also makes `Planner.Actionability` = OBSERVED;
+* `EMPTY_AT_NPC`: the quest's giver (matched by creature id, else by exact name) was observed listing nothing, at that time;
+* `NOT_LISTED_AT_NPC`: the giver's list was complete (every entry had an id) and did not include the quest;
+* nil: no client evidence (UNKNOWN, the default).
+The two negatives are contextual and leave the actionability UNKNOWN. A positive observation always outranks them and is never erased by a later list. They are not rules, not about class / race / prerequisites, and not about the quest in general.
+
+Hierarchy kept: QUEST_DETAIL > client list with id > client EMPTY at the NPC > quest log > QuestieDB / ATT / observed pack > UNKNOWN.
+
+**Planner: unchanged.** Considered and deliberately not done: dropping a pickup whose giver just returned EMPTY. The evidence can be stale (a later level or quest step may change what the NPC offers) and an association by name is weaker than by creature id, so the evidence is exposed first: `plan.onTheWay[i].offer`, the OPPORTUNITIES provenance lines and the report. A narrow, time-bounded gate can be reviewed later with real data.
+
+Report: the section is now ACTIONABILITY / OFFER EVIDENCE (event and function status, totals, OBSERVED quests, per-NPC latest answers with what they do and do not prove, and the last 3 raw observations).
+
+### Real-client checks (not yet performed)
+A. Open an NPC that offers a known quest without accepting: GOSSIP_SHOW fires, the quest id appears in AVAILABLE (if the list carries ids), then open the quest: a QUEST_DETAIL row with the same id.
+B. Open Valennia Stormfist again: AVAILABLE EMPTY, and no quest is marked unavailable anywhere (her quests show `offer evidence: EMPTY_AT_NPC`, actionability UNKNOWN).
+C. Another NPC offering a different quest: separate NPC rows, no mixing.
+D. A QuestieDB-known quest never opened stays `actionability UNKNOWN (never seen offered...)`.
