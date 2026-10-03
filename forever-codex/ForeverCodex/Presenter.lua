@@ -116,6 +116,9 @@ end
 --- The short reason the planner put an action beside the route (from its own reason codes), or nil. Never invented.
 function Pr.AlsoWhy(plan, a)
 	local why = plan and plan.diag and plan.diag.reasons and plan.diag.reasons[a.id]
+	for _, o in ipairs(plan and plan.onTheWay or {}) do
+		if o.id == a.id then why = { o.reason } break end        -- the opportunity carries its own reason code (every on-the-way row, not only the ALSO DO)
+	end
 	for _, r in ipairs(why or {}) do
 		if r.code == "SAME_STOP" then return "Same stop." end
 		if r.code == "ON_THE_WAY" then return "On your way." end

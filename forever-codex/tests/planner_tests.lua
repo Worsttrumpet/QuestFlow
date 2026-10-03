@@ -78,8 +78,10 @@ do
 	local keys = {}
 	for k in pairs(p) do keys[#keys + 1] = k end
 	table.sort(keys)
-	check(table.concat(keys, ",") == "alsoDo,diag,now,reminders,thenAction" or table.concat(keys, ",") == "diag,now,reminders,thenAction" or table.concat(keys, ",") == "alsoDo,diag,now,reminders",
-		"the plan carries only now / alsoDo / thenAction / reminders / diag: " .. table.concat(keys, ","))
+	local allowed, extra = { alsoDo = true, diag = true, now = true, onTheWay = true, reminders = true, thenAction = true }, {}
+	for _, k in ipairs(keys) do if not allowed[k] then extra[#extra + 1] = k end end
+	check(#extra == 0 and p.diag ~= nil and p.reminders ~= nil and type(p.onTheWay) == "table",
+		"the plan carries only now / alsoDo / onTheWay / thenAction / reminders / diag: " .. table.concat(keys, ","))
 	check(p.alsoDo ~= nil and p.thenAction ~= nil, "this situation has all three")
 	local ids = { p.now.id, p.alsoDo.id, p.thenAction.id }
 	check(ids[1] ~= ids[2] and ids[1] ~= ids[3] and ids[2] ~= ids[3], "no action appears twice in now / alsoDo / thenAction")

@@ -103,7 +103,7 @@ function A.ToLegacy(plan, ctx, c)
 		next = seq[1], sequence = seq, upcoming = upcoming, nearby = nearby, inProgress = inProgress,
 		stats = env.stats, warnings = env.warnings, strategy = env.strategy.key, routeZone = ctx.prefs.routeZone, routeMap = env.routeMap,
 		player = env.player,
-		now = plan.now, alsoDo = plan.alsoDo, thenAction = plan.thenAction, reminders = plan.reminders, diag = plan.diag, objectives = objectives, turnIns = turnIns,
+		now = plan.now, alsoDo = plan.alsoDo, onTheWay = plan.onTheWay or {}, thenAction = plan.thenAction, reminders = plan.reminders, diag = plan.diag, objectives = objectives, turnIns = turnIns,
 	}
 end
 

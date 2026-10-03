@@ -580,6 +580,7 @@ end
 -- chooseAlsoDo already prices every candidate against the chosen route; these helpers only NAME what it computed.
 Pl.FREE_SECONDS = 0.5        -- mirrors the 0.5 s "on the way" test addReasons already uses; a label boundary, not a new rule
 Pl.OPP_CAP = 40              -- priced candidates kept in diag.opps.list (the cheapest first); the rest are counted. ~100 candidates are priced per recompute.
+Pl.ON_THE_WAY_MAX = 4        -- opportunities carried in plan.onTheWay (those that clear the ALSO DO bars, best net first)
 Pl.OPP_HUB_CAP = 5           -- off-route stops with 2+ actions priced as a whole (diagnostic only)
 
 --- Where a candidate fits in the chosen route, from the insertion the planner already computed. Returns one of
@@ -588,6 +589,18 @@ Pl.OPP_HUB_CAP = 5           -- off-route stops with 2+ actions priced as a whol
 --   AFTER_ROUTE         inserted after the last stop: no rejoining, the cost is the one-way trip
 --   UNKNOWN             a leg could not be measured
 -- (A "near route" label would need a distance threshold the planner does not have; the cost class carries that distinction.)
+--- Whether this character is known to be OFFERED the action. A database (QuestieDB / ATT) record says the quest exists somewhere; it is not client
+-- evidence. OBSERVED only when Codex recorded a quest dialog (QUEST_DETAIL) for the quest; UNKNOWN otherwise (absence proves nothing); quests already
+-- in the log are IN_LOG (the client itself holds them). Never derived from class / race / level rules.
+function Pl.Actionability(a)
+	if not a or a.kind ~= "ACCEPT" or not a.quest then return "NOT_APPLICABLE" end
+	if ns.State and ns.State.ctx and ns.State.ctx.log and ns.State.ctx.log[a.quest] then return "IN_LOG" end
+	local items = type(ForeverCodexDB) == "table" and ForeverCodexDB.items or nil
+	local seen = type(items) == "table" and type(items.rewards) == "table" and items.rewards[a.quest] or nil
+	if type(seen) == "table" and seen.at == "QUEST_DETAIL" then return "OBSERVED" end
+	return "UNKNOWN"
+end
+
 function Pl.RouteRelation(cost, same, afterLast)
 	if same then return "DIRECTLY_ON_ROUTE" end
 	if cost == nil then return "UNKNOWN" end
@@ -652,7 +665,7 @@ local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
 			cost = cost, same = same or nil, from = at and nodeLabel(at) or nil, to = at and nodeLabel(at + 1) or nil,
 			rel = Pl.RouteRelation(cost, same, at ~= nil and nodes[at + 1] == nil), cls = cls, net = net, val = it.val, dwell = it.dwell,
 			stop = it.stop and it.stop.id or nil, stopSize = it.stop and #it.stop.items or nil, dec = decision,
-			evidence = a.evidence, status = it.status, assumed = it.assumed or nil, conf = it.conf }
+			evidence = a.evidence, status = it.status, assumed = it.assumed or nil, conf = it.conf, item = it }
 	end
 	local also, alsoNet, alsoCost
 	local function offer(it, cost, at, same)
@@ -695,6 +708,30 @@ local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
 			if counts.decision.OUTRANKED == 0 then counts.decision.OUTRANKED = nil end
 		end
 	end
+	-- PHASE B: every candidate that cleared BOTH ALSO DO bars (detour limit and net floor) is an on-the-way opportunity, best net first (the
+	-- planner's own tie rule), so onTheWay[1] is exactly the ALSO DO. Nothing here changes what is chosen; the rest used to be dropped silently.
+	local onTheWay = {}
+	for _, o in ipairs(opps) do
+		if o.dec == "ACCEPTED" or o.dec == "OUTRANKED" then onTheWay[#onTheWay + 1] = o end
+	end
+	table.sort(onTheWay, function(x, y)
+		if x.net ~= y.net then return x.net > y.net end
+		return x.id < y.id
+	end)
+	local carried = {}
+	for n = 1, math.min(#onTheWay, Pl.ON_THE_WAY_MAX) do
+		local o = onTheWay[n]
+		local reason
+		if o.cost <= Pl.FREE_SECONDS or o.same then reason = { code = (o.same and "SAME_STOP" or "ON_THE_WAY") }
+		else reason = { code = "SMALL_DETOUR", seconds = math.floor(o.cost + 0.5) } end
+		-- the normalised opportunity: the action itself plus what the route said about it. Actionability is the same honest UNKNOWN the report prints:
+		-- a database record is not client evidence that this character is offered the quest (see Pl.Actionability).
+		carried[n] = { id = o.id, action = o.item.a, cost = o.cost, relation = o.rel, costClass = o.cls, net = o.net, value = o.val, dwell = o.dwell,
+			sameStop = o.same or false, stopId = o.stop, stopSize = o.stopSize, from = o.from, to = o.to, evidence = o.evidence, status = o.status,
+			actionability = Pl.Actionability(o.item.a), reason = reason, decision = o.dec }
+	end
+	S.onTheWay = carried
+	diag.onTheWayTotal = #onTheWay
 	table.sort(opps, function(x, y)
 		if (x.cost == nil) ~= (y.cost == nil) then return x.cost ~= nil end
 		if x.cost ~= y.cost then return x.cost < y.cost end
@@ -702,6 +739,7 @@ local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
 	end)
 	local kept = {}
 	for n = 1, math.min(#opps, Pl.OPP_CAP) do kept[n] = opps[n] end
+	for _, o in ipairs(opps) do o.item = nil end
 	local hubs, inRoute = {}, {}
 	for _, st in ipairs(seqStops) do inRoute[st] = true end
 	for _, st in ipairs(S.stops) do
@@ -718,7 +756,7 @@ local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
 	while #hubs > Pl.OPP_HUB_CAP do hubs[#hubs] = nil end
 	diag.opps = { list = kept, total = counts.total, class = counts.class, decision = counts.decision, cap = Pl.OPP_CAP, hubs = hubs,
 		route = { stops = #seqStops, detour = par.detour, alsoFloor = par.alsoFloor, timeValue = lam } }
-	return also, alsoCost
+	return also, alsoCost, S.onTheWay
 end
 
 --- Stage 7: reason codes (data, not sentences).
@@ -944,8 +982,9 @@ function Pl.Compute(ctx, c, opts)
 	local thenIt = seqStops[2] and bestOf(seqStops[2]) or nil
 	plan.thenAction = thenIt and thenIt.a or nil
 
-	local also, alsoCost = chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
+	local also, alsoCost, onTheWay = chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
 	plan.alsoDo = also and also.a or nil
+	plan.onTheWay = onTheWay or {}
 	diag.interruption = alsoCost and math.floor(alsoCost * 10 + 0.5) / 10 or nil
 	table.sort(diag.rejected, function(x, y)
 		if x.code ~= y.code then return x.code < y.code end

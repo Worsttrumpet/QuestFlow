@@ -292,6 +292,11 @@ function D.OpportunityLines()
 	end
 	L[#L + 1] = string.format("  priced: %d | by cost: %s | decisions: %s", o.total, counts(o.class, { "FREE", "CHEAP", "MODERATE", "EXPENSIVE", "UNKNOWN" }),
 		counts(o.decision, { "ACCEPTED", "OUTRANKED", "TOO_FAR", "LOW_VALUE", "UNKNOWN_TRANSIT" }))
+	do
+		local ow = {}
+		for _, e in ipairs(plan.onTheWay or {}) do ow[#ow + 1] = string.format("%s (%s, %s, %s)", e.id, e.costClass or "?", e.reason and e.reason.code or "?", e.actionability or "?") end
+		L[#L + 1] = string.format("  on the way (%d cleared both bars; up to %d carried to the tracker, best net first; the first is the ALSO DO): %s", d.onTheWayTotal or 0, ns.Planner.ON_THE_WAY_MAX, #ow > 0 and table.concat(ow, " | ") or "none")
+	end
 	L[#L + 1] = string.format("  planner limits in force: detour %s s | ALSO DO floor %s pts | time value %.2f pts/s | route has %d stop(s). Cost = extra seconds to insert it into that route (0 within the first stop).", tostring(o.route.detour), tostring(o.route.alsoFloor), o.route.timeValue, o.route.stops)
 	L[#L + 1] = string.format("  listed: %d of %d priced (cheapest extra time first, then id; cap %d stored, %d shown). Relation: DIRECTLY_ON_ROUTE <= 0.5 s or same stop | RECONNECTING_DETOUR leaves and rejoins | AFTER_ROUTE one-way past the last stop.",
 		#o.list, o.total, o.cap, D.OPP_SHOW)

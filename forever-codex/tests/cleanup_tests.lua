@@ -443,3 +443,74 @@ do
 	check(table.concat(before, "|") == table.concat(after, "|") and #plan4.diag.opps.list == 1, "changing the diagnostic cap changes only the diagnostics, never the plan")
 	check(#ns2.errors == 0, "no errors")
 end
+
+-- ---------------------------------------------------------------- Opportunity System Phase A/B (0.6.0): plan.onTheWay
+section("on the way: every candidate that clears the ALSO DO bars is carried, normalised, with its route cost and reason")
+do
+	-- core route: three added quests east of you; pickups: one on the line, one 250 yd off (too far), and a 3-giver hub right at the first stop
+	local ns = oppWorld({
+		Q(1, "Right on the line", 150, 0, P5),
+		Q(2, "Behind you", -150, 0, P5),
+		Q(6, "Off then back", 450, 150, P5),
+		Q(7, "Beside the last stop", 900, 90, P5),
+		Q(8, "Past the end", 1500, 0, P5),
+		Q(21, "Hub A", 300, 20, P5), Q(22, "Hub B", 310, 10, P5), Q(23, "Hub C", 305, -10, P5),
+	})
+	local ctx, plan = oppRun(ns)
+	local list = plan.onTheWay
+	local ids = {}
+	for _, o in ipairs(list) do ids[#ids + 1] = o.id end
+	check(#list >= 2 and #list <= ns.Planner.ON_THE_WAY_MAX, "several opportunities are carried, capped at " .. ns.Planner.ON_THE_WAY_MAX .. ": " .. table.concat(ids, " "))
+	check(plan.alsoDo and list[1].id == plan.alsoDo.id and list[1].action == plan.alsoDo, "onTheWay[1] is exactly the ALSO DO (the planner's choice is unchanged)")
+	local sorted = true
+	for i = 2, #list do if list[i - 1].net < list[i].net then sorted = false end end
+	check(sorted, "ordered best net first")
+	local passing = plan.diag.onTheWayTotal
+	local count = 0
+	for _, e in ipairs(plan.diag.opps.list) do if e.dec == "ACCEPTED" or e.dec == "OUTRANKED" then count = count + 1 end end
+	check(passing == count, "the carried set is exactly the candidates the diagnostics call ACCEPTED or OUTRANKED (" .. tostring(passing) .. ")")
+	for _, o in ipairs(list) do
+		check(o.cost <= 30 and o.net >= 5 and o.relation and o.costClass and o.reason and o.reason.code and o.action and o.evidence ~= nil, "every carried item cleared both bars and has relation / cost class / reason: " .. o.id)
+	end
+	local first = list[1]
+	check(first.reason.code == "ON_THE_WAY" or first.reason.code == "SAME_STOP" or first.reason.code == "SMALL_DETOUR", "its reason is one of the planner's own codes (" .. first.reason.code .. ")")
+	local byId = {}
+	for _, o in ipairs(list) do byId[o.id] = o end
+	check(byId["Q:2:ACCEPT"] == nil and byId["Q:8:ACCEPT"] == nil, "a candidate behind you (out and back) or far past the end is not carried")
+	check(first.actionability == "UNKNOWN" and first.action.kind == "ACCEPT", "a database pickup is carried with actionability UNKNOWN, never OBSERVED")
+	-- the tracker lists them, as ALSO PICK UP
+	ns.State.Recompute()
+	ns.UI.Open("codex")
+	local c = ns.UI.main.codex
+	local card = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	local acts = 0
+	for _, it in ipairs(card.also) do if it.kind == "action" then acts = acts + 1 end end
+	check(acts >= 2 and acts <= ns.Overlap.MAX_ACTIONS, "the ALSO card lists several pickups, not only one (" .. acts .. ")")
+	check(c.alsoLabel.__text == "ALSO PICK UP", "titled for what they are")
+	-- repeatable
+	local _, plan2 = oppRun(ns)
+	local same = #plan2.onTheWay == #list
+	for i, o in ipairs(list) do if plan2.onTheWay[i].id ~= o.id then same = false end end
+	check(same, "the same list, in the same order, on a second run")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("on the way: an in-log quest is IN_LOG, a quest dialog seen is OBSERVED, and the cap changes only what is carried")
+do
+	local ns = oppWorld({ Q(1, "Right on the line", 150, 0, P5) })
+	local Pl = ns.Planner
+	check(Pl.Actionability({ kind = "OBJECTIVE", quest = 1 }) == "NOT_APPLICABLE" and Pl.Actionability(nil) == "NOT_APPLICABLE", "only a pickup has an actionability")
+	check(Pl.Actionability({ kind = "ACCEPT", quest = 1 }) == "UNKNOWN", "UNKNOWN by default")
+	ForeverCodexDB.items = ForeverCodexDB.items or {}
+	ForeverCodexDB.items.rewards = { [1] = { q = 1, at = "QUEST_DETAIL" } }
+	check(Pl.Actionability({ kind = "ACCEPT", quest = 1 }) == "OBSERVED", "OBSERVED after a QUEST_DETAIL dialog was recorded")
+	ForeverCodexDB.items.rewards = { [1] = { q = 1, at = "QUEST_COMPLETE" } }
+	check(Pl.Actionability({ kind = "ACCEPT", quest = 1 }) == "UNKNOWN", "a turn-in dialog is not evidence that it was offered")
+	ForeverCodexDB.items.rewards = nil
+	local _, plan = oppRun(ns)
+	local keep = #plan.onTheWay
+	Pl.ON_THE_WAY_MAX = 1
+	local _, plan2 = oppRun(ns)
+	Pl.ON_THE_WAY_MAX = 4
+	check(#plan2.onTheWay <= 1 and plan2.now.id == plan.now.id and (plan2.alsoDo and plan2.alsoDo.id) == (plan.alsoDo and plan.alsoDo.id), "lowering the cap changes only what is carried, never NOW or the ALSO DO")
+end

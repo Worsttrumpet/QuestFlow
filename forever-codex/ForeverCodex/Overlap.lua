@@ -24,6 +24,7 @@ local Ov = {}
 ns.Overlap = Ov
 
 Ov.MAX_QUESTS = 3
+Ov.MAX_ACTIONS = 4             -- on-the-way pickups listed (the planner's ALSO DO and the others that cleared the same bars)
 Ov.ALSO_ACTION_YD = 300        -- a pickup is only 'also' when it is a short walk from the player; a hand-in is never listed here (READY TO TURN IN has it)
 Ov.OVERLAP_YD = 300
 Ov.NOW_HANDIN_YD = 150         -- when NOW is a hand-in this close, nearby unfinished objectives still count as 'also complete this'
@@ -126,18 +127,29 @@ function Ov.List(plan, ctx)
 			end
 		end
 	end
-	-- the planner's own ALSO DO: a pickup or hand-in at the same stop, or a located objective, already checked for a small detour
-	local also = plan.alsoDo
-	if also and not (also.quest and seen[also.quest]) and not inDungeonCard(ctx, also.quest) then
-		if also.kind == "OBJECTIVE" and #unfinishedOf(also) > 0 then
-			out[#out + 1] = { kind = "objective", title = questName(also) .. suffix(ctx, also.quest), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest,
-				dist = ns.Presenter.Dist(distanceTo(also, ctx)), why = ns.Presenter.AlsoWhy(plan, also) }
-		elseif also.type ~= "FLIGHT" and also.kind ~= "TURN_IN" then
-			local d = distanceTo(also, ctx)
-			if d == nil or d <= Ov.ALSO_ACTION_YD then
-				local it = ns.Presenter.Describe(also, plan, ctx, "diamond")
-				out[#out + 1] = { kind = "action", title = it.title, where = Ov.ShortWhere(d), quest = also.quest, verb = also.kind,
-					dist = it.dist, npc = it.npc, why = ns.Presenter.AlsoWhy(plan, also) }
+	-- the planner's on-the-way opportunities (the ALSO DO first, then the other candidates that cleared the same bars): a pickup at the same stop or
+	-- near the route, or a located objective, each already priced against the route. With no list (older plan shape) the single ALSO DO is used.
+	local list = plan.onTheWay
+	if list == nil and plan.alsoDo then list = { { id = plan.alsoDo.id, action = plan.alsoDo } } end
+	local actions = 0
+	for _, o in ipairs(list or {}) do
+		local also = o.action
+		if also and not (also.quest and seen[also.quest]) and not inDungeonCard(ctx, also.quest) then
+			if also.kind == "OBJECTIVE" and #unfinishedOf(also) > 0 then
+				if also.quest then seen[also.quest] = true end
+				out[#out + 1] = { kind = "objective", title = questName(also) .. suffix(ctx, also.quest), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest,
+					dist = ns.Presenter.Dist(distanceTo(also, ctx)), why = ns.Presenter.AlsoWhy(plan, also) }
+			elseif also.type ~= "FLIGHT" and also.kind ~= "TURN_IN" and actions < Ov.MAX_ACTIONS then
+				local d = distanceTo(also, ctx)
+				-- an opportunity the planner priced (same stop, or a detour within its limit) is listed whatever its distance FROM YOU: what matters is the
+				-- extra travel against the route, and a hub 600 yd ahead is still "while you're there". The old distance gate stays for a plan with no list.
+				if d == nil or o.cost ~= nil or d <= Ov.ALSO_ACTION_YD then
+					actions = actions + 1
+					if also.quest then seen[also.quest] = true end
+					local it = ns.Presenter.Describe(also, plan, ctx, "diamond")
+					out[#out + 1] = { kind = "action", title = it.title, where = Ov.ShortWhere(d), quest = also.quest, verb = also.kind,
+						dist = it.dist, npc = it.npc, why = ns.Presenter.AlsoWhy(plan, also), cost = o.costClass }
+				end
 			end
 		end
 	end
