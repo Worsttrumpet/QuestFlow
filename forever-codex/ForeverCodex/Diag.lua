@@ -539,6 +539,15 @@ function D.PlaytestLines(snap, lines)
 	end
 	local sk = P.SkippedKeys()
 	add("skipped: " .. (#sk > 0 and table.concat(sk, " ") or "none"))
+	if ns.ItemProbe then
+		local okI, lines = pcall(ns.ItemProbe.ReportLines)
+		if okI then
+			add("")
+			for _, l in ipairs(lines) do add(l) end
+		else
+			add("ITEM PROBE: error: " .. tostring(lines))
+		end
+	end
 
 	add("")
 	add("--- FULL DIAGNOSTICS ---")
