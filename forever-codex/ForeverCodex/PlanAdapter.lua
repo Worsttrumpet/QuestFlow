@@ -109,7 +109,13 @@ end
 
 --- The whole new pipeline: Engine.Candidates -> Planner -> legacy-shaped plan. opts: { prevNowId }.
 function A.Compute(ctx, opts)
+	local clock = ns.State and ns.State.Clock
+	local pf = ns.State and ns.State.perf
+	local t0 = clock and clock()
 	local c = E.Candidates(ctx)
+	local t1 = clock and clock()
 	local plan = Pl.Compute(ctx, c, opts)
+	local t2 = clock and clock()
+	if pf and t0 and t1 and t2 then pf.stCand, pf.stPlan = t1 - t0, t2 - t1 end      -- stage timers for the PERFORMANCE report (see State.Recompute)
 	return A.ToLegacy(plan, ctx, c)
 end

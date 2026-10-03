@@ -103,7 +103,7 @@ do
 	local text
 	rawset(ns.UI, "ShowReport", function(t) text = t end)
 	H.slash("report")
-	check(text and text:find("unfinished: Rot Hide Graverobber slain 4/8", 1, true) and text:find("ALSO COMPLETE THIS:", 1, true) and text:find("why: Keeps you progressing", 1, true)
+	check(text and text:find("unfinished: Rot Hide Graverobber slain 4/8", 1, true) and text:find("ALSO COMPLETE: ", 1, true) and text:find("why: Keeps you progressing", 1, true)
 		and text:find("reason=", 1, true) and text:find("Recomputes:", 1, true) and text:find("PLAYTEST REPORT", 1, true), "/codex report keeps the 'why', the reason, the recompute count and now lists the unfinished objectives and the overlap")
 	check(#ns.errors == 0, "no errors")
 end
@@ -886,7 +886,7 @@ end
 
 -- ---------------------------------------------------------------- UX clarity pass (0.5.5): distances as numbers, who, why, action-aware labels
 section("clarity: distances read as numbers, hand-in NPCs only when named, reasons only when the planner gave one")
-local function clarityWorld(withTurnInData)
+local function clarityWorld(withTurnInData, withObjective)
 	local ns = boot({ char = { level = 9 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Fixture Valley" } })
 	local function at(dx, dy) return 0.5 + dx / 1000, 0.5 + (dy or 0) / 1000 end
 	local x1, y1 = at(300, 0)
@@ -902,11 +902,19 @@ local function clarityWorld(withTurnInData)
 		{ id = 5, name = "Pickup Beside", map = 9001, x = xp, y = yp, req = 1, level = 9, giverName = "Aamelia Windfield" },
 		{ id = 6, name = "Pickup Onward", map = 9001, x = xq, y = yq, req = 1, level = 9, giverName = "Nazgrel" },
 	}
+	if withObjective then
+		local xo, yo = at(330, 10)
+		recs[#recs + 1] = { id = 7, name = "Near Objective", map = 9001, x = xo, y = yo, req = 1, level = 9, giverName = "Obj Giver", objCoords = { { map = 9001, x = xo, y = yo } } }
+	end
 	H.attPack(ns, recs, ZONES)
 	local W = H.world()
 	W.completed = {}
 	W.log = { { questID = 1, title = "Work Quest", complete = false }, { questID = 2, title = "Far Hand-in", complete = true }, { questID = 3, title = "Giver Only", complete = true } }
 	W.objectives = { [1] = { { text = "Thing", type = "monster", finished = false, numFulfilled = 1, numRequired = 5 } } }
+	if withObjective then
+		W.log[#W.log + 1] = { questID = 7, title = "Near Objective", complete = false }
+		W.objectives[7] = { { text = "Other thing", type = "monster", finished = false, numFulfilled = 0, numRequired = 4 } }
+	end
 	ns.Prefs.FinishSetup()
 	ns.State.Recompute()
 	ns.UI.Open("codex")
@@ -947,4 +955,50 @@ do
 	check(card.now ~= nil, "without any turn-in data the card still builds")
 	for _, r in ipairs(card.ready) do check(r.npc == nil, "no hand-in NPC is invented when none is named") end
 	check(#ns.errors == 0, "no errors")
+end
+
+section("clarity: the ALSO heading is decided from the WHOLE carried set (real-client bug: a mixed set was headed ALSO COMPLETE THIS)")
+do
+	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	local L = ns.Presenter.AlsoLabel
+	local obj, pick = { kind = "objective" }, { kind = "action", verb = "ACCEPT" }
+	check(L({ obj, obj }) == "ALSO COMPLETE" and L({ obj }) == "ALSO COMPLETE", "all objective rows -> ALSO COMPLETE")
+	check(L({ pick, pick }) == "ALSO PICK UP" and L({ pick }) == "ALSO PICK UP", "all pickup rows -> ALSO PICK UP")
+	check(L({ obj, pick, pick, pick }) == "ALSO DO" and L({ pick, obj }) == "ALSO DO", "a mix of objective and pickup rows -> ALSO DO, whichever row comes first")
+	check(L({}) == nil and L(nil) == nil, "an empty set has no heading")
+	-- the real-client shape: one objective first, then three pickups
+	local ns2, W, c = clarityWorld(false, true)
+	local card = ns2.Presenter.Card(ns2.State.plan, ns2.State.ctx)
+	local kinds = {}
+	for _, it in ipairs(card.also) do kinds[#kinds + 1] = it.kind end
+	check(#card.also >= 2 and table.concat(kinds, ","):find("objective", 1, true) and table.concat(kinds, ","):find("action", 1, true), "the tracker's set is mixed (" .. table.concat(kinds, ",") .. ")")
+	check(c.alsoLabel.__text == "ALSO DO", "the tracker draws ALSO DO for the mixed set (drew: " .. tostring(c.alsoLabel.__text) .. ")")
+	local text
+	rawset(ns2.UI, "ShowReport", function(t) text = t end)
+	H.slash("report")
+	check(text and text:find("ALSO DO: ", 1, true) and not text:find("ALSO COMPLETE THIS", 1, true), "/codex report uses the same heading for every row (it used to print ALSO COMPLETE THIS for pickups too)")
+	check(text:find("--- WHAT THE WINDOW SHOWS", 1, true) ~= nil and text:find("worst was recompute", 1, true) == nil or text:find("PERFORMANCE", 1, true) ~= nil, "the report still has its sections")
+	-- an empty set hides the card
+	local ns3, W3, c3 = clarityWorld(false)
+	ns3.Overlap.List = function() return {} end
+	ns3.State.Recompute()
+	check(not c3.alsoBox.__shown, "no rows: the card is hidden as before")
+end
+
+section("performance counters: the worst recompute is attributed to its stages")
+do
+	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	H.attPack(ns, { { id = 1, name = "A", map = 9001, x = 0.52, y = 0.5, req = 1, giverName = "G" } }, ZONES)
+	H.world().log, H.world().objectives, H.world().completed = {}, {}, {}
+	ns.Prefs.FinishSetup()
+	local t = 0
+	_G.debugprofilestop = function() t = t + 1 return t end
+	ns.State.Recompute("direct")
+	local pf = ns.State.perf
+	check(pf.worstN == pf.count and pf.wCtx and pf.wCand and pf.wPlan, "the worst recompute keeps its context / scan / planner times")
+	local lines = table.concat(ns.Diag.PerformanceLines(), "\n")
+	check(lines:find("worst was recompute #", 1, true) and lines:find("quest scan (Engine.Candidates)", 1, true) and lines:find("QuestieDB records built so far", 1, true), "the PERFORMANCE section names the stages and the one-time QuestieDB build")
+	_G.debugprofilestop = nil
+	ns.State.Recompute()
+	check(#ns.errors == 0, "no errors without a clock")
 end

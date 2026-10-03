@@ -188,12 +188,10 @@ local function drawAlso(c, items)
 	if #items == 0 then return nil end
 	local inner = FULL - box.insetX - PAD
 	local st = W.Stack(box, inner)
-	-- named for what the rows are: objectives to finish, quests to pick up, or a mix
-	local nObj, nAccept = 0, 0
-	for _, it in ipairs(items) do
-		if it.kind == "objective" then nObj = nObj + 1 elseif it.verb == "ACCEPT" then nAccept = nAccept + 1 end
-	end
-	c.alsoLabel:SetText((nObj == #items and "ALSO COMPLETE") or (nAccept == #items and "ALSO PICK UP") or "ALSO DO")
+	-- named for what the rows are, decided from the whole set (Presenter.AlsoLabel)
+	local nObj = 0
+	for _, it in ipairs(items) do if it.kind == "objective" then nObj = nObj + 1 end end
+	c.alsoLabel:SetText(ns.Presenter.AlsoLabel(items) or "")
 	st:Skip(16)
 	for _, sub in ipairs(c.alsoSubs) do sub:SetText(""); sub:Hide() end
 	local subsUsed = 0

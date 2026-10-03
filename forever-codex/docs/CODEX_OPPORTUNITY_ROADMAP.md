@@ -20,3 +20,8 @@ Principle: one planner. Opportunities are route-relative context around the core
 * **F activity, G integrations, H items, I Hardcore.** Telemetry already holds movement / combat / objective diffs; spellcast, gather, trainer and taxi events are unprobed. The `actionability`, `evidence`, `relation` and `reason` fields leave room for a future `risk` field without changing the shape.
 * "NEAR_ROUTE" is still not derived (would need a distance threshold); the cost class carries it. Backtracking shows only as a larger cost.
 * Real-client validation needed: that predicted extra seconds match walking, that the extra rows do not crowd the tracker, and the hub-distance behaviour on a real character (Aamelia case).
+
+## 0.6.1: first real-client validation of 0.6.0
+* Confirmed: route-relative pricing (Crab Season 279 yd away = +2 s; The Turncoat 752 yd away = +9 s; distance from you is not the gate). A two-action stop priced as one trip is net +14 while each member is TOO_FAR: evidence for Phase C (not started).
+* Actionability stays UNKNOWN for database / observed-pack pickups. Unchanged.
+* Fixed: the ALSO heading is decided from the whole carried set by one function (`Presenter.AlsoLabel`): all objectives = ALSO COMPLETE, all pickups = ALSO PICK UP, a mix = ALSO DO. The tracker code already classified the whole set; the text seen in the report ("ALSO COMPLETE THIS: ..." on every row, pickups included) was a hardcoded prefix in the report's WHAT THE WINDOW SHOWS block. Both now use the same function. The tracker heading itself was not captured in the report; it is covered by tests, not by a real-client screenshot.

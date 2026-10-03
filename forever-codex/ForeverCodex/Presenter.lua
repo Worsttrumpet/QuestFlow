@@ -77,6 +77,19 @@ function Pr.Where(a, ctx)
 	return string.format("About %d yards away", math.floor(d / 50 + 0.5) * 50)
 end
 
+--- The heading for the carried also-rows, decided from the WHOLE set (never the first row): all objectives -> "ALSO COMPLETE", all pickups ->
+-- "ALSO PICK UP", anything else (a mix) -> "ALSO DO". Used by the tracker and by /codex report so they cannot disagree. nil for an empty set.
+function Pr.AlsoLabel(items)
+	if not items or #items == 0 then return nil end
+	local nObj, nAccept = 0, 0
+	for _, it in ipairs(items) do
+		if it.kind == "objective" then nObj = nObj + 1 elseif it.verb == "ACCEPT" then nAccept = nAccept + 1 end
+	end
+	if nObj == #items then return "ALSO COMPLETE" end
+	if nAccept == #items then return "ALSO PICK UP" end
+	return "ALSO DO"
+end
+
 --- The distance as the tracker prints it: "Here" (under 30 yd), "90 yd", "1,800 yd", "In another area"; nil when it cannot be said.
 function Pr.Dist(d)
 	if type(d) ~= "number" then return nil end

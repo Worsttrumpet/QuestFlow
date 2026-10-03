@@ -334,6 +334,14 @@ function D.PerformanceLines()
 		timed and string.format("%.2f ms", pf.last) or "n/a", timed and string.format("%.2f ms", pf.worst) or "n/a",
 		pf.worstReason and (" (" .. pf.worstReason .. ")") or "", timed and string.format("%.1f ms", pf.total) or "n/a",
 		(timed and pf.count > 0) and string.format("%.2f ms", pf.total / pf.count) or "n/a")
+	if timed and pf.worstN then
+		local function ms(v) return v and string.format("%.1f ms", v) or "n/a" end
+		local rest = (pf.worst and pf.wCtx and pf.wCand and pf.wPlan) and (pf.worst - pf.wCtx - pf.wCand - pf.wPlan) or nil
+		L[#L + 1] = string.format("  worst was recompute #%d (%s): context %s | quest scan (Engine.Candidates) %s | planner (incl. opportunity pricing) %s | the rest (observers, adapter, UI refresh) %s | first recompute %s",
+			pf.worstN, tostring(pf.worstReason), ms(pf.wCtx), ms(pf.wCand), ms(pf.wPlan), ms(rest), ms(pf.firstMs))
+		local qb = ns.QuestieBridge and ns.QuestieBridge.Stats and ns.QuestieBridge.Stats()
+		if qb then L[#L + 1] = string.format("  QuestieDB records built so far: %s in %s (a one-time cost per session: each record is read and cached the first time it is needed)", tostring(qb.built), qb.ms and string.format("%.0f ms", qb.ms) or "n/a") end
+	end
 	L[#L + 1] = "  recomputes by cause: " .. byList(pf.recomputeBy) .. "   (dirty = after an event or choice; periodic = the 3 s refresh while a Codex window is open; direct = a command or button; report = this report itself)"
 	L[#L + 1] = "  events that marked the plan stale: " .. byList(pf.dirtyBy)
 	local now = type(_G.GetTime) == "function" and _G.GetTime() or nil
@@ -412,14 +420,15 @@ function D.PlaytestLines(snap, lines)
 		for _, r in ipairs(card.ready or {}) do
 			add(string.format("READY TO TURN IN: %s (Q:%s) | %s | %s", tostring(r.title), tostring(r.quest), tostring(r.who or "turn-in NPC unknown"), tostring(r.where or "distance unknown")))
 		end
-		if #(card.also or {}) == 0 then add("ALSO COMPLETE THIS: nothing") end
+		local alsoLabel = ns.Presenter.AlsoLabel(card.also or {})
+		if #(card.also or {}) == 0 then add("ALSO COMPLETE: nothing") end
 		for _, it in ipairs(card.also or {}) do
 			if it.kind == "objective" then
 				local parts = {}
 				for _, o in ipairs(it.objectives) do parts[#parts + 1] = string.format("%s %s/%s", tostring(o.text), tostring(o.have), tostring(o.need)) end
-				add(string.format("ALSO COMPLETE THIS: %s (Q:%s) | %s", tostring(it.title), tostring(it.quest), table.concat(parts, "; ")))
+				add(string.format("%s: %s (Q:%s) | %s", alsoLabel, tostring(it.title), tostring(it.quest), table.concat(parts, "; ")))
 			else
-				add(string.format("ALSO COMPLETE THIS: %s | %s", tostring(it.title), tostring(it.where)))
+				add(string.format("%s: %s | %s", alsoLabel, tostring(it.title), tostring(it.dist or it.where)))
 			end
 		end
 		show("planner ALSO DO", card.alsoDo)

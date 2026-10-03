@@ -38,6 +38,7 @@ local function addonMemoryKb()
 	return ok and type(v) == "number" and v or nil
 end
 S.AddonMemoryKb = addonMemoryKb
+S.Clock = clockMs            -- (PlanAdapter times its two stages with the same clock)
 perf.startedAt = type(_G.GetTime) == "function" and _G.GetTime() or nil
 
 --- Marks the plan stale. `why` (optional, an event name) only feeds the counters; callers that pass nothing count as "other".
@@ -64,7 +65,12 @@ function S.Recompute(reason)
 	if t0 and t1 then
 		local ms = t1 - t0
 		perf.last, perf.total = ms, perf.total + ms
-		if ms > perf.worst then perf.worst, perf.worstReason = ms, reason end
+		if ms > perf.worst then
+			perf.worst, perf.worstReason, perf.worstN = ms, reason, perf.count
+			-- where the worst one went (scalars copied from the stage timers below: nothing allocated, nothing measured beyond four clock reads per recompute)
+			perf.wCtx, perf.wCand, perf.wPlan = perf.stCtx, perf.stCand, perf.stPlan
+		end
+		if perf.count == 1 then perf.firstMs = ms end
 	end
 	if perf.memFirstKb == nil and perf.count == 1 then perf.memFirstKb = addonMemoryKb() or false end   -- once, after the first (cold) build
 	return plan
@@ -73,7 +79,10 @@ end
 function S.RecomputeInner()
 	sinceCompute = 0
 	dirty = false
+	local tCtx = clockMs()
 	local okC, ctx = pcall(ns.Context.Build)
+	local tCtx2 = clockMs()
+	perf.stCtx, perf.stCand, perf.stPlan = (tCtx and tCtx2) and (tCtx2 - tCtx) or nil, nil, nil
 	if not okC then
 		ns.RecordError("context", ctx)
 		return S.plan

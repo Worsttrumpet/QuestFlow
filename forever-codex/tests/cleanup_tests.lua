@@ -245,7 +245,7 @@ do
 	local clock = 0
 	_G.debugprofilestop = function() clock = clock + 5 return clock end
 	ns.State.Recompute("dirty")
-	check(pf.last == 5 and pf.worst >= 5 and pf.total >= 5, "last / worst / total use the client's clock (stub clock: 5 per call)")
+	check(pf.last >= 5 and pf.worst >= pf.last and pf.total >= pf.last, "last / worst / total use the client clock (stub clock: 5 per read)")
 	local planA = ns.State.plan
 	local seqA = {}
 	for _, a in ipairs(planA.sequence or {}) do seqA[#seqA + 1] = a.id end
