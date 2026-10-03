@@ -192,3 +192,91 @@ do
 	check(#ns.errors == 0, "no errors")
 	f.uninstall()
 end
+
+-- ---------------------------------------------------------------- 0.5.3: performance cleanup (quest scan reads the skipped table once) and counters
+section("performance: the quest scan reads the skipped table once and returns exactly what it did before")
+do
+	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	local recs = {}
+	for i = 1, 300 do recs[#recs + 1] = Q(i, "Quest " .. i, (i % 20) * 10, math.floor(i / 20) * 10) end
+	H.attPack(ns, recs, nil)
+	local W = H.world()
+	W.log, W.objectives, W.completed = { { questID = 5, title = "Quest 5", complete = false }, { questID = 88888, title = "Unknown held", complete = false } }, {}, {}
+	ns.Prefs.FinishSetup()
+	ns.Prefs.Skip("Q:7")
+	ns.Prefs.Skip("QT:5")
+	ns.Prefs.Skip("QT:88888")
+	ns.Prefs.Add(99999)
+	ns.Prefs.Skip("Q:99999")
+	local function ids(list) local t = {} for _, a in ipairs(list) do t[#t + 1] = a.id end table.sort(t) return table.concat(t, ",") end
+	local ctx = ns.Context.Build()
+	local calls = 0
+	local realChar = ns.Prefs.Char
+	ns.Prefs.Char = function(...) calls = calls + 1 return realChar(...) end
+	local env = { strategy = ns.Registry.Strategy("efficient"), stats = { filtered = {}, byType = {}, providers = {} }, warnings = {} }
+	local out = ns.QuestProvider.Generate(ctx, env)
+	ns.Prefs.Char = realChar
+	check(calls < 10, "Q.Generate no longer rebuilds the preferences once per quest (P.Char calls: " .. calls .. " for 300 quests)")
+	local got = ids(out)
+	check(not got:find("Q:7,", 1, true) and not got:find("QT:5", 1, true) and not got:find("QT:88888", 1, true) and not got:find("99999", 1, true), "skipped quests (Q:, QT:, unknown held, added-unknown) are still excluded")
+	check(env.stats.filtered.skipped == 2, "the skipped counter is unchanged (Q:7 and the held quest QT:5; unknown held / added quests are dropped without counting, as before): " .. tostring(env.stats.filtered.skipped))
+	-- the same answer through the legacy per-key lookups (P.IsSkipped), id by id
+	local expectOk = true
+	for _, a in ipairs(out) do
+		local qid = tonumber(tostring(a.id):match("(%d+)$"))
+		if qid and (ns.Prefs.IsSkipped("Q:" .. qid) and not ctx.log[qid]) then expectOk = false end
+	end
+	check(expectOk, "no candidate is one that P.IsSkipped would have vetoed")
+	ns.Prefs.Unskip("Q:7")
+	local after = ids(ns.QuestProvider.Generate(ctx, { strategy = env.strategy, stats = { filtered = {}, byType = {}, providers = {} }, warnings = {} }))
+	check(after ~= got, "un-skipping brings the quest back")
+end
+
+section("performance counters: recomputes, causes, events, memory, and no effect on the plan")
+do
+	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	H.attPack(ns, { Q(1, "A pickup", 20, 0), Q(2, "Another", 60, 30) }, nil)
+	H.world().log, H.world().objectives, H.world().completed = {}, {}, {}
+	ns.Prefs.FinishSetup()
+	local pf = ns.State.perf
+	local base = pf.count
+	ns.State.Recompute()
+	check(pf.count == base + 1 and (pf.recomputeBy.direct or 0) >= 1, "a recompute is counted with the cause 'direct'")
+	local clock = 0
+	_G.debugprofilestop = function() clock = clock + 5 return clock end
+	ns.State.Recompute("dirty")
+	check(pf.last == 5 and pf.worst >= 5 and pf.total >= 5, "last / worst / total use the client's clock (stub clock: 5 per call)")
+	local planA = ns.State.plan
+	local seqA = {}
+	for _, a in ipairs(planA.sequence or {}) do seqA[#seqA + 1] = a.id end
+	_G.debugprofilestop = nil
+	ns.State.Recompute()
+	local seqB = {}
+	for _, a in ipairs(ns.State.plan.sequence or {}) do seqB[#seqB + 1] = a.id end
+	check(table.concat(seqA, ",") == table.concat(seqB, ",") and (planA.now and planA.now.id) == (ns.State.plan.now and ns.State.plan.now.id), "timing on or off: the plan is identical")
+	check(type(pf.last) == "number", "without a clock the previous timing is kept and nothing fails")
+	local before = pf.dirtyBy.QUEST_LOG_UPDATE or 0
+	local boot_ = ns._selftest.boot
+	boot_.onEvent(nil, "QUEST_LOG_UPDATE")
+	boot_.onEvent(nil, "ZONE_CHANGED")
+	boot_.onEvent(nil, "UNIT_QUEST_LOG_CHANGED", "player")
+	boot_.onEvent(nil, "UNIT_QUEST_LOG_CHANGED", "pet")
+	check((pf.dirtyBy.QUEST_LOG_UPDATE or 0) == before + 1 and pf.dirtyBy.ZONE_CHANGED == 1 and pf.dirtyBy.UNIT_QUEST_LOG_CHANGED == 1, "events that mark the plan stale are counted by name (a pet's log change is ignored, as before)")
+	local n = pf.count
+	ns.State.Tick(0.1)
+	check(pf.count == n, "a dirty plan still waits for the 0.4 s delay (unchanged)")
+	ns.State.Tick(0.5)
+	check(pf.count == n + 1 and pf.recomputeBy.dirty >= 1, "after the delay one 'dirty' recompute runs")
+	local m = pf.count
+	ns.State.Tick(0.5)
+	check(pf.count == m, "an idle tick does not recompute with the window closed")
+	_G.GetAddOnMemoryUsage = function() return 2048 end
+	local text = table.concat(ns.Diag.PerformanceLines(), "\n")
+	check(text:find("recomputes:", 1, true) and text:find("recomputes by cause:", 1, true) and text:find("events that marked the plan stale:", 1, true) and text:find("Codex memory: 2.0 MB now", 1, true), "the PERFORMANCE lines show counts, causes, events and memory")
+	_G.GetAddOnMemoryUsage = nil
+	text = table.concat(ns.Diag.PerformanceLines(), "\n")
+	check(text:find("unavailable", 1, true) and text:find("absent", 1, true), "memory is reported as unavailable when the client API is absent")
+	local rep = reportOf(ns)
+	check(rep:find("PERFORMANCE (counters only", 1, true) ~= nil, "/codex report has a PERFORMANCE section")
+	check(#ns.errors == 0, "no errors")
+end

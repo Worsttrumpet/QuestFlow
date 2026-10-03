@@ -18,8 +18,33 @@ local sinceCompute = 0
 local DIRTY_DELAY = 0.4      -- seconds before a dirty state recomputes
 local PERIODIC = 3           -- seconds between refreshes while the window is open
 
-function S.MarkDirty()
+-- Lightweight performance counters (no timer, no polling: they are updated only where work already happens). Read by /codex report.
+local perf = { dirtyBy = {}, recomputeBy = {}, count = 0, total = 0, worst = 0, last = nil, worstReason = nil }
+S.perf = perf
+local function clockMs()
+	local f = _G.debugprofilestop
+	if type(f) == "function" then
+		local ok, v = pcall(f)
+		if ok and type(v) == "number" then return v end
+	end
+	return nil
+end
+local function addonMemoryKb()
+	local f = _G.GetAddOnMemoryUsage
+	if type(f) ~= "function" then return nil end
+	local u = _G.UpdateAddOnMemoryUsage
+	if type(u) == "function" then pcall(u) end
+	local ok, v = pcall(f, addonName)
+	return ok and type(v) == "number" and v or nil
+end
+S.AddonMemoryKb = addonMemoryKb
+perf.startedAt = type(_G.GetTime) == "function" and _G.GetTime() or nil
+
+--- Marks the plan stale. `why` (optional, an event name) only feeds the counters; callers that pass nothing count as "other".
+function S.MarkDirty(why)
 	dirty = true
+	local k = type(why) == "string" and why or "other"
+	perf.dirtyBy[k] = (perf.dirtyBy[k] or 0) + 1
 end
 
 --- Switches between the Planner and the legacy engine path (kept for comparison and as a fallback). Session only.
@@ -29,7 +54,23 @@ function S.SetPlanner(on)
 end
 
 --- Rebuilds the context and the plan now. Never raises; a failure leaves the previous plan in place.
-function S.Recompute()
+function S.Recompute(reason)
+	local t0 = clockMs()
+	local plan = S.RecomputeInner()
+	local t1 = clockMs()
+	reason = type(reason) == "string" and reason or "direct"
+	perf.count = perf.count + 1
+	perf.recomputeBy[reason] = (perf.recomputeBy[reason] or 0) + 1
+	if t0 and t1 then
+		local ms = t1 - t0
+		perf.last, perf.total = ms, perf.total + ms
+		if ms > perf.worst then perf.worst, perf.worstReason = ms, reason end
+	end
+	if perf.memFirstKb == nil and perf.count == 1 then perf.memFirstKb = addonMemoryKb() or false end   -- once, after the first (cold) build
+	return plan
+end
+
+function S.RecomputeInner()
 	sinceCompute = 0
 	dirty = false
 	local okC, ctx = pcall(ns.Context.Build)
@@ -97,8 +138,8 @@ end
 function S.Tick(elapsed)
 	sinceCompute = sinceCompute + (elapsed or 0)
 	if dirty and sinceCompute >= DIRTY_DELAY then
-		S.Recompute()
+		S.Recompute("dirty")
 	elseif ns.UI and ns.UI.IsShown and ns.UI.IsShown() and sinceCompute >= PERIODIC then
-		S.Recompute()
+		S.Recompute("periodic")
 	end
 end

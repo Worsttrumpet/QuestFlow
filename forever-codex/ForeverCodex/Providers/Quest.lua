@@ -208,7 +208,7 @@ local function attach(a, id, view, ctx, t)
 	local st = K.QuestState(id, view, ctx)
 	local entry = ctx.log[id]
 	return K.Attach(a, {
-		ref = { kind = "quest", id = id }, state = st.state, stateWhy = st.why, skip = P.QuestSkipState(id),
+		ref = { kind = "quest", id = id }, state = st.state, stateWhy = st.why, skip = K.SkipState(ctx.prefs.skipped, id),
 		targets = questTargets(a, view, t), requirements = st.requirements,
 		completion = { watch = "quest", id = id, reaches = REACHES[a.kind] },
 		objectiveState = entry and K.ObjectiveState(entry.objectives) or nil,
@@ -318,6 +318,8 @@ function Q.Generate(ctx, env)
 	local stats = env.stats
 	local strategy = env.strategy
 	local added = {}
+	-- the player's veto list, read ONCE: P.IsSkipped would rebuild the preferences table (P.Char) for every one of thousands of ids
+	local skipped = ctx.prefs.skipped or {}
 	for _, id in ipairs(P.AddedList()) do added[id] = true end
 
 	for _, id in ipairs(R.QuestIds()) do
@@ -329,7 +331,7 @@ function Q.Generate(ctx, env)
 			-- by the player is still handled below as one no pack knows.)
 			bump(stats, "unreadable")
 		elseif entry then
-			if P.IsSkipped("QT:" .. id) then
+			if skipped["QT:" .. id] == true then
 				bump(stats, "skipped")
 			else
 				out[#out + 1] = progressAction(view, entry, pinned, ctx)
@@ -340,7 +342,7 @@ function Q.Generate(ctx, env)
 			else
 				bump(stats, "completed")
 			end
-		elseif P.IsSkipped("Q:" .. id) then
+		elseif skipped["Q:" .. id] == true then
 			bump(stats, "skipped")
 		else
 			local ok, why = Q.Eligibility(view, ctx, strategy)
@@ -356,12 +358,12 @@ function Q.Generate(ctx, env)
 
 	-- Quests the player holds or added that no pack knows.
 	for id, entry in pairs(ctx.log) do
-		if not R.Quest(id) and not P.IsSkipped("QT:" .. id) then
+		if not R.Quest(id) and skipped["QT:" .. id] ~= true then
 			out[#out + 1] = unknownLogAction(entry, ctx)
 		end
 	end
 	for id in pairs(added) do
-		if not R.Quest(id) and not ctx.log[id] and not P.IsSkipped("Q:" .. id) then
+		if not R.Quest(id) and not ctx.log[id] and skipped["Q:" .. id] ~= true then
 			out[#out + 1] = addedUnknown(id, ctx)
 		end
 	end

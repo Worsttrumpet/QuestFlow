@@ -245,6 +245,40 @@ function D.Lines(s)
 	return L
 end
 
+--- PERFORMANCE: counters kept by State/Boot (no timers). Times are the client's debugprofilestop milliseconds around State.Recompute.
+function D.PerformanceLines()
+	local S, pf = ns.State, ns.State.perf
+	local L = {}
+	local function byList(t)
+		local keys = {}
+		for k in pairs(t) do keys[#keys + 1] = k end
+		table.sort(keys, function(a, b) if t[a] ~= t[b] then return t[a] > t[b] end return a < b end)
+		local out = {}
+		for _, k in ipairs(keys) do out[#out + 1] = k .. "=" .. t[k] end
+		return #out > 0 and table.concat(out, " ") or "none"
+	end
+	local timed = pf.last ~= nil
+	L[#L + 1] = "PERFORMANCE (counters only; no timers or polling added; times are real client milliseconds, not stub)"
+	L[#L + 1] = string.format("  recomputes: %d | last %s | worst %s%s | total %s | average %s", pf.count,
+		timed and string.format("%.2f ms", pf.last) or "n/a", timed and string.format("%.2f ms", pf.worst) or "n/a",
+		pf.worstReason and (" (" .. pf.worstReason .. ")") or "", timed and string.format("%.1f ms", pf.total) or "n/a",
+		(timed and pf.count > 0) and string.format("%.2f ms", pf.total / pf.count) or "n/a")
+	L[#L + 1] = "  recomputes by cause: " .. byList(pf.recomputeBy) .. "   (dirty = after an event or choice; periodic = the 3 s refresh while a Codex window is open; direct = a command or button; report = this report itself)"
+	L[#L + 1] = "  events that marked the plan stale: " .. byList(pf.dirtyBy)
+	local now = type(_G.GetTime) == "function" and _G.GetTime() or nil
+	if now and pf.startedAt then
+		local secs = now - pf.startedAt
+		local per = pf.recomputeBy.periodic or 0
+		L[#L + 1] = string.format("  since load: %.0f s | periodic (window-open) recomputes %d (%.1f per minute; the 3 s rule gives at most 20 per minute) | all recomputes %.1f per minute",
+			secs, per, secs > 0 and per * 60 / secs or 0, secs > 0 and pf.count * 60 / secs or 0)
+	end
+	local cur = S.AddonMemoryKb and S.AddonMemoryKb()
+	L[#L + 1] = string.format("  Codex memory: %s now | %s after the first recompute (GetAddOnMemoryUsage: %s; garbage included until the next collection)",
+		cur and string.format("%.1f MB", cur / 1024) or "unavailable", type(pf.memFirstKb) == "number" and string.format("%.1f MB", pf.memFirstKb / 1024) or "unavailable",
+		type(_G.GetAddOnMemoryUsage) == "function" and "present" or "absent")
+	return L
+end
+
 local MAX_STORED = 5
 
 --- Stores a snapshot in ForeverCodexDB.diag (kept to the last 5).
@@ -256,7 +290,7 @@ end
 
 --- Takes a fresh snapshot, prints it, stores it. Returns the snapshot and its lines.
 function D.Print()
-	if ns.State then ns.State.Recompute() end
+	if ns.State then ns.State.Recompute("report") end
 	local snap = D.Snapshot()
 	local lines = D.Lines(snap)
 	for _, l in ipairs(lines) do ns.Say(l) end
@@ -537,6 +571,10 @@ function D.PlaytestLines(snap, lines)
 		end
 		add(string.format("quest tags (game, unverified on Forever): API %s | %d of %d logged quests came back tagged | %d dungeon-style | area-name API %s", api, tagged, #ids, dungeon, (type(C_Map) == "table" and type(C_Map.GetAreaInfo) == "function") and "present" or "absent"))
 	end
+	if ns.State and ns.State.perf then
+		local okP, plines = pcall(D.PerformanceLines)
+		if okP then for _, l in ipairs(plines) do add(l) end else add("PERFORMANCE: error: " .. tostring(plines)) end
+	end
 	local sk = P.SkippedKeys()
 	add("skipped: " .. (#sk > 0 and table.concat(sk, " ") or "none"))
 	if ns.ItemProbe then
@@ -592,7 +630,7 @@ end
 
 --- Takes a fresh snapshot and shows the playtest report in a copyable window (falls back to chat when the window cannot be built).
 function D.Report()
-	if ns.State then ns.State.Recompute() end
+	if ns.State then ns.State.Recompute("report") end
 	local snap = D.Snapshot()
 	local lines = D.Lines(snap)
 	D.Store(snap)

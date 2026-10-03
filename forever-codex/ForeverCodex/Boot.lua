@@ -70,20 +70,20 @@ local function onEvent(_, event, arg1, arg2, arg3, arg4)
 		elseif event == "PLAYER_LOGIN" then
 			onLogin()
 		elseif event == "UNIT_QUEST_LOG_CHANGED" then
-			if arg1 == "player" then ns.State.MarkDirty() end
+			if arg1 == "player" then ns.State.MarkDirty(event) end
 		elseif event == "QUEST_TURNED_IN" then
 			-- (questID, xp, money): the proven turn-in event feeds the Journey and the party announcement
 			ns.Journey.OnQuestTurnedIn(arg1, arg2)
 			ns.Party.OnTurnedIn(arg1, ns.State.ctx)
-			ns.State.MarkDirty()
+			ns.State.MarkDirty(event)
 		elseif event == "USER_WAYPOINT_UPDATED" then
 			ns.Navigation.OnWaypointEvent()
-			ns.State.MarkDirty()
+			ns.State.MarkDirty(event)
 		elseif event == "CHAT_MSG_ADDON" then
 			ns.Party.OnAddonMessage(arg1, arg2, arg3, arg4)
 			if ns.UI and ns.UI.Refresh then ns.UI.Refresh() end
 		else
-			ns.State.MarkDirty()
+			ns.State.MarkDirty(event)
 		end
 	end)
 	if not ok then ns.RecordError("event " .. tostring(event), err) end
