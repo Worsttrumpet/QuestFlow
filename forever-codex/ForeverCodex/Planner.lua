@@ -220,6 +220,8 @@ local function unlocksOf(questId)
 end
 
 --- Points credited to turning in `a` because it makes another quest available right there (nil when it does not).
+Pl.Unlocks = unlocksOf          -- read-only: the quests whose prerequisites include this one (the index chainValue already builds)
+
 local function chainValue(a, pos, ctx, par)
 	if a.kind ~= "TURN_IN" or not a.ref or a.ref.kind ~= "quest" or not pos then return nil end
 	local life = par.value.ACCEPT + par.value.OBJECTIVE + par.value.TURN_IN

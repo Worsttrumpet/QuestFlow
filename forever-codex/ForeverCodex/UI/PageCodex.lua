@@ -1,13 +1,15 @@
 -- UI page "Codex": what am I doing now, what is left of it, and what else can I knock out while I'm here?
 --   NOW                 the one thing to do, with EVERY unfinished objective of that quest (counts and a thin bar each)
---   ALSO COMPLETE THIS  other unfinished objectives that fit with NOW (and the planner's own "also do" line); hidden when there is none
---   READY TO TURN IN    finished quests waiting for the right moment (listed, never forced into NOW); hidden when there are none
+--   ALSO COMPLETE / ALSO PICK UP / ALSO DO   other unfinished objectives that fit with NOW (and the planner's own "also do" line), named for what they are
+--                       (distance, who, and a short reason when the planner gave one); hidden when there is none
+--   READY TO TURN IN    finished quests waiting for the right moment (listed, never forced into NOW) with distance, the hand-in NPC when the data names one,
+--                       and how many follow-up quests it opens when the data supports it; hidden when there are none
 --   NEW FOR YOU         a temporary card for a level you just reached (secondary, never in front of NOW)
 --   Party               what party members finished, only when there is something to say
 -- Before the first-time setup is finished this page shows the setup panel instead (UI/PageSetup.lua).
 --
--- This is a small companion panel (UI.COMPACT_WIDTH wide), not a quest database: no explanations of WHY (that stays in /codex report),
--- no sentences where a number says it. This file only DRAWS: every word and count comes from Presenter (which asks Overlap for the
+-- This is a small companion panel (UI.COMPACT_WIDTH wide), not a quest database: only short reasons the planner already gave (the full
+-- explanation stays in /codex report), no sentences where a number says it. This file only DRAWS: every word and count comes from Presenter (which asks Overlap for the
 -- ALSO COMPLETE THIS rows); nothing here reads the Planner or the data. Progress bars are textures (the UI is ASCII only: block
 -- glyphs would render as boxes) and show only counts the quest log really reported.
 
@@ -59,6 +61,7 @@ local function build(page)
 	c.nowInfo = W.Line(c.nowBox, 11, W.SOFT_GREEN, "LEFT")
 	c.nowDivider = W.Divider(c.nowBox)
 	c.thenFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")
+	c.thenWhereFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")      -- "496 yd - Nazgrel" under the THEN line
 
 	-- ALSO COMPLETE THIS: supporting, cooler and smaller; present only when there is something to say
 	c.alsoBox = W.Card(page, FULL, 40, W.STYLE_NEAR)
@@ -67,15 +70,19 @@ local function build(page)
 	c.alsoHeads, c.alsoRows = {}, {}
 	for i = 1, 4 do c.alsoHeads[i] = W.Line(c.alsoBox, 12, W.TEXT, "LEFT") end
 	for i = 1, MAX_ROWS do c.alsoRows[i] = W.ProgressRow(c.alsoBox) end
+	c.alsoSubs = {}
+	for i = 1, 4 do c.alsoSubs[i] = W.Line(c.alsoBox, 11, W.DIM, "LEFT") end     -- "Here - Aamelia Windfield - same stop" under a pickup
+	c.alsoNote = W.Line(c.alsoBox, 11, W.DIM, "LEFT")                            -- one shared reason for the objectives above it
 	c.alsoMore = W.Line(c.alsoBox, 11, W.DIM, "LEFT")
 
 	-- READY TO TURN IN: finished quests, a quiet green card; present only when there are some
 	c.readyBox = W.Card(page, FULL, 40, W.STYLE_READY)
 	c.readyLabel = W.Label(c.readyBox, "READY TO TURN IN", W.STYLE_READY.label)
 	c.readyLabel:SetPoint("TOPLEFT", c.readyBox, "TOPLEFT", c.readyBox.insetX, -PAD + 2)
-	c.readyRows, c.readyIcons = {}, {}
+	c.readyRows, c.readyIcons, c.readySubs = {}, {}, {}
 	for i = 1, READY_ROWS do
 		c.readyRows[i] = W.Line(c.readyBox, 12, W.TEXT, "LEFT")
+		c.readySubs[i] = W.Line(c.readyBox, 11, W.DIM, "LEFT")
 		c.readyIcons[i] = W.Icon(c.readyBox, 14)
 	end
 	c.readyMore = W.Line(c.readyBox, 11, W.DIM, "LEFT")
@@ -131,7 +138,8 @@ local function drawNow(c, card)
 		c.nowWho:SetText(n.who or "")
 		-- the one-line detail is only for an objective whose counts the quest log did not report
 		c.nowDetail:SetText((n.kind == "OBJECTIVE" and #objectives == 0) and (n.detail or "") or "")
-		c.nowInfo:SetText(n.whereShort or n.where or "")
+		-- the distance as a number ("600 yd", "Here"), then the quest's level when the data has one: secondary information
+		c.nowInfo:SetText(ns.Presenter.Join(n.dist or n.whereShort or n.where, n.level and ("Lv " .. n.level)) or "")
 	else
 		-- nothing to recommend: say so quietly, without the marker
 		c.nowTitle:SetText(card.empty.title)
@@ -142,6 +150,7 @@ local function drawNow(c, card)
 	W.SetColor(c.nowTitle, n and W.WARM_GOLD or W.DIM)
 	if n then c.nowSkip:Show() else c.nowSkip:Hide() end
 	c.thenFS:SetText(card.thenLine and ("Then: " .. card.thenLine) or "")
+	c.thenWhereFS:SetText(card.thenLine and card.thenWhere or "")
 	st:Skip(18)                                       -- the NOW label row
 	local kindIcon = n and (n.kind == "ACCEPT" and "bang" or (n.kind == "TURN_IN" and "query")) or nil
 	c.nowKindIcon:Set(kindIcon)
@@ -163,10 +172,12 @@ local function drawNow(c, card)
 		c.nowDivider:SetPoint("TOPRIGHT", box, "TOPRIGHT", -PAD, -(st.y + 1))
 		c.nowDivider:Show()
 		st:Skip(6)
-		st:Add(c.thenFS, 0)
+		st:Add(c.thenFS, 1)
+		st:Add(c.thenWhereFS, 0)
 	else
 		c.nowDivider:Hide()
 		c.thenFS:Hide()
+		c.thenWhereFS:Hide()
 	end
 	return math.max(NOW_MIN, math.floor(st.y + PAD + 0.5))
 end
@@ -177,10 +188,16 @@ local function drawAlso(c, items)
 	if #items == 0 then return nil end
 	local inner = FULL - box.insetX - PAD
 	local st = W.Stack(box, inner)
-	local hasObjective = false
-	for _, it in ipairs(items) do if it.kind == "objective" then hasObjective = true end end
-	c.alsoLabel:SetText(hasObjective and "ALSO COMPLETE THIS" or "ALSO DO")
+	-- named for what the rows are: objectives to finish, quests to pick up, or a mix
+	local nObj, nAccept = 0, 0
+	for _, it in ipairs(items) do
+		if it.kind == "objective" then nObj = nObj + 1 elseif it.verb == "ACCEPT" then nAccept = nAccept + 1 end
+	end
+	c.alsoLabel:SetText((nObj == #items and "ALSO COMPLETE") or (nAccept == #items and "ALSO PICK UP") or "ALSO DO")
 	st:Skip(16)
+	for _, sub in ipairs(c.alsoSubs) do sub:SetText(""); sub:Hide() end
+	local subsUsed = 0
+	local noteWhy, noteSame = nil, true
 	local rowsUsed, headsUsed, left = 0, 0, 0
 	for _, h in ipairs(c.alsoHeads) do h:SetText(""); h:Hide() end
 	local rowPool = {}
@@ -193,7 +210,7 @@ local function drawAlso(c, items)
 					rowsUsed = rowsUsed + 1
 					local row, o = c.alsoRows[rowsUsed], it.objectives[1]
 					row:Place(box, box.insetX, st.y, inner)
-					row:Set(it.title, o.have, o.need)
+					row:Set(ns.Presenter.Join(it.title, it.dist), o.have, o.need)
 					st.y = st.y + W.ROW_H + 3
 				else
 					left = left + 1
@@ -202,7 +219,7 @@ local function drawAlso(c, items)
 				headsUsed = headsUsed + 1
 				local head = c.alsoHeads[headsUsed]
 				if head then
-					head:SetText(it.title)
+					head:SetText(ns.Presenter.Join(it.title, it.dist))
 					st:Add(head, 1)
 				end
 				for _, o in ipairs(it.objectives) do
@@ -222,11 +239,29 @@ local function drawAlso(c, items)
 			headsUsed = headsUsed + 1
 			local head = c.alsoHeads[headsUsed]
 			if head then
-				head:SetText(it.title .. (it.where and ("  -  " .. it.where) or ""))
-				st:Add(head, 3)
+				-- the title, then (dim) how far, who, and why: "Here - Aamelia Windfield - Same stop."
+				local sub = ns.Presenter.Join(it.dist or it.where, it.npc, it.why and it.why:gsub("%.$", ""):lower() or nil)
+				head:SetText(it.title)
+				st:Add(head, sub and 0 or 3)
+				if sub then
+					subsUsed = subsUsed + 1
+					local fs = c.alsoSubs[subsUsed]
+					if fs then
+						fs:SetText(sub)
+						st:Add(fs, 3)
+					end
+				end
 			end
 		end
+		-- objectives share ONE reason line when they all have the same one
+		if it.kind == "objective" then
+			if it.why == nil then noteSame = false
+			elseif noteWhy == nil then noteWhy = it.why
+			elseif noteWhy ~= it.why then noteSame = false end
+		end
 	end
+	c.alsoNote:SetText((nObj > 0 and noteSame and noteWhy) or "")
+	st:Add(c.alsoNote, 1)
 	for i = rowsUsed + 1, #c.alsoRows do c.alsoRows[i]:Clear() end
 	c.alsoMore:SetText(left > 0 and string.format("+ %d more", left) or "")
 	st:Add(c.alsoMore, 0)
@@ -243,9 +278,13 @@ local function drawReady(c, items)
 	local left = 0
 	for i, row in ipairs(c.readyRows) do
 		local it = items[i]
-		row:SetText(it and (it.title .. (it.where and ("  -  " .. it.where) or "")) or "")
+		row:SetText(it and it.title or "")
 		local y0 = st.y
-		st:Add(row, 2, box.insetX + 18, inner - 18)
+		-- under the name (dim): how far, the hand-in NPC when the data names one, and the follow-up quests it opens when the data supports it
+		local sub = it and ns.Presenter.Join(it.distText or it.where, it.npc, it.unlocks and string.format("opens %d more quest%s", it.unlocks, it.unlocks == 1 and "" or "s") or nil)
+		c.readySubs[i]:SetText(sub or "")
+		st:Add(row, sub and 0 or 2, box.insetX + 18, inner - 18)
+		st:Add(c.readySubs[i], 3, box.insetX + 18, inner - 18)
 		if it then
 			c.readyIcons[i]:Set("query")
 			c.readyIcons[i]:Place(box, box.insetX, y0 + 0)

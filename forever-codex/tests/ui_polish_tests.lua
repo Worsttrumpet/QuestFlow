@@ -122,7 +122,7 @@ do
 	local ns, W, c = logWorld({ GRAVE, DOOM, FAR, MYSTERY })
 	local list = ns.Overlap.List(ns.State.plan, ns.State.ctx)
 	check(ns.State.plan.now.quest == 10 and #list == 1 and list[1].title == "Doom Weed", "only the quest in the zone you are working in overlaps  [" .. #list .. "]")
-	check(c.alsoBox.__shown and c.alsoLabel.__text == "ALSO COMPLETE THIS", "the card is titled ALSO COMPLETE THIS")
+	check(c.alsoBox.__shown and c.alsoLabel.__text == "ALSO COMPLETE", "when every row is an objective the card is titled ALSO COMPLETE")
 	local rows = rowTexts(c.alsoRows)
 	check(#rows == 1 and rows[1] == "Doom Weed 3/10" and math.abs(c.alsoRows[1].fraction - 0.3) < 1e-9, "it shows the quest and its count with a bar  [" .. table.concat(rows, " | ") .. "]")
 	local all = {}
@@ -780,7 +780,7 @@ do
 	check(far == 300, "a pickup has to be within 300 yd to be offered as an extra")
 	local card = ns.Presenter.Card(p, ns.State.ctx)
 	check(card.now.whereShort ~= nil and card.now.whereShort:find("yd away", 1, true) or card.now.whereShort == "Nearby" or card.now.whereShort == "Here", "the NOW line has the short distance ('Here' / 'Nearby' / '750 yd away')")
-	check(c.nowInfo.__text == card.now.whereShort, "and the tracker draws it")
+	check(c.nowInfo.__text:find(card.now.dist, 1, true) ~= nil and card.now.dist ~= nil, "and the tracker draws the distance as a number (" .. tostring(card.now.dist) .. ")")
 	check(#ns.errors == 0, "no errors")
 end
 
@@ -881,5 +881,70 @@ do
 	check(seen >= 1, "at least one objective was checked")
 	local direct = ns.Overlap.Unfinished({ objectiveState = { known = true, list = { { text = "0/1 Captain Vachon slain", finished = false, have = 0, need = 1 }, { text = "Scarlet Friar slain: 2/5", finished = false, have = 2, need = 5 } } } })
 	check(#direct == 2 and direct[1].text == "Captain Vachon slain" and direct[2].text == "Scarlet Friar slain", "the game's '0/1 ...' and '...: 2/5' count text is stripped from the label (the bar shows the count)")
+	check(#ns.errors == 0, "no errors")
+end
+
+-- ---------------------------------------------------------------- UX clarity pass (0.5.5): distances as numbers, who, why, action-aware labels
+section("clarity: distances read as numbers, hand-in NPCs only when named, reasons only when the planner gave one")
+local function clarityWorld(withTurnInData)
+	local ns = boot({ char = { level = 9 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Fixture Valley" } })
+	local function at(dx, dy) return 0.5 + dx / 1000, 0.5 + (dy or 0) / 1000 end
+	local x1, y1 = at(300, 0)
+	local xt, yt = at(1800, 0)
+	local xp, yp = at(250, 20)                       -- a pickup beside NOW's spot
+	local xq, yq = at(700, 0)                        -- a pickup farther on: the THEN
+	local recs = {
+		{ id = 1, name = "Work Quest", map = 9001, x = x1, y = y1, req = 1, level = 9, giverName = "Work Giver", objCoords = { { map = 9001, x = x1, y = y1 } } },
+		{ id = 2, name = "Far Hand-in", map = 9001, x = xt, y = yt, req = 1, level = 9, giverName = "Original Giver",
+			turnIn = withTurnInData and { npc = 77, name = "Riaani Nightwind", map = 9001, x = xt, y = yt } or nil },
+		{ id = 3, name = "Giver Only", map = 9001, x = xt, y = yt + 0.2, req = 1, level = 9, giverName = "Only A Giver" },
+		{ id = 4, name = "Follow Up", map = 9001, x = at(2500, 900), y = 0.5, req = 1, level = 9, giverName = "Next Giver", prereq = { 2 } },
+		{ id = 5, name = "Pickup Beside", map = 9001, x = xp, y = yp, req = 1, level = 9, giverName = "Aamelia Windfield" },
+		{ id = 6, name = "Pickup Onward", map = 9001, x = xq, y = yq, req = 1, level = 9, giverName = "Nazgrel" },
+	}
+	H.attPack(ns, recs, ZONES)
+	local W = H.world()
+	W.completed = {}
+	W.log = { { questID = 1, title = "Work Quest", complete = false }, { questID = 2, title = "Far Hand-in", complete = true }, { questID = 3, title = "Giver Only", complete = true } }
+	W.objectives = { [1] = { { text = "Thing", type = "monster", finished = false, numFulfilled = 1, numRequired = 5 } } }
+	ns.Prefs.FinishSetup()
+	ns.State.Recompute()
+	ns.UI.Open("codex")
+	return ns, W, ns.UI.main.codex
+end
+do
+	local ns, W, c = clarityWorld(true)
+	local Pr = ns.Presenter
+	check(Pr.Dist(10) == "Here" and Pr.Dist(94) == "90 yd" and Pr.Dist(1800) == "1,800 yd" and Pr.Dist(1730) == "1,750 yd" and Pr.Dist(4000) == "4,000 yd" and Pr.Dist(nil) == nil and Pr.Dist(ns.Engine.DIFFERENT_CONTINENT) == "In another area", "distances: Here / 90 yd / 1,800 yd / another area, nothing when unknown")
+	check(Pr.Join("a", nil, "b") == "a - b" and Pr.Join(nil, nil) == nil, "Join keeps only the parts that exist")
+	local card = Pr.Card(ns.State.plan, ns.State.ctx)
+	check(card.now and ns.State.plan.now.quest == 1 and card.now.dist == "300 yd" and card.now.level == 9, "NOW carries a numeric distance and the quest level from the data  [" .. tostring(card.now and card.now.dist) .. "]")
+	check(c.nowInfo.__text == "300 yd - Lv 9", "the tracker shows it as secondary information: '" .. tostring(c.nowInfo.__text) .. "'")
+	-- READY TO TURN IN
+	local byQ = {}
+	for _, r in ipairs(card.ready) do byQ[r.quest] = r end
+	check(byQ[2] and byQ[2].npc == "Riaani Nightwind" and byQ[2].distText == "1,800 yd", "READY: a quest whose data names a turn-in NPC shows the NPC and a numeric distance")
+	check(byQ[3] and byQ[3].npc == nil, "READY: when no turn-in NPC is named the quest giver's name is NOT shown as the hand-in NPC")
+	check(byQ[2].unlocks == 1 and byQ[3].unlocks == nil, "READY: 'opens N more quests' only where the data lists a follow-up that this character could take (1 and none)")
+	local rows = {}
+	for i, r in ipairs(c.readyRows) do if r.__shown ~= false and r.__text ~= "" then rows[#rows + 1] = r.__text .. " | " .. tostring(c.readySubs[i].__text) end end
+	local flat = table.concat(rows, "\n")
+	check(flat:find("Far Hand-in | 1,800 yd - Riaani Nightwind - opens 1 more quest", 1, true) ~= nil, "the card draws the name, then (dim) distance - NPC - follow-ups  [" .. flat:gsub("\n", " / ") .. "]")
+	check(flat:find("Giver Only | 1,800 yd", 1, true) ~= nil and not flat:find("Only A Giver", 1, true), "and nothing invented where the NPC is unknown")
+	check(not flat:find("[\128-\255]"), "plain ASCII")
+	-- ALSO: a pickup beside NOW is named for what it is, with distance, who and why
+	check(card.also[1] and card.also[1].kind == "action" and card.also[1].verb == "ACCEPT" and card.also[1].npc == "Aamelia Windfield", "ALSO row: a pickup carries its NPC")
+	check(c.alsoLabel.__text == "ALSO PICK UP", "a card of pickups is titled ALSO PICK UP, not ALSO COMPLETE THIS")
+	local sub = c.alsoSubs[1].__text
+	check(sub:find("Aamelia Windfield", 1, true) and (sub:find("same stop", 1, true) or sub:find("on your way", 1, true) or sub:find("short detour", 1, true)), "its dim line gives who and the planner's own reason: '" .. tostring(sub) .. "'")
+	-- THEN
+	check(card.thenLine == "Accept Pickup Onward" and card.thenWhere == "700 yd - Nazgrel" and c.thenWhereFS.__text == "700 yd - Nazgrel", "THEN: the action, then how far and who ('700 yd - Nazgrel')")
+	check(#ns.errors == 0, "no errors")
+end
+do
+	local ns, W, c = clarityWorld(false)
+	local card = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	check(card.now ~= nil, "without any turn-in data the card still builds")
+	for _, r in ipairs(card.ready) do check(r.npc == nil, "no hand-in NPC is invented when none is named") end
 	check(#ns.errors == 0, "no errors")
 end

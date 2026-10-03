@@ -81,9 +81,9 @@ local function compatible(a, ctx, ref, refMap)
 	if pos then
 		if not ref then return false end
 		local d = E.Distance(ctx, ref, pos)
-		return d ~= nil and d < E.DIFFERENT_CONTINENT and d <= Ov.OVERLAP_YD
+		return d ~= nil and d < E.DIFFERENT_CONTINENT and d <= Ov.OVERLAP_YD, true
 	end
-	return a.areaMap ~= nil and refMap ~= nil and a.areaMap == refMap
+	return a.areaMap ~= nil and refMap ~= nil and a.areaMap == refMap, false
 end
 
 function Ov.List(plan, ctx)
@@ -108,7 +108,8 @@ function Ov.List(plan, ctx)
 		local cand = {}
 		for _, a in ipairs(pool) do
 			local todo = unfinishedOf(a)
-			if #todo > 0 and compatible(a, ctx, ref, refMap) then cand[#cand + 1] = { a = a, todo = todo, fraction = fractionOf(a) } end
+			local okC, byPlace = compatible(a, ctx, ref, refMap)
+			if #todo > 0 and okC then cand[#cand + 1] = { a = a, todo = todo, fraction = fractionOf(a), byPlace = byPlace } end
 		end
 		-- closest to done first (the quickest wins), then by id so the order is stable
 		table.sort(cand, function(x, y)
@@ -119,7 +120,9 @@ function Ov.List(plan, ctx)
 			if #out >= Ov.MAX_QUESTS then break end
 			if not seen[c.a.quest] then
 				seen[c.a.quest] = true
-				out[#out + 1] = { kind = "objective", title = questName(c.a) .. suffix(ctx, c.a.quest), objectives = c.todo, fraction = c.fraction, quest = c.a.quest }
+				out[#out + 1] = { kind = "objective", title = questName(c.a) .. suffix(ctx, c.a.quest), objectives = c.todo, fraction = c.fraction, quest = c.a.quest,
+					dist = ns.Presenter.Dist(distanceTo(c.a, ctx)),
+					why = c.byPlace and "Close to what you're doing." or "In the same area as what you're doing." }
 			end
 		end
 	end
@@ -127,12 +130,14 @@ function Ov.List(plan, ctx)
 	local also = plan.alsoDo
 	if also and not (also.quest and seen[also.quest]) and not inDungeonCard(ctx, also.quest) then
 		if also.kind == "OBJECTIVE" and #unfinishedOf(also) > 0 then
-			out[#out + 1] = { kind = "objective", title = questName(also) .. suffix(ctx, also.quest), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest }
+			out[#out + 1] = { kind = "objective", title = questName(also) .. suffix(ctx, also.quest), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest,
+				dist = ns.Presenter.Dist(distanceTo(also, ctx)), why = ns.Presenter.AlsoWhy(plan, also) }
 		elseif also.type ~= "FLIGHT" and also.kind ~= "TURN_IN" then
 			local d = distanceTo(also, ctx)
 			if d == nil or d <= Ov.ALSO_ACTION_YD then
 				local it = ns.Presenter.Describe(also, plan, ctx, "diamond")
-				out[#out + 1] = { kind = "action", title = it.title, where = Ov.ShortWhere(d), quest = also.quest }
+				out[#out + 1] = { kind = "action", title = it.title, where = Ov.ShortWhere(d), quest = also.quest, verb = also.kind,
+					dist = it.dist, npc = it.npc, why = ns.Presenter.AlsoWhy(plan, also) }
 			end
 		end
 	end
@@ -155,7 +160,8 @@ function Ov.Ready(plan, ctx)
 			local d = distanceTo(a, ctx)
 			if d and d >= E.DIFFERENT_CONTINENT then d = nil end
 			local short = Ov.ShortWhere(d)
-			out[#out + 1] = { title = questName(a) .. suffix(ctx, a.quest), who = a.giver, where = short, quest = a.quest, dist = d }
+			out[#out + 1] = { title = questName(a) .. suffix(ctx, a.quest), who = a.giver, where = short, quest = a.quest, dist = d,
+				distText = ns.Presenter.Dist(d), npc = a.turnInNpc and a.giver or nil, unlocks = ns.Presenter.Unlocks(a, ctx) }
 		end
 	end
 	table.sort(out, function(x, y)

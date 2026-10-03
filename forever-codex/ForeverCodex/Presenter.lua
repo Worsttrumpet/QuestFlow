@@ -77,6 +77,53 @@ function Pr.Where(a, ctx)
 	return string.format("About %d yards away", math.floor(d / 50 + 0.5) * 50)
 end
 
+--- The distance as the tracker prints it: "Here" (under 30 yd), "90 yd", "1,800 yd", "In another area"; nil when it cannot be said.
+function Pr.Dist(d)
+	if type(d) ~= "number" then return nil end
+	if d >= E.DIFFERENT_CONTINENT then return "In another area" end
+	if d < 30 then return "Here" end
+	local r = d < 1000 and math.floor(d / 10 + 0.5) * 10 or math.floor(d / 50 + 0.5) * 50
+	local t = tostring(r)
+	if r >= 1000 then t = t:sub(1, #t - 3) .. "," .. t:sub(-3) end
+	return t .. " yd"
+end
+
+--- "a - b" for the parts that exist (nil when none do).
+function Pr.Join(...)
+	local out = {}
+	for i = 1, select("#", ...) do
+		local v = select(i, ...)
+		if type(v) == "string" and v ~= "" then out[#out + 1] = v end
+	end
+	return #out > 0 and table.concat(out, " - ") or nil
+end
+
+--- How many follow-up quests turning this one in would open for THIS character, by the rules Codex already applies to every pickup (the same
+-- eligibility check, run as if the quest were done). Quests already done or in the log, repeatables and anything the rules exclude are not counted.
+-- nil when the data names none. (QuestieDB prerequisite lists: unverified, so this says "Codex knows of", never more.)
+function Pr.Unlocks(a, ctx)
+	if not (a and a.quest and ctx and Pl.Unlocks and ns.QuestProvider) then return nil end
+	local after = setmetatable({ isCompleted = function(id) return id == a.quest or ctx.isCompleted(id) end }, { __index = ctx })
+	local strategy = R.Strategy(ctx.prefs and ctx.prefs.style)
+	local n = 0
+	for _, qid in ipairs(Pl.Unlocks(a.quest)) do
+		local v = R.Quest(qid)
+		if v and not ctx.log[qid] and not ctx.isCompleted(qid) and ns.QuestProvider.Eligibility(v, after, strategy) then n = n + 1 end
+	end
+	return n > 0 and n or nil
+end
+
+--- The short reason the planner put an action beside the route (from its own reason codes), or nil. Never invented.
+function Pr.AlsoWhy(plan, a)
+	local why = plan and plan.diag and plan.diag.reasons and plan.diag.reasons[a.id]
+	for _, r in ipairs(why or {}) do
+		if r.code == "SAME_STOP" then return "Same stop." end
+		if r.code == "ON_THE_WAY" then return "On your way." end
+		if r.code == "SMALL_DETOUR" then return string.format("A short detour (about %d s).", r.seconds or 0) end
+	end
+	return nil
+end
+
 local function describe(a, plan, ctx, icon)
 	local name = questName(a) .. (ns.Dungeons and ns.Dungeons.Suffix(ctx, a.quest) or "")
 	local it = { kind = a.kind, icon = icon, where = Pr.Where(a, ctx), progress = Pr.Progress(a) }
@@ -87,6 +134,8 @@ local function describe(a, plan, ctx, icon)
 	local sw = ns.Overlap and ns.Overlap.ShortWhere(d0)
 	if sw then it.whereShort = (sw == "here" and "Here") or (sw == "nearby" and "Nearby") or (sw .. " away") end
 	if pos0 and d0 and d0 >= E.DIFFERENT_CONTINENT then it.whereShort = "In another area" end
+	it.dist = Pr.Dist(d0)                                 -- the number the tracker prints ("90 yd", "1,800 yd", "Here")
+	if type(a.level) == "number" and a.quest then it.level = a.level end
 	if a.type == "FLIGHT" then
 		it.title = "Visit the flight master"
 		it.detail = a.name and ("Flight path: " .. a.name .. ".") or nil
@@ -94,6 +143,7 @@ local function describe(a, plan, ctx, icon)
 	elseif a.kind == "ACCEPT" then
 		it.title = "Accept " .. name
 		it.who = a.giver
+		it.npc = a.giver
 		local view = a.quest and R.Quest(a.quest)
 		local obj = view and view.objectives and Pr.CleanObjective(view.objectives[1])
 		it.detail = obj and ("Goal: " .. obj .. ".") or (a.giver and ("Talk to " .. a.giver .. ".") or nil)
@@ -109,7 +159,8 @@ local function describe(a, plan, ctx, icon)
 		for _, o in ipairs(todo) do it.objectives[#it.objectives + 1] = { text = Pr.CleanObjective(o.text) or "objective", have = o.have, need = o.need } end
 	elseif a.kind == "TURN_IN" then
 		it.title = "Turn in " .. name
-		it.who = a.giver
+		it.npc = a.turnInNpc and a.giver or nil           -- only a NAMED turn-in NPC; the quest giver's name is not assumed to be where it is handed in
+		it.who = it.npc
 		it.detail = a.giver and ("Hand it in near " .. a.giver .. ".") or "Your objectives are done."
 	else
 		it.title = name
@@ -164,6 +215,7 @@ function Pr.Card(plan, ctx)
 		if show then
 			local th = describe(t, plan, ctx, nil)
 			card.thenLine = th.title
+			card.thenWhere = Pr.Join(th.dist, th.npc)
 		end
 	end
 	return card
