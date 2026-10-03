@@ -574,6 +574,39 @@ local function bestOf(stop, preferId)
 	return list[1], list
 end
 
+--- OPPORTUNITY DIAGNOSTICS (Phase 1 of the Opportunity System: visibility only; nothing here changes what the planner decides).
+-- chooseAlsoDo already prices every candidate against the chosen route; these helpers only NAME what it computed.
+Pl.FREE_SECONDS = 0.5        -- mirrors the 0.5 s "on the way" test addReasons already uses; a label boundary, not a new rule
+Pl.OPP_CAP = 40              -- priced candidates kept in diag.opps.list (the cheapest first); the rest are counted. ~100 candidates are priced per recompute.
+Pl.OPP_HUB_CAP = 5           -- off-route stops with 2+ actions priced as a whole (diagnostic only)
+
+--- Where a candidate fits in the chosen route, from the insertion the planner already computed. Returns one of
+--   DIRECTLY_ON_ROUTE   shares the first stop, or costs <= FREE_SECONDS extra
+--   RECONNECTING_DETOUR inserted between two nodes of the route (the player leaves it and rejoins it)
+--   AFTER_ROUTE         inserted after the last stop: no rejoining, the cost is the one-way trip
+--   UNKNOWN             a leg could not be measured
+-- (A "near route" label would need a distance threshold the planner does not have; the cost class carries that distinction.)
+function Pl.RouteRelation(cost, same, afterLast)
+	if same then return "DIRECTLY_ON_ROUTE" end
+	if cost == nil then return "UNKNOWN" end
+	if cost <= Pl.FREE_SECONDS then return "DIRECTLY_ON_ROUTE" end
+	if afterLast then return "AFTER_ROUTE" end
+	return "RECONNECTING_DETOUR"
+end
+
+--- Cost label for a priced candidate: FREE (same stop / ~no extra time), then EXPENSIVE (net <= 0 after paying for the time),
+-- CHEAP (within the detour limit) or MODERATE (above it, still net positive). UNKNOWN when the cost could not be measured.
+function Pl.CostClass(cost, same, net, detour)
+	if same then return "FREE" end
+	if cost == nil then return "UNKNOWN" end
+	if cost <= Pl.FREE_SECONDS then return "FREE" end
+	if net <= 0 then return "EXPENSIVE" end
+	if cost <= detour then return "CHEAP" end
+	return "MODERATE"
+end
+
+local DECISION_RANK = { ACCEPTED = 1, OUTRANKED = 2, TOO_FAR = 3, LOW_VALUE = 4, UNKNOWN_TRANSIT = 5 }
+
 --- Stage 6: ALSO DO. Interruption cost = extra time to fit the action into the sequence (0 within the first stop).
 -- Returns the chosen item and its cost (nil, nil when nothing qualifies).
 local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
@@ -582,7 +615,7 @@ local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
 	if S.player then nodes[#nodes + 1] = S.player end
 	for _, s in ipairs(seqStops) do nodes[#nodes + 1] = s.pos end
 	local function interruption(it)
-		local best
+		local best, bestAt
 		for i = 1, #nodes do
 			local a = seconds(ctx, nodes[i], it.pos)
 			if a == nil then return nil end
@@ -592,39 +625,97 @@ local function chooseAlsoDo(S, seqStops, firstList, nowIt, inSeq)
 				if b == nil or direct == nil then return nil end
 				local extra = a + b - direct
 				if extra < 0 then extra = 0 end
-				if not best or extra < best then best = extra end
+				if not best or extra < best then best, bestAt = extra, i end
 			else
-				if not best or a < best then best = a end      -- after the last stop: just getting there
+				if not best or a < best then best, bestAt = a, i end      -- after the last stop: just getting there
 			end
 		end
-		return best or 0
+		return best or 0, bestAt           -- (bestAt: the node the item is inserted AFTER; diagnostics only)
+	end
+	-- diagnostics: a label for node i of the route polyline ("you" or the stop's id), and one record per priced candidate
+	local offset = S.player and 1 or 0
+	local function nodeLabel(i)
+		if not nodes[i] then return nil end
+		if S.player and i == 1 then return "you" end
+		return seqStops[i - offset] and seqStops[i - offset].id or nil
+	end
+	local opps, counts = {}, { total = 0, class = {}, decision = {} }
+	local function record(it, cost, at, same, net, decision)
+		local cls = Pl.CostClass(cost, same, net or 0, par.detour)
+		local a = it.a
+		counts.total = counts.total + 1
+		counts.class[cls] = (counts.class[cls] or 0) + 1
+		counts.decision[decision] = (counts.decision[decision] or 0) + 1
+		opps[#opps + 1] = { id = it.id, title = a.title, kind = a.kind, type = a.type, qid = (a.ref and a.ref.kind == "quest") and a.ref.id or nil,
+			cost = cost, same = same or nil, from = at and nodeLabel(at) or nil, to = at and nodeLabel(at + 1) or nil,
+			rel = Pl.RouteRelation(cost, same, at ~= nil and nodes[at + 1] == nil), cls = cls, net = net, val = it.val, dwell = it.dwell,
+			stop = it.stop and it.stop.id or nil, stopSize = it.stop and #it.stop.items or nil, dec = decision,
+			evidence = a.evidence, status = it.status, assumed = it.assumed or nil, conf = it.conf }
 	end
 	local also, alsoNet, alsoCost
-	local function offer(it, cost)
+	local function offer(it, cost, at, same)
 		local net = it.val - lam * (cost + it.dwell)
 		if cost > par.detour then
 			diag.rejected[#diag.rejected + 1] = { id = it.id, code = "TOO_FAR", seconds = math.floor(cost + 0.5) }
+			record(it, cost, at, same, net, "TOO_FAR")
 		elseif net < par.alsoFloor then
 			diag.rejected[#diag.rejected + 1] = { id = it.id, code = "LOW_VALUE", net = math.floor(net * 10) / 10 }
-		elseif not also or net > alsoNet or (net == alsoNet and it.id < also.id) then
-			also, alsoNet, alsoCost = it, net, cost
+			record(it, cost, at, same, net, "LOW_VALUE")
+		else
+			record(it, cost, at, same, net, "OUTRANKED")        -- cleared both bars; ACCEPTED is set below for the one that won
+			if not also or net > alsoNet or (net == alsoNet and it.id < also.id) then
+				also, alsoNet, alsoCost = it, net, cost
+			end
 		end
 	end
 	for _, it in ipairs(firstList) do
-		if it ~= nowIt then offer(it, 0) end
+		if it ~= nowIt then offer(it, 0, nil, true) end
 	end
 	for _, pool in ipairs({ S.items, S.extras }) do
 		for _, it in ipairs(pool) do
 			if not inSeq[it.id] then
-				local cost = interruption(it)
+				local cost, at = interruption(it)
 				if cost == nil then
 					diag.rejected[#diag.rejected + 1] = { id = it.id, code = "UNKNOWN_TRANSIT" }
+					record(it, nil, nil, false, nil, "UNKNOWN_TRANSIT")
 				else
-					offer(it, cost)
+					offer(it, cost, at, false)
 				end
 			end
 		end
 	end
+	-- diagnostics only: the winner, the deterministic order (cheapest first), the cap, and the off-route stops priced as a whole
+	for _, o in ipairs(opps) do
+		if also and o.id == also.id then
+			o.dec = "ACCEPTED"
+			counts.decision.OUTRANKED = (counts.decision.OUTRANKED or 1) - 1
+			counts.decision.ACCEPTED = 1
+			if counts.decision.OUTRANKED == 0 then counts.decision.OUTRANKED = nil end
+		end
+	end
+	table.sort(opps, function(x, y)
+		if (x.cost == nil) ~= (y.cost == nil) then return x.cost ~= nil end
+		if x.cost ~= y.cost then return x.cost < y.cost end
+		return x.id < y.id
+	end)
+	local kept = {}
+	for n = 1, math.min(#opps, Pl.OPP_CAP) do kept[n] = opps[n] end
+	local hubs, inRoute = {}, {}
+	for _, st in ipairs(seqStops) do inRoute[st] = true end
+	for _, st in ipairs(S.stops) do
+		if not inRoute[st] and #st.items >= 2 then
+			local cost = interruption(st)
+			if cost ~= nil then
+				local ids = {}
+				for k, it in ipairs(st.items) do if k <= 6 then ids[k] = it.id end end
+				hubs[#hubs + 1] = { stop = st.id, size = #st.items, ids = ids, cost = cost, val = st.val, dwell = st.dwell, net = st.val - lam * (cost + st.dwell) }
+			end
+		end
+	end
+	table.sort(hubs, function(x, y) if x.cost ~= y.cost then return x.cost < y.cost end return x.stop < y.stop end)
+	while #hubs > Pl.OPP_HUB_CAP do hubs[#hubs] = nil end
+	diag.opps = { list = kept, total = counts.total, class = counts.class, decision = counts.decision, cap = Pl.OPP_CAP, hubs = hubs,
+		route = { stops = #seqStops, detour = par.detour, alsoFloor = par.alsoFloor, timeValue = lam } }
 	return also, alsoCost
 end
 

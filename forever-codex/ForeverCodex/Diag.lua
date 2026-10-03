@@ -245,6 +245,72 @@ function D.Lines(s)
 	return L
 end
 
+--- OPPORTUNITIES (Phase 1, diagnostics only): every candidate chooseAlsoDo priced against the chosen route, kept from this recompute only (not saved).
+-- Reads plan.diag.opps; nothing here feeds back into the planner.
+D.OPP_SHOW = 24            -- candidate lines printed (of the Planner.OPP_CAP kept, cheapest extra time first); the counts cover all of them
+
+local function oppProvenance(o)
+	local parts = { "evidence=" .. tostring(o.evidence or "?"), "location=" .. tostring(o.status or "?") .. (o.assumed and " (assumed)" or "") }
+	local view = o.qid and ns.Registry.Quest(o.qid) or nil
+	if view then
+		local src = view.layers and view.layers[1]
+		parts[#parts + 1] = "known from " .. (src and (tostring(src.src) .. (src.verified and ", verified=yes" or ", verified=no")) or "?")
+		if o.kind == "ACCEPT" then
+			parts[#parts + 1] = string.format("classMask=%s raceMask=%s classes=%s races=%s faction=%s", tostring(view.classMask), tostring(view.raceMask),
+				view.classes and table.concat(view.classes, "/") or "none", view.races and table.concat(view.races, "/") or "none", tostring(view.faction))
+		end
+	end
+	if o.kind == "ACCEPT" and o.qid then
+		-- the only client-side evidence Codex has that a quest was OFFERED to this character: a quest dialog it saw (QUEST_DETAIL). Absence proves nothing.
+		local items = type(ForeverCodexDB) == "table" and ForeverCodexDB.items or nil
+		local seen = type(items) == "table" and type(items.rewards) == "table" and items.rewards[o.qid] or nil
+		if type(seen) == "table" and seen.at == "QUEST_DETAIL" then
+			parts[#parts + 1] = "actionability OBSERVED (a quest dialog for it was seen)"
+		else
+			parts[#parts + 1] = "actionability UNKNOWN (never seen offered; database presence is not client evidence)"
+		end
+	end
+	return table.concat(parts, " | ")
+end
+
+function D.OpportunityLines()
+	local L = {}
+	local plan = ns.State and ns.State.plan
+	local d = plan and plan.diag
+	L[#L + 1] = "OPPORTUNITIES (diagnostic only: what the planner priced against the CURRENT route; nothing here changes the plan; not saved)"
+	if not d then L[#L + 1] = "  no plan yet"; return L end
+	L[#L + 1] = "  core route: " .. ((d.sequence and #d.sequence > 0) and table.concat(d.sequence, " > ") or "none") .. (plan.now and (" | NOW " .. tostring(plan.now.title)) or "")
+	local o = d.opps
+	if not o then
+		L[#L + 1] = "  not priced this time: " .. tostring(d.reason or (d.deferredTurnIn and "a hand-in was deferred for local work" or (d.localWork and "LOCAL_WORK" or "no route was chosen")))
+		return L
+	end
+	local function counts(t, order)
+		local out = {}
+		for _, k in ipairs(order) do if t[k] then out[#out + 1] = k .. " " .. t[k] end end
+		return #out > 0 and table.concat(out, ", ") or "none"
+	end
+	L[#L + 1] = string.format("  priced: %d | by cost: %s | decisions: %s", o.total, counts(o.class, { "FREE", "CHEAP", "MODERATE", "EXPENSIVE", "UNKNOWN" }),
+		counts(o.decision, { "ACCEPTED", "OUTRANKED", "TOO_FAR", "LOW_VALUE", "UNKNOWN_TRANSIT" }))
+	L[#L + 1] = string.format("  planner limits in force: detour %s s | ALSO DO floor %s pts | time value %.2f pts/s | route has %d stop(s). Cost = extra seconds to insert it into that route (0 within the first stop).", tostring(o.route.detour), tostring(o.route.alsoFloor), o.route.timeValue, o.route.stops)
+	L[#L + 1] = string.format("  listed: %d of %d priced (cheapest extra time first, then id; cap %d stored, %d shown). Relation: DIRECTLY_ON_ROUTE <= 0.5 s or same stop | RECONNECTING_DETOUR leaves and rejoins | AFTER_ROUTE one-way past the last stop.",
+		#o.list, o.total, o.cap, D.OPP_SHOW)
+	for n, e in ipairs(o.list) do
+		if n > D.OPP_SHOW then break end
+		local where = e.same and "same stop as NOW" or (e.from and (e.to and ("between " .. e.from .. " and " .. e.to) or ("after " .. e.from)) or "unplaced")
+		L[#L + 1] = string.format("  %-9s %s %s [%s] extra=%s | %s | %s | %s | net %s (value %s, dwell %s s)", e.cls, e.id, tostring(e.title), e.kind,
+			e.cost and string.format("%.0fs", e.cost) or "unknown", e.rel, where, e.dec, e.net and string.format("%.1f", e.net) or "n/a", string.format("%.1f", e.val or 0), string.format("%.0f", e.dwell or 0))
+		L[#L + 1] = string.format("      %s%s", e.stop and string.format("stop %s holds %d action(s) | ", e.stop, e.stopSize or 1) or "optional hint, no stop | ", oppProvenance(e))
+	end
+	if #o.hubs > 0 then
+		L[#L + 1] = "  off-route stops with 2+ actions priced AS A WHOLE (diagnostic only: the planner prices these one by one when it picks an ALSO DO):"
+		for _, h in ipairs(o.hubs) do
+			L[#L + 1] = string.format("    stop %s: %d actions (%s) | extra=%.0fs | summed value %.1f, dwell %.0f s | net as one trip %.1f", h.stop, h.size, table.concat(h.ids, " "), h.cost, h.val, h.dwell, h.net)
+		end
+	end
+	return L
+end
+
 --- PERFORMANCE: counters kept by State/Boot (no timers). Times are the client's debugprofilestop milliseconds around State.Recompute.
 function D.PerformanceLines()
 	local S, pf = ns.State, ns.State.perf
@@ -570,6 +636,10 @@ function D.PlaytestLines(snap, lines)
 			if ns.Dungeons and ns.Dungeons.IsDungeon(ctx, id) then dungeon = dungeon + 1 end
 		end
 		add(string.format("quest tags (game, unverified on Forever): API %s | %d of %d logged quests came back tagged | %d dungeon-style | area-name API %s", api, tagged, #ids, dungeon, (type(C_Map) == "table" and type(C_Map.GetAreaInfo) == "function") and "present" or "absent"))
+	end
+	do
+		local okO, olines = pcall(D.OpportunityLines)
+		if okO then for _, l in ipairs(olines) do add(l) end else add("OPPORTUNITIES: error: " .. tostring(olines)) end
 	end
 	if ns.State and ns.State.perf then
 		local okP, plines = pcall(D.PerformanceLines)

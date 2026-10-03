@@ -280,3 +280,166 @@ do
 	check(rep:find("PERFORMANCE (counters only", 1, true) ~= nil, "/codex report has a PERFORMANCE section")
 	check(#ns.errors == 0, "no errors")
 end
+
+-- ---------------------------------------------------------------- Phase 1 of the Opportunity System: diagnostics only
+section("opportunity diagnostics: every priced candidate is explained, and the plan is the same with or without them")
+-- The core route is forced: three quests the player ADDED sit 300 / 600 / 900 yd due east of the player (an added quest is always sequenced).
+local function oppWorld(extra)
+	local ns = boot({ char = { level = 6 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	local recs = {}
+	for i = 1, 3 do recs[#recs + 1] = Q(100 + i, "Core " .. i, 300 * i, 0, { level = 6, req = 5 }) end
+	for _, q in ipairs(extra or {}) do recs[#recs + 1] = q end
+	H.attPack(ns, recs, nil)
+	local W = H.world()
+	W.log, W.objectives, W.completed = {}, {}, {}
+	ns.Prefs.FinishSetup()
+	for i = 1, 3 do ns.Prefs.Add(100 + i) end
+	return ns
+end
+local function oppRun(ns, over)
+	local ctx = ns.Context.Build()
+	local c = ns.Engine.Candidates(ctx)
+	local plan = ns.Planner.Compute(ctx, c, { trace = true })
+	return ctx, plan, c
+end
+local function oppById(plan, id)
+	for _, o in ipairs(plan.diag.opps and plan.diag.opps.list or {}) do if o.id == id then return o end end
+end
+local P5 = { level = 6, req = 5 }
+local spec = {
+	Q(1, "Right on the line", 150, 0, P5),            -- A: between you and Core 1, on the straight line
+	Q(2, "Behind you", -150, 0, P5),                  -- B: the opposite direction
+	Q(3, "Hub one", 300, -400, P5), Q(4, "Hub two", 320, -410, P5), Q(5, "Hub three", 310, -430, P5),   -- C: three givers together, off the line
+	Q(6, "Off then back", 450, 150, P5),              -- D: leaves the route and reconnects
+	Q(7, "Beside the last stop", 900, 90, P5),        -- E: near a later stop
+	Q(8, "Past the end", 1500, 0, P5),                -- after the whole route
+}
+do
+	local ns = oppWorld(spec)
+	local ctx, plan = oppRun(ns)
+	local o = plan.diag.opps
+	print("OPPDEBUG route", table.concat(plan.diag.sequence or {}, ">"), "total", o and o.total)
+	for _, e in ipairs(o and o.list or {}) do print(string.format("OPPDEBUG %s cost=%s rel=%s cls=%s dec=%s from=%s to=%s stop=%s/%s net=%.1f", e.id, tostring(e.cost), e.rel, e.cls, e.dec, tostring(e.from), tostring(e.to), tostring(e.stop), tostring(e.stopSize), e.net or 0)) end
+	for _, h in ipairs(o and o.hubs or {}) do print("OPPDEBUG hub", h.stop, h.size, h.cost, h.net) end
+end
+
+-- ---- the scenarios
+do
+	local ns = oppWorld(spec)
+	local ctx, plan = oppRun(ns)
+	local o = plan.diag.opps
+	check(plan.diag.sequence[1] == "Q:101:ACCEPT" and plan.diag.sequence[3] == "Q:103:ACCEPT", "the forced core route is the three added quests, in order")
+	check(o ~= nil and o.total == 8 and #o.list == 8, "every candidate the planner priced is kept (8 of 8), not just one winner and six rejections")
+	-- A: directly on the route
+	local a = oppById(plan, "Q:1:ACCEPT")
+	check(a and a.cost == 0 and a.rel == "DIRECTLY_ON_ROUTE" and a.cls == "FREE" and a.dec == "ACCEPTED" and a.from == "you" and a.to == "Q:101:ACCEPT", "A: a pickup on the straight line costs 0 s, is DIRECTLY_ON_ROUTE / FREE, and is the ALSO DO")
+	check(plan.alsoDo and plan.alsoDo.id == "Q:1:ACCEPT", "the real ALSO DO is that same item (the diagnostics describe the decision, they do not make it)")
+	-- B: opposite direction: the out-and-back is charged
+	local b = oppById(plan, "Q:2:ACCEPT")
+	check(b and math.abs(b.cost - 300 / 7) < 0.01 and b.rel == "RECONNECTING_DETOUR" and b.from == "you" and b.dec == "TOO_FAR" and b.cls == "MODERATE", "B: a quest 150 yd BEHIND you costs the out-and-back (300 yd = 42.9 s), MODERATE, TOO_FAR; backtracking shows only as that cost")
+	-- C: a hub of three givers shares one stop
+	local c3, c4, c5 = oppById(plan, "Q:3:ACCEPT"), oppById(plan, "Q:4:ACCEPT"), oppById(plan, "Q:5:ACCEPT")
+	check(c3 and c4 and c5 and c3.stop == c4.stop and c4.stop == c5.stop and c3.stopSize == 3, "C: three nearby givers are ONE stop of 3 actions")
+	check(c3.cls == "EXPENSIVE" and c4.cls == "EXPENSIVE" and c5.cls == "EXPENSIVE", "C: priced one by one each is EXPENSIVE (net <= 0 after the walk)")
+	local hub = o.hubs[1]
+	check(hub and hub.size == 3 and hub.stop == c3.stop and hub.net > 0 and hub.val > 3 * 19, "C: priced as one trip the same hub is net positive (" .. (hub and string.format("%.1f", hub.net) or "?") .. ": the compound value the per-item pricing hides)")
+	-- D: leaves the route and reconnects
+	local d = oppById(plan, "Q:6:ACCEPT")
+	check(d and d.rel == "RECONNECTING_DETOUR" and d.from == "Q:101:ACCEPT" and d.to == "Q:102:ACCEPT" and d.cls == "CHEAP" and d.dec == "OUTRANKED", "D: a detour between two route stops is RECONNECTING_DETOUR, CHEAP, and OUTRANKED (it cleared both bars; a better item won)")
+	-- E: next to the last stop
+	local e = oppById(plan, "Q:7:ACCEPT")
+	check(e and e.rel == "AFTER_ROUTE" and e.from == "Q:103:ACCEPT" and e.to == nil and math.abs(e.cost - 90 / 7) < 0.01, "E: a quest beside the last stop is priced after the route (90 yd = 12.9 s)")
+	local f = oppById(plan, "Q:8:ACCEPT")
+	check(f and f.cls == "EXPENSIVE" and f.dec == "TOO_FAR", "a quest 600 yd past the end is EXPENSIVE and TOO_FAR")
+	-- the independent check: every cost equals the cheapest insertion into player -> stops, recomputed here from the trace
+	local route = { { map = 9001, x = 0.5, y = 0.5 } }
+	for _, sid in ipairs(plan.diag.sequence) do for _, st in ipairs(plan.diag.stopList) do if st.id == sid then route[#route + 1] = { map = st.map, x = st.x, y = st.y } end end end
+	local all = true
+	for _, e2 in ipairs(o.list) do
+		local pos = plan.diag.items[e2.id]
+		if not e2.same and pos then
+			local best
+			for i = 1, #route do
+				local da = ns.Engine.Distance(ctx, route[i], pos) / 7
+				local extra
+				if route[i + 1] then extra = math.max(0, da + ns.Engine.Distance(ctx, pos, route[i + 1]) / 7 - ns.Engine.Distance(ctx, route[i], route[i + 1]) / 7) else extra = da end
+				if not best or extra < best then best = extra end
+			end
+			if math.abs(best - e2.cost) > 1e-6 then all = false end
+		end
+	end
+	check(all, "every recorded cost equals the cheapest insertion into player -> stops, recomputed independently from the trace")
+	-- the counts and the deterministic order
+	check(o.class.FREE == 1 and o.class.CHEAP == 2 and o.class.MODERATE == 1 and o.class.EXPENSIVE == 4, "cost-class counts cover every priced candidate")
+	check(o.decision.ACCEPTED == 1 and o.decision.OUTRANKED == 2 and o.decision.TOO_FAR == 5, "decision counts: ACCEPTED 1, OUTRANKED 2, TOO_FAR 5")
+	local sorted = true
+	for i = 2, #o.list do if o.list[i - 1].cost > o.list[i].cost then sorted = false end end
+	check(sorted, "the list is ordered cheapest extra time first")
+	-- the existing TOO_FAR record is untouched
+	local tf = 0
+	for _, r in ipairs(plan.diag.rejected) do if r.code == "TOO_FAR" then tf = tf + 1 end end
+	check(tf == 5 or #plan.diag.rejected == 6, "the old diag.rejected list keeps its own six-entry cap and shape")
+	-- same plan twice: deterministic
+	local _, plan2 = oppRun(ns)
+	local same = #plan2.diag.opps.list == #o.list
+	for i, e2 in ipairs(o.list) do if plan2.diag.opps.list[i].id ~= e2.id then same = false end end
+	check(same, "a second run lists the same candidates in the same order")
+	-- provenance: a database record is not client evidence
+	ns.State.Recompute()
+	local lines = table.concat(ns.Diag.OpportunityLines(), "\n")
+	check(lines:find("Q:1:ACCEPT", 1, true) and lines:find("actionability UNKNOWN (never seen offered", 1, true) ~= nil, "an ACCEPT known only from a database stays 'actionability UNKNOWN' in the report")
+	check(lines:find("classMask=", 1, true) and lines:find("raceMask=", 1, true), "the report prints the class and race mask the data holds, without acting on them")
+	check(lines:find("stop Q:3:ACCEPT holds 3 action", 1, true) and lines:find("priced AS A WHOLE", 1, true), "the report shows the 3-action stop and the hub priced as a whole")
+	check(not lines:find("evidence=observed", 1, true), "nothing database-derived is labelled observed")
+end
+
+do
+	-- a quest dialog the client really showed is the one thing that turns UNKNOWN into OBSERVED
+	local ns = oppWorld(spec)
+	ForeverCodexDB.items = ForeverCodexDB.items or {}
+	ForeverCodexDB.items.rewards = { [1] = { q = 1, at = "QUEST_DETAIL", src = "CODEX_OBSERVED" } }
+	ns.State.Recompute()
+	local lines = table.concat(ns.Diag.OpportunityLines(), "\n")
+	check(lines:find("actionability OBSERVED (a quest dialog for it was seen)", 1, true) ~= nil, "a QUEST_DETAIL observation turns that quest's actionability to OBSERVED")
+	ForeverCodexDB.items.rewards = nil
+end
+
+section("opportunity diagnostics: cost labels, LOW_VALUE, the cap, optional hints, no behaviour change")
+do
+	local ns = oppWorld(spec)
+	local Pl = ns.Planner
+	check(Pl.CostClass(0, true, 5, 30) == "FREE" and Pl.CostClass(0.3, false, 12, 30) == "FREE", "FREE: same stop, or <= 0.5 s extra")
+	check(Pl.CostClass(20, false, 8, 30) == "CHEAP", "CHEAP: within the detour limit and net positive")
+	check(Pl.CostClass(60, false, 4, 30) == "MODERATE", "MODERATE: above the limit but still net positive")
+	check(Pl.CostClass(60, false, -2, 30) == "EXPENSIVE" and Pl.CostClass(20, false, -2, 30) == "EXPENSIVE", "EXPENSIVE: net <= 0 after the walk, even inside the limit")
+	check(Pl.CostClass(nil, false, nil, 30) == "UNKNOWN" and Pl.RouteRelation(nil, false, false) == "UNKNOWN", "an unmeasurable leg is UNKNOWN, never guessed")
+	check(Pl.RouteRelation(10, false, true) == "AFTER_ROUTE" and Pl.RouteRelation(10, false, false) == "RECONNECTING_DETOUR" and Pl.RouteRelation(0.4, false, false) == "DIRECTLY_ON_ROUTE", "route relation from the insertion the planner already computed")
+	-- LOW_VALUE: an action kind the planner values at 0, 3 s from the route
+	ForeverCodex.RegisterProvider({ key = "opp-lowvalue", type = "RESPAWN_SKIP", label = "test low value", generate = function()
+		return { ns.Registry.NewAction({ id = "RS:9", type = "RESPAWN_SKIP", kind = "RESPAWN_SKIP", skipKey = "RS:9", title = "Worthless thing",
+			target = { map = 9001, x = 0.5 + 0.150, y = 0.5 + 0.030, label = "x", src = "att", verified = false }, src = "att", verified = false }) }
+	end })
+	ForeverCodex.RegisterActionType("RESPAWN_SKIP", { label = "Respawn skip" })
+	local ctx, plan = oppRun(ns)
+	local lv = oppById(plan, "RS:9")
+	check(lv and lv.dec == "LOW_VALUE" and lv.cost <= 30 and lv.net < 5, "LOW_VALUE: close enough, but not worth its time (net " .. (lv and string.format("%.1f", lv.net) or "?") .. ")")
+	-- the cap
+	local many = {}
+	for i = 1, 60 do many[#many + 1] = Q(200 + i, "Many " .. i, 100 + i * 15, 200 + (i % 7) * 40, P5) end
+	local ns2 = oppWorld(many)
+	local _, plan3 = oppRun(ns2)
+	local o3 = plan3.diag.opps
+	check(o3.total > 40 and #o3.list == 40 and o3.cap == 40, "the kept list is capped at 40 while the counts cover all " .. o3.total .. " priced")
+	local sorted = true
+	for i = 2, #o3.list do if o3.list[i - 1].cost > o3.list[i].cost or (o3.list[i - 1].cost == o3.list[i].cost and o3.list[i - 1].id > o3.list[i].id) then sorted = false end end
+	check(sorted, "the cap keeps the cheapest first, ties by id (deterministic)")
+	-- an optional hint is priced too and has no stop
+	-- no behaviour change: NOW / ALSO DO / THEN and the sequence do not depend on the diagnostics
+	local before = { plan3.now and plan3.now.id, plan3.alsoDo and plan3.alsoDo.id, plan3.thenAction and plan3.thenAction.id, table.concat(plan3.diag.sequence, ">") }
+	ns2.Planner.OPP_CAP = 1
+	local _, plan4 = oppRun(ns2)
+	local after = { plan4.now and plan4.now.id, plan4.alsoDo and plan4.alsoDo.id, plan4.thenAction and plan4.thenAction.id, table.concat(plan4.diag.sequence, ">") }
+	ns2.Planner.OPP_CAP = 40
+	check(table.concat(before, "|") == table.concat(after, "|") and #plan4.diag.opps.list == 1, "changing the diagnostic cap changes only the diagnostics, never the plan")
+	check(#ns2.errors == 0, "no errors")
+end
