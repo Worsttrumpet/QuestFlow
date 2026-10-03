@@ -233,13 +233,15 @@ inert systems (see E). Tier rules (route / stop / extra / context) are in the de
 ## C. Actionability, provenance and data quality
 
 ### C-01 Offer evidence layer (what the client offered)
-**Status:** BUILT (0.6.4 probe, 0.6.5 evidence layer); partly real-client proven
-* **Proven on build 70205:** `GOSSIP_SHOW` fires; `C_GossipInfo.GetAvailableQuests()` and `GetActiveQuests()` return empty tables (Valennia Stormfist, Talaanis Shadowsong);
-  `QUEST_DETAIL` fires with `GetQuestID()` / `GetTitleText()` (Fendaal Windstone: Q98512 Al'Aketh Assassins). Old gossip functions (`GetNumGossip*`) are absent; `GetAvailableQuestID` absent.
-* **Built:** bounded stores (observations 100, quests 300, NPCs 100; no raw GUIDs); OBSERVED via QUEST_DETAIL or AVAILABLE_LIST; contextual EMPTY_AT_NPC / NOT_LISTED_AT_NPC; report section
-  ACTIONABILITY / OFFER EVIDENCE; opportunity diagnostics wording; `plan.onTheWay[i].offer`.
-* **Not proven in the real client:** that an available-quest list ever carries quest ids on Forever (so AVAILABLE_LIST and NOT_LISTED_AT_NPC may never occur), QUEST_GREETING payloads,
-  ACTIVE list contents. The 0.6.5 code itself has had stub tests only; the real-client checks A to D in `CODEX_OFFER_PROBE.md` are pending.
+**Status:** BUILT (0.6.4 probe, 0.6.5 evidence layer, 0.6.6 refinement); the underlying client API is real-client PROVEN, the normalised layer itself is stub-tested only
+* **Proven on build 70205 (v0.6.4 report):** `GOSSIP_SHOW` fired 16 times; `C_GossipInfo.GetAvailableQuests()` and `GetActiveQuests()` answered 16/16 and their entries carry real quest ids (and
+  `title`, `questLevel`, `questInfoID`, `repeatable`, `isComplete`, `isImportant`); `GetOptions`, `GetQuestID`, `GetTitleText`, `UnitName`, `UnitGUID` PROVEN; `QUEST_DETAIL` fired 5 times with ids;
+  empty lists occur (Valennia Stormfist, Talaanis Shadowsong). `QUEST_GREETING` did not fire. The older `GetNumGossip*` / `GetGossip*` functions and `GetAvailableQuestID` are ABSENT.
+* **Built:** bounded stores (observations 100, quests 300, NPCs 100; no raw GUIDs); OBSERVED via QUEST_DETAIL or the available list (both counted, QUEST_DETAIL stronger); the ACTIVE list kept
+  separate and never treated as an offer; contextual EMPTY_AT_NPC / NOT_LISTED_AT_NPC (only from a complete, all-ids list from the proven API); positive evidence never erased (a newer contrary dialog is
+  shown beside it); report section; opportunity diagnostics wording; `plan.onTheWay[i].offer`.
+* **Remaining unproven:** QUEST_GREETING payloads (recorded, never used as evidence); how long an observation stays meaningful (no staleness policy); the real-client checks of the normalised report
+  (A to D in `CODEX_OFFER_PROBE.md`).
 
 ### C-02 Using actionability in the planner
 **Status:** DEFERRED (deliberately unbuilt)

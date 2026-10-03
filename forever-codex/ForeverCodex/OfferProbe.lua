@@ -6,9 +6,9 @@
 -- proves useful) used. It uses no planner input and gives the planner no output: no candidate, score, skip, filter or actionability changes.
 --
 -- WHAT IT READS (nothing is assumed; each call is made through pcall, only if it exists, and tallied PROVEN / UNPROVEN / FAILED / ABSENT):
---   GOSSIP_SHOW      C_GossipInfo.GetAvailableQuests / GetActiveQuests / GetOptions, and the older GetNumGossipAvailableQuests / GetGossipAvailableQuests /
---                    GetNumGossipActiveQuests / GetGossipActiveQuests / GetNumGossipOptions
---   QUEST_GREETING   GetNumAvailableQuests / GetAvailableTitle (and GetAvailableQuestID only if the client has it), GetNumActiveQuests / GetActiveTitle
+--   GOSSIP_SHOW      C_GossipInfo.GetAvailableQuests / GetActiveQuests / GetOptions (PROVEN on Forever, build 70205: every answer carried quest ids; the older
+--                    GetNumGossip* / GetGossip* functions and GetAvailableQuestID are proven ABSENT and are no longer called)
+--   QUEST_GREETING   GetNumAvailableQuests / GetAvailableTitle, GetNumActiveQuests / GetActiveTitle (the event has not fired on Forever: recorded, never used as evidence)
 --   QUEST_DETAIL     GetQuestID, GetTitleText: the quest whose offer dialog is open (an explicit offer)
 --   the NPC          UnitName("npc") and the creature id parsed from UnitGUID("npc"); the raw GUID is never stored
 --
@@ -46,8 +46,7 @@ O.SHOW_EVIDENCE = 8             -- quests / NPCs listed in the report
 
 -- every function the probe may call, by the name the client would give it (a dotted name is a namespace function)
 O.APIS = { "C_GossipInfo.GetAvailableQuests", "C_GossipInfo.GetActiveQuests", "C_GossipInfo.GetOptions",
-	"GetNumGossipAvailableQuests", "GetGossipAvailableQuests", "GetNumGossipActiveQuests", "GetGossipActiveQuests", "GetNumGossipOptions",
-	"GetNumAvailableQuests", "GetAvailableTitle", "GetAvailableQuestID", "GetNumActiveQuests", "GetActiveTitle",
+	"GetNumAvailableQuests", "GetAvailableTitle", "GetNumActiveQuests", "GetActiveTitle",
 	"GetQuestID", "GetTitleText", "UnitName", "UnitGUID" }
 
 local frame = CreateFrame("Frame")
@@ -159,13 +158,13 @@ local function answerFromTable(kind, api, pack, ok)
 		if type(e) == "table" then
 			if i == 1 then a.shape = table.concat(sortedKeys(e), ","):sub(1, 140) end
 			a.entries[#a.entries + 1] = { id = type(e.questID) == "number" and e.questID or nil, title = type(e.title) == "string" and e.title:sub(1, 50) or nil,
-				level = type(e.questLevel) == "number" and e.questLevel or nil }
+				level = type(e.questLevel) == "number" and e.questLevel or nil, repeatable = e.repeatable == true or nil, complete = e.isComplete == true or nil }
 		end
 	end
 	return a
 end
 
---- A count call (GetNumGossipAvailableQuests): EMPTY when it answers 0, LISTED when it answers a positive number, NO_DATA when it answers nothing.
+--- A count call (GetNumAvailableQuests, QUEST_GREETING): EMPTY when it answers 0, LISTED for a positive number, NO_DATA when it answers nothing.
 local function answerFromCount(kind, api, pack, ok)
 	if not ok then return { kind = kind, api = api, state = pack == "absent" and "ABSENT" or "ERROR" } end
 	local n = pack[1]
@@ -173,41 +172,23 @@ local function answerFromCount(kind, api, pack, ok)
 	return { kind = kind, api = api, state = n == 0 and "EMPTY" or "LISTED", n = n, entries = {} }
 end
 
---- Legacy gossip lists return several values per quest (title, level, ...): only the STRING values are taken (titles); nothing is assumed about the rest.
-local function titlesFromLegacy(a, api)
-	local ok, pack = call(api)
-	if not ok or pack.n == 0 then return end
-	a.rawValues = pack.n
-	for i = 1, pack.n do
-		if type(pack[i]) == "string" and #a.entries < O.MAX_ENTRIES then a.entries[#a.entries + 1] = { title = pack[i]:sub(1, 50) } end
-	end
-end
-
+-- GOSSIP_SHOW: only the modern C_GossipInfo functions are asked. The older GetNumGossip* / GetGossip* functions and GetAvailableQuestID are PROVEN ABSENT on
+-- Forever (real client, build 70205), so they are no longer called.
 local function gossipAnswers()
 	local out = {}
 	local ok, pack = call("C_GossipInfo.GetAvailableQuests")
 	out[#out + 1] = answerFromTable("available", "C_GossipInfo.GetAvailableQuests", pack, ok)
-	local ok2, pack2 = call("GetNumGossipAvailableQuests")
-	local a2 = answerFromCount("available", "GetNumGossipAvailableQuests", pack2, ok2)
-	if a2.state == "LISTED" then titlesFromLegacy(a2, "GetGossipAvailableQuests") end
-	out[#out + 1] = a2
 	local ok3, pack3 = call("C_GossipInfo.GetActiveQuests")
 	out[#out + 1] = answerFromTable("active", "C_GossipInfo.GetActiveQuests", pack3, ok3)
-	local ok4, pack4 = call("GetNumGossipActiveQuests")
-	local a4 = answerFromCount("active", "GetNumGossipActiveQuests", pack4, ok4)
-	if a4.state == "LISTED" then titlesFromLegacy(a4, "GetGossipActiveQuests") end
-	out[#out + 1] = a4
 	local ok5, pack5 = call("C_GossipInfo.GetOptions")
 	out[#out + 1] = answerFromTable("options", "C_GossipInfo.GetOptions", pack5, ok5)
-	local ok6, pack6 = call("GetNumGossipOptions")
-	out[#out + 1] = answerFromCount("options", "GetNumGossipOptions", pack6, ok6)
 	return out
 end
 
+-- QUEST_GREETING has not fired on Forever yet (its payload is unproven): its titles are recorded as observations only and are never used as listing evidence.
 local function greetingAnswers()
 	local out = {}
-	for _, spec in ipairs({ { "available", "GetNumAvailableQuests", "GetAvailableTitle", "GetAvailableQuestID" },
-		{ "active", "GetNumActiveQuests", "GetActiveTitle", nil } }) do
+	for _, spec in ipairs({ { "available", "GetNumAvailableQuests", "GetAvailableTitle" }, { "active", "GetNumActiveQuests", "GetActiveTitle" } }) do
 		local ok, pack = call(spec[2])
 		local a = answerFromCount(spec[1], spec[2], pack, ok)
 		if a.state == "LISTED" then
@@ -215,10 +196,6 @@ local function greetingAnswers()
 				local e = {}
 				local okT, t = call(spec[3], i)
 				if okT and type(t[1]) == "string" then e.title = t[1]:sub(1, 50) end
-				if spec[4] and O.Resolve(spec[4]) then
-					local okI, id = call(spec[4], i)
-					if okI and type(id[1]) == "number" then e.id = id[1] end
-				end
 				a.entries[#a.entries + 1] = e
 			end
 		end
@@ -279,28 +256,35 @@ local function summary(a)
 	for _, e in ipairs(a.entries or {}) do
 		if e.id then ids[#ids + 1] = e.id else complete = false end
 	end
-	return { state = a.state, api = a.api, n = a.n, ids = ids, complete = complete or nil, at = wall() }
+	local shown = {}
+	for _, e in ipairs(a.entries or {}) do shown[#shown + 1] = { id = e.id, title = e.title, complete = e.complete } end
+	return { state = a.state, api = a.api, n = a.n, ids = ids, entries = shown, complete = complete or nil, at = wall(), seq = nil }
 end
 
+-- A listing counts as NPC evidence only when it came from the PROVEN modern gossip API (C_GossipInfo.*). QUEST_GREETING counts are recorded but unproven.
 local function firstOf(answers, kind)
 	for _, a in ipairs(answers) do
-		if a.kind == kind and (a.state == "LISTED" or a.state == "EMPTY") then return a end
+		if a.kind == kind and (a.state == "LISTED" or a.state == "EMPTY") and tostring(a.api):find("^C_GossipInfo%.") then return a end
 	end
 end
 
 --- Updates the quest / NPC indexes from one dialog (also called for an unchanged repeat, which only raises counters and times).
 local function index(s, via, npc, answers)
 	local now = wall()
+	s.seq = (s.seq or 0) + 1                      -- ordering of evidence: wall time has one-second resolution, a sequence number does not tie
 	-- quests the client itself showed: the open offer, or an available-quest list that carried an id
 	for _, a in ipairs(answers) do
-		if a.kind == "offered" or a.kind == "available" then
+		if a.kind == "offered" or (a.kind == "available" and a.state == "LISTED" and tostring(a.api):find("^C_GossipInfo%.")) then
+			-- (the ACTIVE list is deliberately not here: a quest the character already has is not an offer)
 			for _, e in ipairs(a.entries or {}) do
 				if e.id then
 					local src = a.kind == "offered" and "QUEST_DETAIL" or "AVAILABLE_LIST"
 					local r = s.quests[e.id]
 					if not r then r = { first = now, n = 0 }; s.quests[e.id] = r end
 					r.n = r.n + 1
-					r.last = now
+					r.last, r.seq = now, s.seq
+					r.by = type(r.by) == "table" and r.by or {}
+					r.by[src] = (r.by[src] or 0) + 1                 -- observations per source (QUEST_DETAIL / AVAILABLE_LIST), both are positive evidence
 					if (VIA_RANK[src] or 0) >= (VIA_RANK[r.via] or 0) then r.via = src end
 					r.title = e.title or r.title
 					if npc then r.npcName, r.npcId = npc.name or r.npcName, npc.id or r.npcId end
@@ -310,14 +294,15 @@ local function index(s, via, npc, answers)
 	end
 	dropOldest(s.quests, O.MAX_QUESTS)
 	-- the NPC's latest listing (a QUEST_DETAIL says nothing about what the NPC lists, so it does not touch the listing)
-	if npc and (npc.id or npc.name) and via ~= "QUEST_DETAIL" then
+	if npc and (npc.id or npc.name) and via == "GOSSIP_SHOW" then
 		local key = npcKey(npc)
 		local r = s.npcs[key]
 		if not r then r = { first = now, n = 0 }; s.npcs[key] = r end
 		r.name, r.id = npc.name or r.name, npc.id or r.id
 		r.n, r.last, r.via = r.n + 1, now, via
-		r.avail = summary(firstOf(answers, "available"))
-		r.active = summary(firstOf(answers, "active"))
+		local av, ac = firstOf(answers, "available"), firstOf(answers, "active")
+		r.avail, r.active = summary(av), summary(ac)
+		r.avail.seq, r.active.seq = s.seq, s.seq
 		dropOldest(s.npcs, O.MAX_NPCS)
 	end
 end
@@ -345,16 +330,26 @@ end
 --- What the client has shown about this quest being offered: { kind = "OBSERVED", via, npc, last, n } | { kind = "EMPTY_AT_NPC" | "NOT_LISTED_AT_NPC",
 -- npc, last } | nil (no client evidence: UNKNOWN). The negative kinds describe ONE NPC dialog at one moment, never the quest.
 function O.OfferEvidence(qid, giverNpcId, giverName)
-	local q = O.QuestEvidence(qid)
-	if q then return { kind = "OBSERVED", via = q.via, npc = q.npcName, last = q.last, n = q.n } end
 	local ctx = O.NpcContext(giverNpcId, giverName)
 	local av = ctx and ctx.avail
-	if not av then return nil end
-	if av.state == "EMPTY" then return { kind = "EMPTY_AT_NPC", npc = ctx.name, last = av.at } end
-	if av.state == "LISTED" and av.complete then
-		for _, id in ipairs(av.ids) do if id == qid then return { kind = "OBSERVED", via = "AVAILABLE_LIST", npc = ctx.name, last = av.at } end end
-		return { kind = "NOT_LISTED_AT_NPC", npc = ctx.name, last = av.at }
+	-- the contextual kind from the giver's latest listing (never from an incomplete one)
+	local ctxKind, ctxAt
+	if av then
+		if av.state == "EMPTY" then ctxKind, ctxAt = "EMPTY_AT_NPC", av.at
+		elseif av.state == "LISTED" and av.complete then
+			local listed = false
+			for _, id in ipairs(av.ids) do if id == qid then listed = true end end
+			ctxKind, ctxAt = listed and "LISTED_AT_NPC" or "NOT_LISTED_AT_NPC", av.at
+		end
 	end
+	local q = O.QuestEvidence(qid)
+	if q then
+		-- positive evidence is kept whatever the NPC lists later (it may have been accepted or completed since); a NEWER contrary listing is reported beside it
+		local newer = (ctxKind == "EMPTY_AT_NPC" or ctxKind == "NOT_LISTED_AT_NPC") and (av.seq or 0) > (q.seq or 0) and ctxKind or nil
+		return { kind = "OBSERVED", via = q.via, npc = q.npcName, last = q.last, n = q.n, by = q.by, newer = newer }
+	end
+	if ctxKind == "LISTED_AT_NPC" then return { kind = "OBSERVED", via = "AVAILABLE_LIST", npc = ctx.name, last = ctxAt, n = 1, by = { AVAILABLE_LIST = 1 } } end
+	if ctxKind then return { kind = ctxKind, npc = ctx.name, last = ctxAt } end
 	return nil
 end
 
@@ -464,30 +459,46 @@ function O.ReportLines()
 		return L
 	end
 	local now = wall()
+	local function ents(list)
+		local out = {}
+		for _, e in ipairs(list or {}) do out[#out + 1] = (e.id and ("Q" .. e.id) or "(no id)") .. (e.title and (" " .. e.title) or "") .. (e.complete and " [complete]" or "") end
+		return #out > 0 and table.concat(out, ", ") or "none"
+	end
+	local function src(by)
+		local out = {}
+		for _, k in ipairs({ "QUEST_DETAIL", "AVAILABLE_LIST" }) do if by and by[k] then out[#out + 1] = k .. " x" .. by[k] end end
+		return table.concat(out, " + ")
+	end
 	local qs = {}
 	for id, r in pairs(s.quests) do qs[#qs + 1] = { id = id, r = r } end
 	table.sort(qs, function(x, y) if (x.r.last or 0) ~= (y.r.last or 0) then return (x.r.last or 0) > (y.r.last or 0) end return x.id < y.id end)
-	if #qs > 0 then L[#L + 1] = "  OBSERVED quests (the client showed them to this character; most recent first):" end
+	if #qs > 0 then L[#L + 1] = "  OFFER EVIDENCE: OBSERVED = the client offered this quest to this character at that time (most recent first; history, not a promise it is still offered):" end
 	for i = 1, math.min(#qs, O.SHOW_EVIDENCE) do
 		local q = qs[i]
-		L[#L + 1] = string.format("    Q:%d %s | OBSERVED via %s | NPC %s%s | x%d | %s", q.id, tostring(q.r.title or "?"), tostring(q.r.via), tostring(q.r.npcName or "not reported"),
-			q.r.npcId and (" (creature " .. q.r.npcId .. ")") or "", q.r.n or 1, ago(q.r.last, now))
+		local ctx = O.NpcContext(q.r.npcId, q.r.npcName)
+		local newer = ""
+		if ctx and ctx.avail and (ctx.avail.seq or 0) > (q.r.seq or 0) then
+			if ctx.avail.state == "EMPTY" then newer = " | NEWER dialog at that NPC: available EMPTY (kept, not erased)"
+			elseif ctx.avail.state == "LISTED" and ctx.avail.complete then
+				local listed = false
+				for _, id in ipairs(ctx.avail.ids) do if id == q.id then listed = true end end
+				if not listed then newer = " | NEWER dialog at that NPC: not listed (kept, not erased)" end
+			end
+		end
+		L[#L + 1] = string.format("    Q%d %s | NPC %s%s | OBSERVED | sources: %s | observations %d | %s%s", q.id, tostring(q.r.title or "?"), tostring(q.r.npcName or "not reported"),
+			q.r.npcId and (" (creature " .. q.r.npcId .. ")") or "", src(q.r.by) ~= "" and src(q.r.by) or tostring(q.r.via), q.r.n or 1, ago(q.r.last, now), newer)
 	end
 	if #qs > O.SHOW_EVIDENCE then L[#L + 1] = "    + " .. (#qs - O.SHOW_EVIDENCE) .. " more" end
 	local ns_ = {}
 	for _, r in pairs(s.npcs) do ns_[#ns_ + 1] = r end
 	table.sort(ns_, function(x, y) if (x.last or 0) ~= (y.last or 0) then return (x.last or 0) > (y.last or 0) end return tostring(x.name) < tostring(y.name) end)
-	if #ns_ > 0 then L[#L + 1] = "  NPC dialogs (latest answer per NPC; an EMPTY answer is about that dialog at that moment only, NOT proof a quest is permanently unavailable):" end
+	if #ns_ > 0 then L[#L + 1] = "  NPC dialogs (latest answer per NPC; EMPTY / not listed describe that dialog at that moment only; an ACTIVE quest is not an offer):" end
 	for i = 1, math.min(#ns_, O.SHOW_EVIDENCE) do
 		local r = ns_[i]
 		local av, ac = r.avail or {}, r.active or {}
-		local listed = ""
-		if av.state == "LISTED" then
-			listed = av.complete and (" [" .. table.concat(av.ids, ",") .. "]") or " [not every entry had an id]"
-		end
-		L[#L + 1] = string.format("    %s%s | AVAILABLE %s%s via %s | ACTIVE %s%s | dialogs x%d | %s", tostring(r.name or "?"), r.id and (" (creature " .. r.id .. ")") or "",
-			tostring(av.state), av.state == "LISTED" and (" " .. tostring(av.n)) or "", tostring(av.api or "-"), tostring(ac.state), ac.state == "LISTED" and (" " .. tostring(ac.n)) or "", r.n or 1, ago(r.last, now))
-		if listed ~= "" then L[#L + 1] = "      listed ids:" .. listed end
+		local avText = av.state == "LISTED" and (av.complete and ("LISTED: " .. ents(av.entries)) or ("LISTED, incomplete (an entry has no quest id): " .. ents(av.entries))) or tostring(av.state)
+		local acText = ac.state == "LISTED" and ("LISTED: " .. ents(ac.entries)) or tostring(ac.state)
+		L[#L + 1] = string.format("    %s%s | available %s | active %s | dialogs x%d | %s", tostring(r.name or "?"), r.id and (" (creature " .. r.id .. ")") or "", avText, acText, r.n or 1, ago(r.last, now))
 	end
 	if #ns_ > O.SHOW_EVIDENCE then L[#L + 1] = "    + " .. (#ns_ - O.SHOW_EVIDENCE) .. " more" end
 	L[#L + 1] = "  latest raw observations:"

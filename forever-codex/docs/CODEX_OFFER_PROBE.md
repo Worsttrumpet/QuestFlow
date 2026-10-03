@@ -47,3 +47,18 @@ A. Open an NPC that offers a known quest without accepting: GOSSIP_SHOW fires, t
 B. Open Valennia Stormfist again: AVAILABLE EMPTY, and no quest is marked unavailable anywhere (her quests show `offer evidence: EMPTY_AT_NPC`, actionability UNKNOWN).
 C. Another NPC offering a different quest: separate NPC rows, no mixing.
 D. A QuestieDB-known quest never opened stays `actionability UNKNOWN (never seen offered...)`.
+
+## 0.6.6: refinement from the v0.6.4 real-client report
+Proven by that report (build 70205): `GOSSIP_SHOW` x16, `QUEST_DETAIL` x5, `QUEST_GREETING` never; `C_GossipInfo.GetAvailableQuests` / `GetActiveQuests` answered 16/16 with entries that carry quest ids and the fields `questID`, `title`, `questLevel`, `questInfoID`, `repeatable`, `isComplete`, `isImportant`; 15 dialogs, 8 listed entries (all with ids), 8 empty answers. Example: Strange Hermit available Q93160 and Q93172, active Q93172.
+
+Changes (the code already had the 0.6.5 evidence layer; the v0.6.4 report predates it):
+* The proven-absent functions (`GetNumGossip*`, `GetGossip*`, `GetAvailableQuestID`) are no longer called; the report lists the functions that are still asked.
+* Only `C_GossipInfo.*` answers count as listing evidence (NPC context, OBSERVED via the available list, EMPTY / NOT_LISTED). QUEST_GREETING counts are recorded as observations and never become evidence (unproven payload).
+* The ACTIVE list is stored per NPC (ids and titles) and is never offer evidence. A quest in both lists (Q93172) is OBSERVED only because it appeared in the available list or its QUEST_DETAIL opened.
+* Per quest: observations are counted by source (QUEST_DETAIL x n, AVAILABLE_LIST x n); QUEST_DETAIL stays the stronger `via`.
+* Hierarchy: positive evidence is never erased. When the giver's NEWER dialog is EMPTY or omits the quest from a complete list, the quest stays OBSERVED and the report/diagnostics show "NEWER dialog ... (kept, not erased)". Ordering uses a sequence number, not wall time (one-second resolution).
+* NOT_LISTED_AT_NPC requires an answered table where every entry is a table with a numeric `questID` and the count matches; anything else (title-only entry, string id, non-table entry, number instead of a table, missing API, raised error) makes no claim.
+* Entries keep `repeatable` / `isComplete` when the client gives them (the ACTIVE `isComplete` flag shows a quest ready to hand in).
+* Report: per quest "NPC | OBSERVED | sources | observations | age"; per NPC "available LISTED: Q93160 ..., Q93172 ... | active LISTED: Q93172 ...", or EMPTY.
+
+Meaning is unchanged: OBSERVED means the client offered the quest to this character at that time (history, not a promise it is offered now); EMPTY / NOT_LISTED describe one NPC dialog at one moment. Nothing here is a rule about class, race, prerequisites or permanent availability. The planner does not read any of it.

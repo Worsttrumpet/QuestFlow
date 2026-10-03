@@ -265,7 +265,8 @@ local function oppProvenance(o)
 		local act = ns.Planner.Actionability({ kind = "ACCEPT", quest = o.qid })
 		local ev = ns.Planner.OfferEvidence({ kind = "ACCEPT", quest = o.qid })
 		if act == "OBSERVED" then
-			parts[#parts + 1] = (ev and ev.via == "AVAILABLE_LIST") and "actionability OBSERVED (listed as available in an NPC dialog)" or "actionability OBSERVED (a quest dialog for it was seen)"
+			parts[#parts + 1] = ((ev and ev.via == "AVAILABLE_LIST") and "actionability OBSERVED (listed as available in an NPC dialog)" or "actionability OBSERVED (a quest dialog for it was seen)")
+				.. ((ev and ev.newer) and (" | a NEWER dialog at " .. tostring(ev.npc) .. " shows " .. ev.newer .. " (history kept)") or "")
 		elseif act == "IN_LOG" then
 			parts[#parts + 1] = "actionability IN_LOG (the quest is in your log)"
 		elseif ev and (ev.kind == "EMPTY_AT_NPC" or ev.kind == "NOT_LISTED_AT_NPC") then
