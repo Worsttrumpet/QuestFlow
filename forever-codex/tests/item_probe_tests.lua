@@ -909,3 +909,124 @@ do
 	check(#consumers == 0, "no planner, presenter or provider reads the probe (it only feeds the report)" .. (#consumers > 0 and (": " .. consumers[1]) or ""))
 end
 clearApi()
+
+-- ---------------------------------------------------------------- OfferProbe (0.6.4): what the client says an NPC offers
+section("offered quests probe: records what the client lists, keeps 'empty' apart from 'no data', and never touches the planner")
+do
+	local NAMES = { "C_GossipInfo", "GetNumGossipAvailableQuests", "GetGossipAvailableQuests", "GetNumGossipActiveQuests", "GetGossipActiveQuests", "GetNumGossipOptions",
+		"GetNumAvailableQuests", "GetAvailableTitle", "GetAvailableQuestID", "GetNumActiveQuests", "GetActiveTitle", "GetQuestID", "GetTitleText", "UnitName", "UnitGUID" }
+	local function clear() for _, n in ipairs(NAMES) do _G[n] = nil end end
+	local ns = boot({ char = { level = 10 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	clear()                                  -- (the harness stubs UnitName / UnitGUID for the PLAYER; the probe asks about "npc")
+	check(ns.OfferProbe ~= nil and ns.OfferProbe.OnEvent ~= nil, "the probe module is loaded")
+	local O = ns.OfferProbe
+	local function reset() ForeverCodexDB.offers = nil end
+	reset()
+	local dirtyBefore, countBefore = ns.State.perf.dirtyBy, ns.State.perf.count
+	local function dirtyTotal() local n = 0 for _, v in pairs(ns.State.perf.dirtyBy) do n = n + v end return n end
+	local d0 = dirtyTotal()
+
+	-- no APIs at all: the probe is attempted and says so, nothing is invented
+	O.OnEvent("GOSSIP_SHOW")
+	local s = ForeverCodexDB.offers
+	check(s and #s.obs == 1 and s.obs[1].npc == nil, "an observation is saved even with no API, with no NPC invented")
+	local states = {}
+	for _, a in ipairs(s.obs[1].answers) do states[a.api] = a.state end
+	check(states["C_GossipInfo.GetAvailableQuests"] == "ABSENT" and states["GetNumGossipAvailableQuests"] == "ABSENT", "missing APIs are ABSENT, not 'none offered'")
+	check(table.concat(O.ReportLines(), "\n"):find("API absent", 1, true) ~= nil, "the report says which API is absent")
+
+	-- an NPC that lists nothing: the API ANSWERS with an empty list -> EMPTY (meaningful), and the NPC is recorded without its GUID
+	reset()
+	_G.UnitName = function(u) return u == "npc" and "Yorana Windyreed" or nil end
+	_G.UnitGUID = function(u) return u == "npc" and "Creature-0-4170-2521-9999-12345-0000A1B2C3" or nil end
+	_G.C_GossipInfo = { GetAvailableQuests = function() return {} end, GetActiveQuests = function() return {} end, GetOptions = function() return {} end }
+	O.OnEvent("GOSSIP_SHOW")
+	local ob = ForeverCodexDB.offers.obs[1]
+	local av
+	for _, a in ipairs(ob.answers) do if a.api == "C_GossipInfo.GetAvailableQuests" then av = a end end
+	check(av and av.state == "EMPTY" and av.n == 0, "an empty list is EMPTY: the client answered 'nothing offered'")
+	check(ob.npc and ob.npc.name == "Yorana Windyreed" and ob.npc.id == 12345, "the NPC name and creature id are recorded")
+	check(not (function() local function scan(t, depth) for k, v in pairs(t) do if type(v) == "string" and v:find("Creature-", 1, true) then return true end if type(v) == "table" and depth < 6 and scan(v, depth + 1) then return true end end end return scan(ForeverCodexDB.offers, 0) end)(), "the raw GUID is never stored")
+	check(ob.src == "CODEX_OBSERVED", "the observation is labelled CODEX_OBSERVED (not QuestieDB / ATT / the observed quest pack)")
+
+	-- an API that answers with nothing at all is NO_DATA, not EMPTY
+	reset()
+	_G.C_GossipInfo = { GetAvailableQuests = function() return nil end }
+	O.OnEvent("GOSSIP_SHOW")
+	local nd
+	for _, a in ipairs(ForeverCodexDB.offers.obs[1].answers) do if a.api == "C_GossipInfo.GetAvailableQuests" then nd = a end end
+	check(nd and nd.state == "NO_DATA", "a nil answer is NO_DATA, kept apart from an empty list")
+
+	-- listed quests: the quest id is kept when the client gives one, the payload field names are kept
+	reset()
+	_G.C_GossipInfo = { GetAvailableQuests = function() return { { questID = 92642, title = "Disrupting Logistics", questLevel = 11, isTrivial = false }, { title = "No id here" } } end,
+		GetActiveQuests = function() return { { questID = 93317, title = "Crab Season" } } end, GetOptions = function() return { { name = "x" } } end }
+	O.OnEvent("GOSSIP_SHOW")
+	local o2 = ForeverCodexDB.offers.obs[1]
+	local list
+	for _, a in ipairs(o2.answers) do if a.api == "C_GossipInfo.GetAvailableQuests" then list = a end end
+	check(list.state == "LISTED" and list.n == 2 and list.entries[1].id == 92642 and list.entries[1].title == "Disrupting Logistics" and list.entries[1].level == 11, "a listed quest keeps the id, title and level the client gave")
+	check(list.entries[2].id == nil and list.entries[2].title == "No id here", "an entry without an id stays title-only (no id is guessed)")
+	check(list.shape and list.shape:find("questID", 1, true) and list.shape:find("title", 1, true), "the payload's field names are kept: " .. tostring(list.shape))
+	local st = ForeverCodexDB.offers.stats
+	check(st.entries == 2 and st.entriesWithId == 1 and st.entriesTitleOnly == 1, "counters: 2 entries, 1 with an id, 1 title only")
+	local text = table.concat(O.ReportLines(), "\n")
+	check(text:find("OFFERED QUESTS PROBE", 1, true) and text:find("Q:92642 Disrupting Logistics L11", 1, true) and text:find("(no id) No id here", 1, true) and text:find("PROVEN", 1, true), "the report shows the listed quests, ids and PROVEN status")
+	check(text:find("only 'not listed in that dialog at that moment'", 1, true) ~= nil, "the report states what a negative does and does not mean")
+
+	-- an unchanged repeat of the same dialog is one observation with a counter
+	O.OnEvent("GOSSIP_SHOW")
+	check(#ForeverCodexDB.offers.obs == 1 and ForeverCodexDB.offers.obs[1].n == 2, "a refreshed identical dialog raises a counter instead of adding a row")
+
+	-- QUEST_GREETING with legacy-style APIs: titles only, no id unless the client has an id function
+	reset()
+	_G.C_GossipInfo = nil
+	_G.GetNumAvailableQuests = function() return 2 end
+	_G.GetAvailableTitle = function(i) return ({ "First", "Second" })[i] end
+	_G.GetNumActiveQuests = function() return 0 end
+	O.OnEvent("QUEST_GREETING")
+	local g = ForeverCodexDB.offers.obs[1]
+	local ga
+	for _, a in ipairs(g.answers) do if a.kind == "available" then ga = a end end
+	check(g.via == "QUEST_GREETING" and ga.state == "LISTED" and #ga.entries == 2 and ga.entries[1].title == "First" and ga.entries[1].id == nil, "QUEST_GREETING: titles only when the client has no id function")
+	local gb
+	for _, a in ipairs(g.answers) do if a.kind == "active" then gb = a end end
+	check(gb.state == "EMPTY", "zero active quests is an EMPTY answer")
+	_G.GetAvailableQuestID = function(i) return 5000 + i end
+	O.OnEvent("QUEST_GREETING")
+	local g2 = ForeverCodexDB.offers.obs[#ForeverCodexDB.offers.obs]
+	local ga2
+	for _, a in ipairs(g2.answers) do if a.kind == "available" then ga2 = a end end
+	check(ga2.entries[1].id == 5001, "an id is recorded only when the client itself provides an id function")
+
+	-- QUEST_DETAIL: the quest whose offer dialog is open
+	reset()
+	_G.GetQuestID = function() return 92645 end
+	_G.GetTitleText = function() return "Breaking the Breaker" end
+	O.OnEvent("QUEST_DETAIL")
+	local d = ForeverCodexDB.offers.obs[1]
+	check(d.via == "QUEST_DETAIL" and d.answers[1].kind == "offered" and d.answers[1].entries[1].id == 92645 and d.answers[1].entries[1].title == "Breaking the Breaker", "QUEST_DETAIL: the open offer is recorded with its id and title")
+
+	-- a failing API is FAILED / ERROR and never breaks anything
+	reset()
+	_G.C_GossipInfo = { GetAvailableQuests = function() error("boom") end }
+	O.OnEvent("GOSSIP_SHOW")
+	local er
+	for _, a in ipairs(ForeverCodexDB.offers.obs[1].answers) do if a.api == "C_GossipInfo.GetAvailableQuests" then er = a end end
+	check(er.state == "ERROR" and ForeverCodexDB.offers.proof["C_GossipInfo.GetAvailableQuests"].fail == 1, "an API that raises is ERROR / FAILED, and the probe carries on")
+
+	-- bounded
+	reset()
+	_G.C_GossipInfo = nil
+	for i = 1, O.MAX_OBS + 20 do
+		_G.UnitName = function() return "NPC " .. i end
+		O.OnEvent("GOSSIP_SHOW")
+	end
+	check(#ForeverCodexDB.offers.obs == O.MAX_OBS, "at most " .. O.MAX_OBS .. " observations are kept")
+
+	-- read-only: no recompute, no dirty mark, no error
+	check(dirtyTotal() == d0 and ns.State.perf.count == countBefore, "the probe marked nothing dirty and recomputed nothing")
+	check(#ns.errors == 0, "no errors")
+	clear()
+	reset()
+end
