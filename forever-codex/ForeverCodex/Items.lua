@@ -126,7 +126,7 @@ function I.Read(ref)
 		local ok, r = call(usable, ref)
 		if not ok then facts.err.usable = "error: " .. r
 		elseif type(r[1]) ~= "boolean" then facts.err.usable = "returned nothing"
-		else f.usable, facts.src.usable = r[1], usableName end
+		else f.usable, f.usableSecond, facts.src.usable = r[1], r[2], usableName end
 	end
 
 	local spell, spellName = find("C_Item", "GetItemSpell", "GetItemSpell")
@@ -200,24 +200,27 @@ end
 
 -- ---------------------------------------------------------------- slot-level reads (Stage 2): an empty slot is not an API failure
 
---- Every equipment slot 1..EQUIP_SLOTS: { { slot, state, link, reason, src }, ... } indexed by slot.
--- state: POPULATED (an item link came back), EMPTY (the call worked and returned nothing), FAILED (api absent, an error, or an unusable result; reason says which).
-function I.EquipmentSlots()
+--- One equipment slot: { slot, state, link, reason, src }. state: POPULATED (an item link came back), EMPTY (the call worked and returned nothing),
+-- FAILED (api absent, an error, or an unusable result; reason says which).
+function I.EquipmentSlot(slot)
 	local get, name = find(nil, nil, "GetInventoryItemLink")
-	local out = {}
-	for slot = 1, I.EQUIP_SLOTS do
-		local e = { slot = slot, src = name }
-		if not get then
-			e.state, e.reason = "FAILED", "api absent"
-		else
-			local ok, r = call(get, "player", slot)
-			if not ok then e.state, e.reason = "FAILED", "error: " .. r
-			elseif type(r[1]) == "string" and r[1] ~= "" then e.state, e.link = "POPULATED", r[1]
-			elseif r[1] == nil then e.state = "EMPTY"
-			else e.state, e.reason = "FAILED", "unusable result of type " .. type(r[1]) end
-		end
-		out[slot] = e
+	local e = { slot = slot, src = name }
+	if not get then
+		e.state, e.reason = "FAILED", "api absent"
+	else
+		local ok, r = call(get, "player", slot)
+		if not ok then e.state, e.reason = "FAILED", "error: " .. r
+		elseif type(r[1]) == "string" and r[1] ~= "" then e.state, e.link = "POPULATED", r[1]
+		elseif r[1] == nil then e.state = "EMPTY"
+		else e.state, e.reason = "FAILED", "unusable result of type " .. type(r[1]) end
 	end
+	return e
+end
+
+--- Every equipment slot 1..EQUIP_SLOTS as I.EquipmentSlot results, indexed by slot.
+function I.EquipmentSlots()
+	local out = {}
+	for slot = 1, I.EQUIP_SLOTS do out[slot] = I.EquipmentSlot(slot) end
 	return out
 end
 
@@ -398,7 +401,7 @@ function I.Normalize(raw)
 	elseif err.usable then
 		fl.usable = F("FAILED", nil, nil, err.usable)
 	elseif type(f.usable) == "boolean" then
-		fl.usable = F("PROVEN", f.usable, src.usable)
+		fl.usable = F("PROVEN", f.usable, src.usable, nil, { second = f.usableSecond })
 	else
 		fl.usable = F("FAILED", nil, nil, "not returned")
 	end

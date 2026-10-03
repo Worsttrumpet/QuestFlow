@@ -61,17 +61,22 @@ local function attach(key, entry)
 	watch(key, entry)
 end
 
+local function equipEntry(r)
+	local e = { slot = r.slot, slotName = G.SLOT_NAMES[r.slot], state = r.state, link = r.link, src = r.src, reason = r.reason }
+	if r.state == "POPULATED" then attach("equip:" .. r.slot, e) end
+	return e
+end
+
 --- The equipment: { state = "OK" | "FAILED", reason, slots = { [1..19] = EquipmentFact }, list = { EquipmentFact in slot order } }.
 -- Every slot is present: POPULATED (with its normalized itemFacts), EMPTY (the slot was read and holds nothing) or FAILED (the read itself failed).
+-- `slot` is the ACTUAL equipment slot that was read; the item's own equip location is itemFacts.fields.equipSlot (the two stay separate).
 function G.Equipped()
 	local raw = I.EquipmentSlots()
 	local out = { state = "OK", slots = {}, list = {} }
 	local failed = 0
 	for slot = 1, I.EQUIP_SLOTS do
-		local r = raw[slot]
-		local e = { slot = slot, slotName = G.SLOT_NAMES[slot], state = r.state, link = r.link, src = r.src, reason = r.reason }
-		if r.state == "FAILED" then failed = failed + 1 end
-		if r.state == "POPULATED" then attach("equip:" .. slot, e) end
+		local e = equipEntry(raw[slot])
+		if e.state == "FAILED" then failed = failed + 1 end
 		out.slots[slot], out.list[#out.list + 1] = e, e
 	end
 	if failed == I.EQUIP_SLOTS then out.state, out.reason = "FAILED", raw[1].reason end
@@ -107,11 +112,47 @@ function G.Bags()
 	return out
 end
 
---- Equipment and bags together: { t, equipped, bags }. Remembered as G.last (the watchers refresh its entries in place when late item data arrives).
+-- ---------------------------------------------------------------- refresh (events reuse ItemProbe's event frame)
+
+G.stats = { equipmentEvents = 0, slotRefreshes = 0, bagEvents = 0, bagRescans = 0 }
+G.dirty = { equipment = false, bags = false }
+
+--- Equipment and bags together: { t, equipped, bags }, read NOW. Remembered as G.last (the late-loading watchers refresh its entries in place).
 function G.Snapshot()
 	local snap = { t = wall(), equipped = G.Equipped(), bags = G.Bags() }
 	G.last = snap
+	G.dirty.equipment, G.dirty.bags = false, false
 	return snap
+end
+
+--- The event-maintained snapshot: read once, then kept current by PLAYER_EQUIPMENT_CHANGED (the one changed slot is re-read) and BAG_UPDATE_DELAYED (the bags
+-- are re-read the next time they are asked for). Item data that finishes loading refreshes the entries in place. Use G.Snapshot() to force a fresh read.
+function G.Get()
+	local snap = G.last
+	if not snap then return G.Snapshot() end
+	if G.dirty.equipment then snap.equipped = G.Equipped(); G.dirty.equipment = false end
+	if G.dirty.bags then snap.bags = G.Bags(); G.dirty.bags = false; G.stats.bagRescans = G.stats.bagRescans + 1 end
+	return snap
+end
+
+--- PLAYER_EQUIPMENT_CHANGED(slot, hasCurrent): re-reads just that slot. An unusable slot argument marks the whole equipment dirty instead.
+function G.OnEquipmentChanged(slot)
+	G.stats.equipmentEvents = G.stats.equipmentEvents + 1
+	if not G.last then return end
+	if type(slot) == "number" and slot >= 1 and slot <= I.EQUIP_SLOTS then
+		local e = equipEntry(I.EquipmentSlot(slot))
+		G.last.equipped.slots[slot] = e
+		G.last.equipped.list[slot] = e
+		G.stats.slotRefreshes = G.stats.slotRefreshes + 1
+	else
+		G.dirty.equipment = true
+	end
+end
+
+--- BAG_UPDATE_DELAYED: the bags changed somewhere; they are re-read the next time G.Get() is called (correctness first, no per-slot bookkeeping).
+function G.OnBagsChanged()
+	G.stats.bagEvents = G.stats.bagEvents + 1
+	if G.last then G.dirty.bags = true end
 end
 
 --- Counts for the report, computed on demand so they follow late-resolved facts: populated / empty / failedSlots, and over the populated items
@@ -131,6 +172,11 @@ end
 function G.EquippedSummary(eq) return tally(eq.list) end
 function G.BagSummary(bags)
 	local t = tally(bags.stacks)
+	local ids = {}
+	t.unique = 0
+	for _, e in ipairs(bags.stacks) do
+		if e.itemId and not ids[e.itemId] then ids[e.itemId] = true; t.unique = t.unique + 1 end
+	end
 	t.containers, t.emptySlots, t.slotFailed = #bags.containers, 0, 0
 	for _, c in ipairs(bags.containers) do t.emptySlots = t.emptySlots + (c.empty or 0); t.slotFailed = t.slotFailed + (c.failed or 0) end
 	return t
@@ -321,25 +367,37 @@ function G.ReportLines()
 		return L
 	end
 	local eq, bags = snap.equipped, snap.bags
+	local function itemWord(e)
+		local fl = e.itemFacts.fields
+		local nm = fl.name.state == "PROVEN" and fl.name.value or "(name not loaded)"
+		return string.format("%s (id %s)", nm, tostring(e.itemId))
+	end
 	if eq.state == "FAILED" then
 		L[#L + 1] = "EQUIPPED ITEM FACTS: FAILED (" .. tostring(eq.reason) .. ")"
 	else
 		local t = G.EquippedSummary(eq)
-		L[#L + 1] = string.format("EQUIPPED ITEM FACTS: populated slots %d of %d | empty %d | slot read failed %d | normalized %d | waiting %d | failed %d",
-			t.populated, I.EQUIP_SLOTS, t.empty, t.slotFailed, t.normalized, t.waiting, t.failed)
-		local notes = {}
+		L[#L + 1] = string.format("EQUIPPED ITEM FACTS: occupied slots %d of %d | facts loaded %d | waiting %d | failed %d | empty slots %d | slot reads failed %d",
+			t.populated, I.EQUIP_SLOTS, t.normalized, t.waiting, t.failed, t.empty, t.slotFailed)
 		for _, e in ipairs(eq.list) do
-			if e.state == "POPULATED" and e.itemFacts.state ~= "LOADED" and #notes < 5 then notes[#notes + 1] = string.format("%d %s %s", e.slot, e.slotName, e.itemFacts.state) end
+			if e.state == "POPULATED" then
+				local es = e.itemFacts.fields.equipSlot
+				L[#L + 1] = string.format("  slot %d %s: %s %s | item equip location %s", e.slot, e.slotName, itemWord(e), e.itemFacts.state, es.state == "PROVEN" and es.value or es.state)
+			end
 		end
-		if #notes > 0 then L[#L + 1] = "  not normalized yet: " .. table.concat(notes, ", ") end
 	end
 	if bags.state == "FAILED" then
 		L[#L + 1] = "BAG ITEM FACTS: FAILED (" .. tostring(bags.reason) .. ")"
 	else
 		local t = G.BagSummary(bags)
-		L[#L + 1] = string.format("BAG ITEM FACTS: visible stacks %d | containers read %d (empty slots %d, slot reads failed %d) | normalized %d | waiting %d | failed %d",
-			t.populated, t.containers, t.emptySlots, t.slotFailed, t.normalized, t.waiting, t.failed)
+		L[#L + 1] = string.format("BAG ITEM FACTS: occupied stacks %d | unique item ids %d | facts loaded %d | waiting %d | failed %d | containers read %d (empty slots %d, slot reads failed %d)",
+			t.populated, t.unique, t.normalized, t.waiting, t.failed, t.containers, t.emptySlots, t.slotFailed)
+		for i, e in ipairs(bags.stacks) do
+			if i > 24 then L[#L + 1] = string.format("  + %d more stacks", #bags.stacks - 24); break end
+			L[#L + 1] = string.format("  bag %d slot %d: %s x%s %s", e.bag, e.slot, itemWord(e), e.count and tostring(e.count) or "?", e.itemFacts.state)
+		end
 	end
+	L[#L + 1] = string.format("  refresh events seen: PLAYER_EQUIPMENT_CHANGED %d (slot re-reads %d) | BAG_UPDATE_DELAYED %d (bag re-reads %d) | items waiting for data %d",
+		G.stats.equipmentEvents, G.stats.slotRefreshes, G.stats.bagEvents, G.stats.bagRescans, ns.ItemProbe and ns.ItemProbe.PendingCount and ns.ItemProbe.PendingCount() or 0)
 	-- the offered reward items against what is equipped in their slot: differences only
 	local df = ns.ItemProbe and ns.ItemProbe.DialogFacts and ns.ItemProbe.DialogFacts(true)
 	if df and (#df.choices + #df.rewards) > 0 and eq.state ~= "FAILED" then

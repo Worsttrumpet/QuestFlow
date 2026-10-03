@@ -70,7 +70,7 @@ local function install(o)
 	if o.bags then
 		_G.GetContainerNumSlots = function(bag) return bag == 0 and (o.bagSize or #o.bags) or 0 end
 		_G.GetContainerItemLink = function(bag, slot) local id = bag == 0 and o.bags[slot]; return id and link(id, items[id] and items[id].name) or nil end
-		_G.GetContainerItemInfo = function(bag, slot) return nil, 1 end
+		_G.GetContainerItemInfo = function(bag, slot) return nil, (o.counts and o.counts[slot]) or 1 end
 	end
 	if o.skills then
 		_G.GetNumSkillLines = function() return #o.skills end
@@ -647,15 +647,15 @@ section("report: EQUIPPED ITEM FACTS, BAG ITEM FACTS and facts-only COMPARISON F
 do
 	local ns = gearWorld({ equipped = { [8] = 5103, [10] = 5201 }, bags = { 4914, 900 }, bagSize = 5, questId = 4881, choices = { { id = 5101 }, { id = 5103 } } })
 	local text = joined(ns.Gear.ReportLines())
-	check(text:find("EQUIPPED ITEM FACTS: populated slots 2 of 19 | empty 17 | slot read failed 0 | normalized 2 | waiting 0 | failed 0", 1, true), "the equipped counts")
-	check(text:find("BAG ITEM FACTS: visible stacks 2 | containers read 5 (empty slots 3, slot reads failed 0) | normalized 2 | waiting 0 | failed 0", 1, true), "the bag counts")
+	check(text:find("EQUIPPED ITEM FACTS: occupied slots 2 of 19 | facts loaded 2 | waiting 0 | failed 0 | empty slots 17 | slot reads failed 0", 1, true), "the equipped counts")
+	check(text:find("BAG ITEM FACTS: occupied stacks 2 | unique item ids 2 | facts loaded 2 | waiting 0 | failed 0 | containers read 5 (empty slots 3, slot reads failed 0)", 1, true), "the bag counts")
 	check(text:find("COMPARISON FACTS", 1, true) and text:find("Choice 1 (INVTYPE_WRIST) vs slot 9 WRIST: the slot is empty", 1, true), "an offered item against an empty slot")
 	check(text:find("Choice 2 (INVTYPE_FEET) vs slot 8 FEET: equipped Hiking Boots [LOADED] | slot SAME", 1, true), "an offered item against the equipped item in its slot")
 	check(text:find("req level 9 vs 9 | usable true vs true", 1, true), "required level and usable are shown as facts")
 	for _, w in ipairs({ "upgrade", "recommend", "take it", "sell it", "better", "worse", "best" }) do
 		check(not text:lower():find(w, 1, true), "the report text does not say '" .. w .. "'")
 	end
-	check(#ns.Gear.ReportLines() <= 12, "and it stays compact  [" .. #ns.Gear.ReportLines() .. " lines]")
+	check(#ns.Gear.ReportLines() <= 16, "and it stays compact  [" .. #ns.Gear.ReportLines() .. " lines]")
 	local full
 	rawset(ns.UI, "ShowReport", function(t) full = t end)
 	H.slash("report")
@@ -664,6 +664,123 @@ do
 	clearApi()
 	local t2 = joined(ns2.Gear.ReportLines())
 	check(t2:find("EQUIPPED ITEM FACTS: FAILED (api absent)", 1, true) and t2:find("BAG ITEM FACTS: FAILED (api absent)", 1, true), "with no APIs both sections say FAILED, not 'nothing equipped'")
+end
+
+-- ================================================================ Stage 2 completion (0.4.8): refresh events, stacks and counts, listings, the usable evidence
+
+section("gear refresh: PLAYER_EQUIPMENT_CHANGED re-reads only the changed slot; BAG_UPDATE_DELAYED re-reads the bags")
+do
+	local equipped = { [8] = 5103 }
+	local bags = { 4914 }
+	local ns = gearWorld({ equipped = equipped, bags = bags, bagSize = 3 })
+	local snap = ns.Gear.Get()
+	check(snap.equipped.slots[8].itemId == 5103 and snap.equipped.slots[9].state == "EMPTY" and #snap.bags.stacks == 1, "the first Get reads the equipment and the bags")
+	local untouched = snap.equipped.slots[8]
+	-- a ring is equipped: the client says slot 11 changed
+	equipped[11] = 5201
+	ns.ItemProbe.OnEvent("PLAYER_EQUIPMENT_CHANGED", 11, true)
+	local after = ns.Gear.Get()
+	check(after.equipped.slots[11].state == "POPULATED" and after.equipped.slots[11].itemId == 5201 and after.equipped.slots[11].itemFacts.fields.name.value == "Plain Pants", "the changed slot now holds the new item")
+	check(after.equipped.slots[8] == untouched, "the other slots were not re-read (same entry)")
+	check(ns.Gear.stats.slotRefreshes == 1 and ns.Gear.stats.equipmentEvents == 1, "one targeted slot re-read was counted")
+	-- the item is taken off
+	equipped[11] = nil
+	ns.ItemProbe.OnEvent("PLAYER_EQUIPMENT_CHANGED", 11, false)
+	check(ns.Gear.Get().equipped.slots[11].state == "EMPTY", "an emptied slot becomes EMPTY (not FAILED)")
+	-- a bad slot argument marks everything dirty, and the next Get rescans
+	equipped[9] = 5301
+	ns.ItemProbe.OnEvent("PLAYER_EQUIPMENT_CHANGED")
+	check(ns.Gear.Get().equipped.slots[9].itemId == 5301, "an event without a slot number leads to a full equipment re-read on the next Get")
+	-- bags
+	bags[2] = 900
+	local before = ns.Gear.Get().bags
+	ns.ItemProbe.OnEvent("BAG_UPDATE_DELAYED")
+	local rescanned = ns.Gear.Get().bags
+	check(rescanned ~= before and #rescanned.stacks == 2 and rescanned.stacks[2].itemId == 900 and ns.Gear.stats.bagRescans == 1, "BAG_UPDATE_DELAYED leads to a bag re-read on the next Get; the new stack is there")
+	ns.Gear.Get()
+	check(ns.Gear.stats.bagRescans == 1, "and nothing is re-read again until another bag event")
+	-- events before anything was read do nothing harmful
+	local ns2 = gearWorld({ equipped = { [8] = 5103 } })
+	ns2.ItemProbe.OnEvent("PLAYER_EQUIPMENT_CHANGED", 8, true)
+	ns2.ItemProbe.OnEvent("BAG_UPDATE_DELAYED")
+	check(ns2.Gear.Get().equipped.slots[8].itemId == 5103 and #ns2.errors == 0, "events before the first read are harmless")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("gear: multiple stacks keep their own counts, item facts are reused, and unique item ids are counted")
+do
+	local ns = gearWorld({ bags = { 4914, 4914, 900 }, bagSize = 4, counts = { [1] = 6, [2] = 3, [3] = 1 } })
+	local bags = ns.Gear.Bags()
+	check(#bags.stacks == 3, "three stacks (two of the same item are not merged)")
+	check(bags.stacks[1].itemId == 4914 and bags.stacks[1].count == 6 and bags.stacks[2].itemId == 4914 and bags.stacks[2].count == 3 and bags.stacks[3].count == 1, "each stack keeps its own count: 6, 3 and 1")
+	check(bags.stacks[1].bag == 0 and bags.stacks[1].slot == 1 and bags.stacks[2].slot == 2, "and its bag and slot")
+	check(bags.stacks[1].itemFacts.fields.name.value == "Battleworn Leather Gloves" and bags.stacks[1].itemFacts.fields.stackCount == nil, "the count lives on the stack, not in the item's facts")
+	local t = ns.Gear.BagSummary(bags)
+	check(t.populated == 3 and t.unique == 2, "3 stacks, 2 unique item ids")
+	local direct = ns.Items.Facts(bags.stacks[1].link)
+	check(bags.stacks[1].itemFacts.fields.name.value == direct.fields.name.value and bags.stacks[1].itemFacts.schema == direct.schema, "a bag item's facts are the same Items.Facts structure")
+	local text = joined(ns.Gear.ReportLines())
+	check(text:find("bag 0 slot 1: Battleworn Leather Gloves (id 4914) x6 LOADED", 1, true) and text:find("bag 0 slot 2: Battleworn Leather Gloves (id 4914) x3 LOADED", 1, true), "the report lists each stack with its id, count and status")
+	check(text:find("unique item ids 2", 1, true), "and the unique item id count")
+end
+
+section("gear: failed item info is FAILED (counted), and QuestieDB not knowing an item changes nothing")
+do
+	local ns = gearWorld({ equipped = { [8] = 5103 }, bags = { 4914 } })
+	_G.GetItemInfo = nil
+	local snap = ns.Gear.Snapshot()
+	check(snap.equipped.slots[8].state == "POPULATED" and snap.equipped.slots[8].itemFacts.state == "FAILED" and snap.equipped.slots[8].itemFacts.fields.name.reason == "api absent", "the slot is populated but its item info FAILED (api absent)")
+	local es = ns.Gear.EquippedSummary(snap.equipped)
+	check(es.populated == 1 and es.failed == 1 and es.normalized == 0 and es.waiting == 0, "counted as failed, not waiting")
+	check(ns.ItemProbe.PendingCount() == 0, "a failure is not retried as if it were loading")
+	local text = joined(ns.Gear.ReportLines())
+	check(text:find("facts loaded 0 | waiting 0 | failed 1", 1, true), "the report says failed 1")
+	-- QuestieDB present but not knowing the item
+	local ns2 = gearWorld({ equipped = { [8] = 5103 } })
+	_G.LibQuestieDB = { Item = { Exists = function() return false end, Get = function() return nil end } }
+	local f = ns2.Gear.Snapshot().equipped.slots[8].itemFacts
+	check(f.external.questiedb.exists == false and f.state == "LOADED" and f.fields.name.state == "PROVEN" and #f.conflicts == 0, "unknown to QuestieDB is external.exists = false; the client's facts are untouched and nothing conflicts")
+	_G.LibQuestieDB = { Item = { Exists = function() return true end, Get = function(id, k) return ({ class = 4, subClass = 3, itemLevel = 13 })[k] end } }
+	local g = ns2.Gear.Snapshot().equipped.slots[8].itemFacts
+	check(g.external.questiedb.exists == true and g.external.questiedb.verified == false and g.fields.subclass.value == 2 and g.conflicts[1].field == "subclass" and g.conflicts[1].external == 3, "a QuestieDB record is external and unverified; a disagreement is a conflict, the client's subclass stays")
+	_G.LibQuestieDB = nil
+end
+
+section("gear: the actual slot and the item's equip location stay separate; factual stat comparison")
+do
+	local ns = gearWorld({ equipped = { [16] = 25, [17] = 5401 } })
+	local eq = ns.Gear.Equipped()
+	check(eq.slots[16].slotName == "MAINHAND" and eq.slots[16].itemFacts.fields.equipSlot.value == "INVTYPE_WEAPON", "slot 16 MAINHAND holds an item whose equip location is INVTYPE_WEAPON")
+	check(eq.slots[17].slotName == "OFFHAND" and eq.slots[17].itemFacts.fields.equipSlot.value == "INVTYPE_WEAPON", "the same equip location sits in the OFFHAND slot: the two are not merged")
+	local cur = ns.Items.Facts(5403)
+	local cand = ns.Items.Facts(5403)
+	local c = ns.Gear.Compare(cand, cur)
+	check(c.stats.armor.diff == 0 and c.stats.stamina.diff == 0, "identical items: every difference is 0")
+	_G.ARMOR, _G.RESISTANCE0_NAME = "Armor", "Armor"
+	local a = ns.Items.Facts(5201)       -- armor 28, stamina 2
+	local b = ns.Items.Facts(5403)       -- armor 40, stamina 4
+	local d = ns.Gear.Compare(b, a)
+	check(d.stats.armor.a == 40 and d.stats.armor.b == 28 and d.stats.armor.diff == 12 and d.stats.stamina.diff == 2, "armor 40 vs 28 (+12), stamina 4 vs 2 (+2)")
+	check(d.stats.armor.meaning.a == "label-match", "and each side's evidence for what the key means")
+	_G.ARMOR, _G.RESISTANCE0_NAME = nil, nil
+	local text = joined(ns.Gear.ReportLines())
+	for _, w in ipairs({ "upgrade", "downgrade", "better", "worse", "take this", "sell this", "temporary" }) do
+		check(not text:lower():find(w, 1, true), "the report never says '" .. w .. "'")
+	end
+end
+
+section("item facts: the usable value keeps IsUsableItem's second value and the dialog's own flag, as evidence only")
+do
+	local ns = fresh()
+	_G.IsUsableItem = nil
+	install({ items = STAGE2, questId = 92579, choices = { { id = 5101 }, { id = 5102 } } })
+	_G.IsUsableItem = function() return false, true end
+	ns.ItemProbe.OnEvent("QUEST_COMPLETE")
+	local f = ns.ItemProbe.DialogFacts(false).choices[1].facts
+	check(f.fields.usable.state == "PROVEN" and f.fields.usable.value == false and f.fields.usable.second == true, "usable false, with the second return value kept")
+	check(f.offered.dialogFlag == true, "and the dialog's own 5th GetQuestItemInfo value is kept beside it")
+	local text = joined(ns.ItemProbe.FactsLines())
+	check(text:find("usable PROVEN false [IsUsableItem second value true; dialog flag true]", 1, true), "the report shows both next to the value, without interpreting them")
 end
 
 section("gear: Stage 2 is read-only, judges nothing, and feeds nothing (no planner, presenter or provider reads it)")

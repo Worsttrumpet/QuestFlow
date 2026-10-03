@@ -447,6 +447,7 @@ end
 
 --- Called for every watched client event. Counts it, keeps the first arguments, and runs the reward-dialog capture or the late-data retry.
 function P.OnEvent(event, ...)
+	local a1, a2 = ...
 	local s = store()
 	if not s then return end
 	local e = s.events[event]
@@ -462,6 +463,10 @@ function P.OnEvent(event, ...)
 			P.CaptureDialog(event)
 		elseif event == "GET_ITEM_INFO_RECEIVED" then
 			if #pending > 0 then resolvePending() end
+		elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+			if ns.Gear then ns.Gear.OnEquipmentChanged(a1, a2) end
+		elseif event == "BAG_UPDATE_DELAYED" then
+			if ns.Gear then ns.Gear.OnBagsChanged(a1) end
 		end
 	end)
 	if not ok and ns.RecordError then ns.RecordError("itemprobe " .. tostring(event), err) end
@@ -604,7 +609,7 @@ function P.DialogFacts(refresh)
 		for i, d in ipairs(spec[1]) do
 			local raw = d.facts or { id = d.e.id, ref = d.e.id, f = {}, src = {}, err = { info = "not read" } }
 			local facts = I.Annotate(I.Normalize(raw))
-			facts.offered = { source = "reward_dialog", kind = d.kind, index = d.i, quest = dlg.q }
+			facts.offered = { source = "reward_dialog", kind = d.kind, index = d.i, quest = dlg.q, dialogFlag = d.e.r5 }
 			spec[2][#spec[2] + 1] = { index = d.i, kind = d.kind, id = d.e.id, name = d.e.name, count = d.e.n, quality = d.e.q, facts = facts }
 		end
 	end
@@ -625,7 +630,7 @@ local function factsItemLines(label, it)
 	local function cls(f) return f.state == "PROVEN" and ((f.text and (tostring(f.text) .. " ") or "") .. tostring(f.value)) or nil end
 	L[#L + 1] = string.format("  class %s | subclass %s | ilvl %s | slot %s | req level %s | vendor %s | usable %s | use effect %s",
 		factWord(fl.class, cls(fl.class)), factWord(fl.subclass, cls(fl.subclass)), factWord(fl.itemLevel), factWord(fl.equipSlot), factWord(fl.requiredLevel),
-		factWord(fl.vendorValue, fl.vendorValue.state == "PROVEN" and I.Money(fl.vendorValue.value) or nil), factWord(fl.usable), factWord(fl.useEffect))
+		factWord(fl.vendorValue, fl.vendorValue.state == "PROVEN" and I.Money(fl.vendorValue.value) or nil), factWord(fl.usable, fl.usable.state == "PROVEN" and (tostring(fl.usable.value) .. " [IsUsableItem second value " .. tostring(fl.usable.second) .. "; dialog flag " .. tostring(facts.offered and facts.offered.dialogFlag) .. "]") or nil), factWord(fl.useEffect))
 	local st = fl.stats
 	if st.state == "PROVEN" then
 		local parts = {}
