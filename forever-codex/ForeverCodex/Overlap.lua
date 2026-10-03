@@ -122,7 +122,7 @@ function Ov.List(plan, ctx)
 			if not seen[c.a.quest] then
 				seen[c.a.quest] = true
 				out[#out + 1] = { kind = "objective", title = questName(c.a) .. suffix(ctx, c.a.quest), objectives = c.todo, fraction = c.fraction, quest = c.a.quest,
-					dist = ns.Presenter.Dist(distanceTo(c.a, ctx)),
+					dist = ns.Presenter.Dist(distanceTo(c.a, ctx), true),
 					why = c.byPlace and "Close to what you're doing." or "In the same area as what you're doing." }
 			end
 		end
@@ -140,7 +140,7 @@ function Ov.List(plan, ctx)
 			if also.kind == "OBJECTIVE" and #unfinishedOf(also) > 0 then
 				if also.quest then seen[also.quest] = true end
 				out[#out + 1] = { kind = "objective", title = questName(also) .. suffix(ctx, also.quest), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest,
-					dist = ns.Presenter.Dist(distanceTo(also, ctx)), why = ns.Presenter.AlsoWhy(plan, also) }
+					dist = ns.Presenter.Dist(distanceTo(also, ctx), true), why = ns.Presenter.AlsoWhy(plan, also) }
 			elseif also.type ~= "FLIGHT" and also.kind ~= "TURN_IN" and actions < Ov.MAX_ACTIONS then
 				local d = distanceTo(also, ctx)
 				-- an opportunity the planner priced (same stop, or a detour within its limit) is listed whatever its distance FROM YOU: what matters is the

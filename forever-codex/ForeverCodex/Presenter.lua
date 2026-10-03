@@ -91,14 +91,15 @@ function Pr.AlsoLabel(items)
 end
 
 --- The distance as the tracker prints it: "Here" (under 30 yd), "90 yd", "1,800 yd", "In another area"; nil when it cannot be said.
-function Pr.Dist(d)
+function Pr.Dist(d, area)
 	if type(d) ~= "number" then return nil end
 	if d >= E.DIFFERENT_CONTINENT then return "In another area" end
 	if d < 30 then return "Here" end
 	local r = d < 1000 and math.floor(d / 10 + 0.5) * 10 or math.floor(d / 50 + 0.5) * 50
 	local t = tostring(r)
 	if r >= 1000 then t = t:sub(1, #t - 3) .. "," .. t:sub(-3) end
-	return t .. " yd"
+	-- an objective is an AREA the game marks with one point (the real spawns can be anywhere in it): its distance is to that point, so it is marked approximate
+	return (area and "~" or "") .. t .. " yd"
 end
 
 --- "a - b" for the parts that exist (nil when none do).
@@ -150,7 +151,7 @@ local function describe(a, plan, ctx, icon)
 	local sw = ns.Overlap and ns.Overlap.ShortWhere(d0)
 	if sw then it.whereShort = (sw == "here" and "Here") or (sw == "nearby" and "Nearby") or (sw .. " away") end
 	if pos0 and d0 and d0 >= E.DIFFERENT_CONTINENT then it.whereShort = "In another area" end
-	it.dist = Pr.Dist(d0)                                 -- the number the tracker prints ("90 yd", "1,800 yd", "Here")
+	it.dist = Pr.Dist(d0, a.kind == "OBJECTIVE")          -- the number the tracker prints ("90 yd", "1,800 yd", "Here")
 	if type(a.level) == "number" and a.quest then it.level = a.level end
 	if a.type == "FLIGHT" then
 		it.title = "Visit the flight master"

@@ -201,7 +201,10 @@ local function drawAlso(c, items)
 	local rowPool = {}
 	for _, it in ipairs(items) do
 		if it.kind == "objective" then
-			local single = #it.objectives == 1
+			-- one unfinished objective is drawn compactly (quest name beside its count) ONLY when the quest name says what the count is of; when the
+			-- objective has its own wording ("Windsong Crawler Meat"), the quest is a heading and the objective is the row, like any other quest
+			local o1 = it.objectives[1]
+			local single = #it.objectives == 1 and not (o1 and o1.text and o1.text ~= "" and o1.text ~= "objective" and o1.text ~= it.title)
 			if single then
 				-- one unfinished objective: the quest's own name beside its count, one row
 				if rowsUsed < #c.alsoRows then

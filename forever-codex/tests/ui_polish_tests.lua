@@ -926,8 +926,8 @@ do
 	check(Pr.Dist(10) == "Here" and Pr.Dist(94) == "90 yd" and Pr.Dist(1800) == "1,800 yd" and Pr.Dist(1730) == "1,750 yd" and Pr.Dist(4000) == "4,000 yd" and Pr.Dist(nil) == nil and Pr.Dist(ns.Engine.DIFFERENT_CONTINENT) == "In another area", "distances: Here / 90 yd / 1,800 yd / another area, nothing when unknown")
 	check(Pr.Join("a", nil, "b") == "a - b" and Pr.Join(nil, nil) == nil, "Join keeps only the parts that exist")
 	local card = Pr.Card(ns.State.plan, ns.State.ctx)
-	check(card.now and ns.State.plan.now.quest == 1 and card.now.dist == "300 yd" and card.now.level == 9, "NOW carries a numeric distance and the quest level from the data  [" .. tostring(card.now and card.now.dist) .. "]")
-	check(c.nowInfo.__text == "300 yd - Lv 9", "the tracker shows it as secondary information: '" .. tostring(c.nowInfo.__text) .. "'")
+	check(card.now and ns.State.plan.now.quest == 1 and card.now.dist == "~300 yd" and card.now.level == 9, "NOW carries a numeric distance and the quest level from the data  [" .. tostring(card.now and card.now.dist) .. "]")
+	check(c.nowInfo.__text == "~300 yd - Lv 9", "the tracker shows it as secondary information: '" .. tostring(c.nowInfo.__text) .. "'")
 	-- READY TO TURN IN
 	local byQ = {}
 	for _, r in ipairs(card.ready) do byQ[r.quest] = r end
@@ -1001,4 +1001,21 @@ do
 	_G.debugprofilestop = nil
 	ns.State.Recompute()
 	check(#ns.errors == 0, "no errors without a clock")
+end
+
+section("clarity (0.6.3): an ALSO objective says what its count is of")
+do
+	local ns, W, c = clarityWorld(false, true)
+	local heads, rows = {}, {}
+	for _, h in ipairs(c.alsoHeads) do if h.__shown ~= false and h.__text ~= "" then heads[#heads + 1] = h.__text end end
+	for _, r in ipairs(c.alsoRows) do if r.cur then rows[#rows + 1] = tostring(r.label.__text) .. " " .. tostring(r.count.__text) end end
+	local flat = table.concat(heads, " | ") .. " || " .. table.concat(rows, " | ")
+	check(flat:find("Near Objective", 1, true) and flat:find("Other thing 0/4", 1, true), "the quest is the heading and its objective ('Other thing') is the row with its count: " .. flat)
+	-- a quest whose objective has no wording of its own keeps the compact row
+	local ns2, W2, c2 = clarityWorld(false, true)
+	W2.objectives[7] = { { text = "", type = "monster", finished = false, numFulfilled = 0, numRequired = 4 } }
+	ns2.State.Recompute()
+	local compact = {}
+	for _, r in ipairs(c2.alsoRows) do if r.cur then compact[#compact + 1] = tostring(r.label.__text) end end
+	check(table.concat(compact, "|"):find("Near Objective", 1, true) ~= nil, "no objective wording: the compact row (quest name beside the count) is kept")
 end
