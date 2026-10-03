@@ -316,3 +316,138 @@ do
 	check(e.current.state == "PROVEN_NO" and e.future.state == "SOON" and e.future.unlockLevel == 40, "registered proven evidence still gives PROVEN_NO now and SOON")
 	E.ClearEvidence(); reset()
 end
+
+-- ================================================================ 0.5.2: one source of truth for the diagnostic state of IsUsableItem
+-- Real report (build 70205): ITEM PROBE said "Usable (IsUsableItem) PROVEN" (a boolean was read) while ELIGIBILITY EVIDENCE said "IsUsableItem (MISSING)". The readers
+-- looked the function up as C_Item.IsUsableItem and then as a global; the evidence diagnostics looked only for a global. Same name, two lookups.
+
+local function clearClient()
+	for _, n in ipairs({ "GetQuestID", "GetNumQuestChoices", "GetNumQuestRewards", "GetQuestItemInfo", "GetQuestItemLink", "GetItemInfo", "GetItemStats", "IsUsableItem", "GetItemSpell", "GetItemCount", "GetInventoryItemLink", "GetItemInfoInstant" }) do _G[n] = nil end
+	_G.C_Item = nil
+end
+
+local USABLE_DB = { [7101] = { name = "Mail Chest", equipLoc = "INVTYPE_CHEST", classID = 4, sub = 3, req = 5 } }
+local function stubItems(usableFn, where)
+	clearClient()
+	local function lk(id) return "|Hitem:" .. id .. "::|h[" .. USABLE_DB[id].name .. "]|h" end
+	_G.GetQuestID = function() return 88 end
+	_G.GetNumQuestChoices = function() return 1 end
+	_G.GetNumQuestRewards = function() return 0 end
+	_G.GetQuestItemInfo = function(kind, i) return USABLE_DB[7101].name, 1, 1, 1, true, 7101 end
+	_G.GetQuestItemLink = function() return lk(7101) end
+	_G.GetItemInfo = function(ref) local d = USABLE_DB[7101]; return d.name, lk(7101), 1, 10, d.req, "Armor", "Mail", 1, d.equipLoc, 1, 5, d.classID, d.sub end
+	_G.GetItemStats = function() return { RESISTANCE0_NAME = 10 } end
+	_G.GetItemSpell = function() return nil end
+	_G.GetItemCount = function() return 1 end
+	_G.GetInventoryItemLink = function() return nil end
+	if usableFn then
+		if where == "namespace" then _G.C_Item = { IsUsableItem = usableFn } else _G.IsUsableItem = usableFn end
+	end
+end
+
+section("diagnostics: IsUsableItem available only as C_Item.IsUsableItem is PRESENT everywhere (the 0.5.1 disagreement)")
+do
+	reset()
+	ns.Context.DefaultReader.character = function() return { level = 39, classToken = "SHAMAN", raceToken = "ORC", faction = "Horde" } end
+	stubItems(function() return false, false end, "namespace")
+	check(rawget(_G, "IsUsableItem") == nil and type(C_Item.IsUsableItem) == "function", "(only the namespace form exists)")
+	local fn, via = I.Resolve("IsUsableItem")
+	check(fn ~= nil and via == "C_Item.IsUsableItem", "the shared resolver finds it: via C_Item.IsUsableItem")
+	local raw = I.Read(7101)
+	check(raw.f.usable == false and raw.src.usable == "C_Item.IsUsableItem" and raw.err.usable == nil, "the item reader read a boolean through that same function and records where it came from")
+	local sig
+	for _, x in ipairs(Ev.Signals()) do if x.name == "IsUsableItem" then sig = x end end
+	check(sig.state == "PRESENT" and sig.via == "C_Item.IsUsableItem", "the evidence diagnostics now agree: PRESENT via C_Item.IsUsableItem (0.5.1 said MISSING)")
+	ns.ItemProbe.OnEvent("QUEST_COMPLETE")
+	local st, detail = ns.ItemProbe.Status("usable")
+	check(st == "PROVEN" and detail:find("via C_Item.IsUsableItem", 1, true), "ItemProbe: a boolean was read, PROVEN, and the field says which function  [" .. st .. " " .. detail .. "]")
+	local text = table.concat(Ev.ReportLines(nil, { observed = function(name) if name == "IsUsableItem" then local a, b = ns.ItemProbe.Status("usable"); return a .. " (" .. b .. ")" end end }), "\n")
+	check(text:find("IsUsableItem via C_Item.IsUsableItem", 1, true) and text:find("IsUsableItem: availability PRESENT (C_Item.IsUsableItem) | reads: PROVEN (usable=false via C_Item.IsUsableItem)", 1, true), "the report line shows availability, then what was read, then reliability, as three separate statements")
+	check(not text:find("MISSING", 1, true) and text:find("reliability: not trusted alone", 1, true), "'MISSING' is gone, and availability is not mixed with reliability")
+	clearClient()
+end
+
+section("diagnostics: a global IsUsableItem is PRESENT, and no function at all is ABSENT with ItemProbe FAILED (no 'proven' without the API)")
+do
+	reset()
+	ns.Context.DefaultReader.character = function() return { level = 39, classToken = "SHAMAN" } end
+	stubItems(function() return true, false end, "global")
+	local _, via = I.Resolve("IsUsableItem")
+	local sig
+	for _, x in ipairs(Ev.Signals()) do if x.name == "IsUsableItem" then sig = x end end
+	check(via == "IsUsableItem" and sig.state == "PRESENT" and sig.via == "IsUsableItem" and I.Read(7101).src.usable == "IsUsableItem", "global form: PRESENT via IsUsableItem, read through it")
+	-- no form at all
+	stubItems(nil)
+	check(I.Resolve("IsUsableItem") == nil, "(neither form exists)")
+	for _, x in ipairs(Ev.Signals()) do if x.name == "IsUsableItem" then sig = x end end
+	check(sig.state == "ABSENT" and sig.via == nil, "the evidence diagnostics say ABSENT")
+	local raw = I.Read(7101)
+	check(raw.err.usable == "api absent" and raw.f.usable == nil, "the reader says api absent")
+	ForeverCodexDB.items = nil
+	ns.ItemProbe.OnEvent("QUEST_COMPLETE")
+	local st, detail = ns.ItemProbe.Status("usable")
+	check(st == "FAILED" and detail == "api absent", "ItemProbe says FAILED (api absent), never PROVEN  [" .. st .. " " .. detail .. "]")
+	local text = table.concat(Ev.ReportLines(nil, { observed = function(name) if name == "IsUsableItem" then local a, b = ns.ItemProbe.Status("usable"); return a .. " (" .. b .. ")" end end }), "\n")
+	check(text:find("IsUsableItem: availability ABSENT | reads: FAILED (api absent)", 1, true) and text:find("client functions absent", 1, true), "the report is consistent: availability ABSENT, reads FAILED")
+	clearClient()
+end
+
+section("diagnostics: every client function the diagnostics name is looked up by the same resolver the readers use")
+do
+	reset()
+	clearClient()
+	_G.C_Item = {}
+	local names = { "GetItemInfo", "GetItemInfoInstant", "GetItemStats", "IsUsableItem", "GetItemSpell", "GetItemCount" }
+	for _, n in ipairs(names) do C_Item[n] = function() return nil end end
+	for _, n in ipairs(names) do
+		local fn, via = I.Resolve(n)
+		check(fn == C_Item[n] and via == "C_Item." .. n, n .. " resolves to the namespace function and says so")
+	end
+	for _, x in ipairs(Ev.Signals()) do
+		if x.name == "IsUsableItem" then check(x.state == "PRESENT" and x.via == "C_Item.IsUsableItem", "the evidence diagnostics agree for IsUsableItem") end
+	end
+	local sg = Ev.Signals()
+	local byName = {}
+	for _, x in ipairs(sg) do byName[x.name] = x end
+	check(byName.GetNumSkillLines.state == "ABSENT" and byName.GetSkillLineInfo.state == "ABSENT", "the skill-line functions are ABSENT (not found as a namespace function or a global; this is what 'absent' means)")
+	check(I.API.GetNumSkillLines[3] == "GetNumSkillLines" and I.Resolve("GetNumSkillLines") == nil, "and the skill-line reader uses the same lookup")
+	for name in pairs(I.API) do check(type(I.API[name]) == "table", name .. " is in the one registry") end
+	clearClient()
+end
+
+section("diagnostics: the evidence behaviour of 0.5.1 is unchanged when IsUsableItem is namespace-only (dialog and worn evidence, OBSERVED/PROVEN, conflicts)")
+do
+	reset()
+	ns.Context.DefaultReader.character = function() return { level = 39, classToken = "SHAMAN", raceToken = "ORC", faction = "Horde" } end
+	USABLE_DB[7102] = { name = "Mail Legs", equipLoc = "INVTYPE_LEGS", classID = 4, sub = 3, req = 5 }
+	USABLE_DB[7103] = { name = "Mail Boots", equipLoc = "INVTYPE_FEET", classID = 4, sub = 3, req = 5 }
+	USABLE_DB[7110] = { name = "Leather Vest", equipLoc = "INVTYPE_CHEST", classID = 4, sub = 2, req = 1 }
+	local function idOf(ref) return type(ref) == "number" and ref or tonumber(ref:match("item:(%d+)")) end
+	local function lk(id) return "|Hitem:" .. id .. "::|h[" .. USABLE_DB[id].name .. "]|h" end
+	stubItems(function() return false, false end, "namespace")
+	_G.GetNumQuestChoices = function() return 3 end
+	_G.GetQuestItemInfo = function(kind, i) return USABLE_DB[7100 + i].name, 1, 1, 1, false, 7100 + i end
+	_G.GetQuestItemLink = function(kind, i) return lk(7100 + i) end
+	_G.GetItemInfo = function(ref) local id = idOf(ref); local d = USABLE_DB[id]; if not d then return nil end return d.name, lk(id), 1, 10, d.req, "Armor", "x", 1, d.equipLoc, 1, 5, d.classID, d.sub end
+	_G.GetInventoryItemLink = function(u, slot) if slot == 5 then return lk(7110) end end
+	ns.ItemProbe.OnEvent("QUEST_COMPLETE")
+	local g = Ev.Group("SHAMAN", 4, 3)
+	check(g.counts.no == 3 and g.evidenceState == "PROVEN" and g.noAt == 39, "reward-dialog evidence still records: three distinct unusable mail items prove 'not usable at 39'")
+	ns.ItemProbe.OnEvent("PLAYER_EQUIPMENT_CHANGED", 5, true)
+	local l = Ev.Group("SHAMAN", 4, 2)
+	check(l.counts.yes == 1 and l.yesAt == 39 and l.evidenceState == "PROVEN", "worn-item evidence still records: usable at 39, PROVEN by one worn item")
+	check(Ev.GetProficiency("SHAMAN", 4, 3, 39).state == "PROVEN_NO" and Ev.GetProficiency("SHAMAN", 4, 2, 39).state == "PROVEN_YES", "and the answers are unchanged")
+	-- a lone observation stays OBSERVED, and a contradiction stays a CONFLICT
+	rec({ level = 30, id = 5001, usable = false, text = "Armor/Plate", sub = 4 })
+	check(Ev.GetProficiency("SHAMAN", 4, 4, 30).evidenceState == "OBSERVED", "one observation is still only OBSERVED")
+	rec({ level = 30, id = 5001, usable = true, sub = 4, text = "Armor/Plate" })
+	check(Ev.GetProficiency("SHAMAN", 4, 4, 30).state == "CONFLICT", "and a contradiction is still a CONFLICT")
+	local text = table.concat(Ev.ReportLines(), "\n")
+	check(not text:find("MISSING", 1, true), "the report never says MISSING")
+	local function code(f) return (H.readFile(H.addonDir .. "/" .. f):gsub("%-%-[^\n]*", "")) end
+	for _, f in ipairs({ "Planner.lua", "Engine.lua", "Strategies.lua", "Presenter.lua", "RewardAdvisor.lua", "Eligibility.lua" }) do
+		check(not code(f):find("Items%.Resolve") and not code(f):find("Signals"), f .. " does not use the diagnostic resolver")
+	end
+	clearClient()
+	ns.Context.DefaultReader.character = nil
+end

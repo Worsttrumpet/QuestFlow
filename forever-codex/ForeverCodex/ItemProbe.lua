@@ -173,7 +173,7 @@ local function tallyItem(facts)
 			note("itemStats", "ok", statSample(f.stats))
 		end
 	end
-	if facts.err.usable then note("usable", "fail", nil, facts.err.usable) else note("usable", "ok", "usable=" .. tostring(f.usable)) end
+	if facts.err.usable then note("usable", "fail", nil, facts.err.usable) else note("usable", "ok", "usable=" .. tostring(f.usable) .. " via " .. tostring(facts.src.usable)) end
 	if facts.err.spell then note("useEffect", "fail", nil, facts.err.spell)
 	elseif f.spell then note("useEffect", "ok", f.spell .. (f.spellId and (" #" .. f.spellId) or ""))
 	else note("useEffect", "none") end

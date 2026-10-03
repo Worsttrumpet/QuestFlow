@@ -23,7 +23,8 @@
 --     level. A hidden restriction can cause a false conflict; that errs toward UNKNOWN, which is the safe side.
 -- DEDUPLICATION: identical observations (same class, level, race, faction, item, result, source and build) are one record with a repeat count and first/last
 -- time. A different result, item, level, source or BUILD is a separate record.
--- Read-only; independent of the planner, Gear, UI, the advisor and Eligibility (Eligibility asks this file, never the reverse).
+-- Read-only; independent of the planner, Gear, UI, the advisor and Eligibility (Eligibility asks this file, never the reverse). The only use of the item reader is
+-- Items.Resolve, to say in the diagnostics whether a client function is present by the same lookup the readers use.
 
 local addonName, ns = ...
 
@@ -330,23 +331,32 @@ function Ev.Status()
 	return st
 end
 
---- The client functions this recorder relies on, present or absent right now (looked up at call time; presence is NOT proof that they work).
+--- The client functions this recorder relies on. AVAILABILITY only, from the same resolver the item readers use (Items.Resolve, which tries the namespace form such
+-- as C_Item.IsUsableItem and then the global): { name, label, state = "PRESENT" | "ABSENT", via }. PRESENT means a function with that name exists right now; it does NOT
+-- mean it was read successfully (that is ItemProbe's PROVEN / UNPROVEN / FAILED) and it does NOT mean its answers are reliable (a separate question).
+-- Without Items (it is not a hard dependency) only the global form can be checked and `via` says so.
 function Ev.Signals()
-	local function has(name) return type(_G[name]) == "function" end
+	local function look(name, label, group)
+		local via
+		if ns.Items and ns.Items.Resolve and ns.Items.API[name] then
+			local fn, v = ns.Items.Resolve(name)
+			if fn then via = v end
+		elseif type(_G[name]) == "function" then
+			via = name
+		end
+		return { name = name, label = label, group = group, state = via and "PRESENT" or "ABSENT", via = via }
+	end
 	return {
-		available = {
-			{ "IsUsableItem", has("IsUsableItem") }, { "GetQuestItemInfo (reward dialog usable flag)", has("GetQuestItemInfo") },
-			{ "GetInventoryItemLink (worn items)", has("GetInventoryItemLink") }, { "UnitClass / UnitLevel / UnitRace", has("UnitClass") and has("UnitLevel") and has("UnitRace") },
-		},
-		unavailable = {
-			{ "GetNumSkillLines / GetSkillLineInfo (skill lines)", not (has("GetNumSkillLines") and has("GetSkillLineInfo")) },
-		},
+		look("IsUsableItem", "IsUsableItem", "usability"), look("GetQuestItemInfo", "GetQuestItemInfo (reward dialog usable flag)", "usability"),
+		look("GetInventoryItemLink", "GetInventoryItemLink (worn items)", "worn"), look("UnitClass", "UnitClass", "character"), look("UnitLevel", "UnitLevel", "character"),
+		look("UnitRace", "UnitRace", "character"), look("GetNumSkillLines", "GetNumSkillLines (skill lines)", "skills"), look("GetSkillLineInfo", "GetSkillLineInfo (skill lines)", "skills"),
 		notProbed = { "IsSpellKnown for proficiency spells (their Forever spell ids are unproven)" },
 	}
 end
 
---- Compact lines for /codex report (never a dump of observations). extra = optional lines appended by the caller (event status).
-function Ev.ReportLines(extra)
+--- Compact lines for /codex report (never a dump of observations). extra = optional lines appended by the caller (event status); opts.observed(name) = optional
+-- function returning the caller's own observation of a signal (for example ItemProbe's "PROVEN"), shown next to its availability.
+function Ev.ReportLines(extra, opts)
 	local L = {}
 	local st = Ev.Status()
 	L[#L + 1] = "ELIGIBILITY EVIDENCE (what the Forever client let this character use; observations are not proven rules)"
@@ -362,11 +372,21 @@ function Ev.ReportLines(extra)
 	local P = Ev.POLICY
 	L[#L + 1] = string.format("  policy v%d: YES needs %d worn item or %d client-flagged items at that level; NO needs %d client-flagged items at that level; an item above the character's level is never counted",
 		P.version, P.yesWorn, P.yesClient, P.noClient)
+	-- signals: three different questions, kept apart: is the function there (availability), was it read successfully (the caller's observation), can its answers be trusted
 	local sg = Ev.Signals()
-	local a, u = {}, {}
-	for _, x in ipairs(sg.available) do a[#a + 1] = x[1] .. (x[2] and "" or " (MISSING)") end
-	for _, x in ipairs(sg.unavailable) do u[#u + 1] = x[1] .. (x[2] and " (absent)" or " (present)") end
-	L[#L + 1] = "  signals: " .. table.concat(a, "; ") .. " | " .. table.concat(u, "; ") .. " | not probed: " .. table.concat(sg.notProbed, "; ")
+	local present, absent = {}, {}
+	for _, x in ipairs(sg) do
+		if x.state == "PRESENT" then present[#present + 1] = x.label .. " via " .. x.via else absent[#absent + 1] = x.label end
+	end
+	L[#L + 1] = "  client functions present: " .. (#present > 0 and table.concat(present, "; ") or "none")
+	L[#L + 1] = "  client functions absent (not found as " .. "a namespace function or a global): " .. (#absent > 0 and table.concat(absent, "; ") or "none") .. " | not probed: " .. table.concat(sg.notProbed, "; ")
+	local u
+	for _, x in ipairs(sg) do if x.name == "IsUsableItem" then u = x end end
+	if u then
+		local read = opts and opts.observed and opts.observed("IsUsableItem")
+		L[#L + 1] = string.format("  IsUsableItem: availability %s%s | reads: %s | reliability: not trusted alone (%d recorded observation(s) had client answers that did not agree)",
+			u.state, u.via and (" (" .. u.via .. ")") or "", read or "not reported here", st.noResult)
+	end
 	for i, g in ipairs(Ev.Groups()) do
 		if i > 6 then L[#L + 1] = "  + " .. (#Ev.Groups() - 6) .. " more group(s)"; break end
 		L[#L + 1] = string.format("  %s %s: %s | observations %d (usable %d, not usable %d, unknown %d, not counted %d)%s%s", g.class, g.typeText or (g.itemClass .. "/" .. g.subClass), g.evidenceState,

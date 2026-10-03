@@ -562,7 +562,13 @@ function D.PlaytestLines(snap, lines)
 			extra[1] = "  events it relies on: " .. ns.ItemProbe.EventStatus("QUEST_DETAIL") .. " " .. ns.ItemProbe.EventStatus("QUEST_COMPLETE") .. " " .. ns.ItemProbe.EventStatus("PLAYER_EQUIPMENT_CHANGED")
 				.. " (observations are recorded at those moments and when the report is made; detail: /dump ForeverCodexDB.items.evidence)"
 		end
-		local okE, elines = pcall(ns.EligibilityEvidence.ReportLines, extra)
+		local observed = function(name)
+			if name == "IsUsableItem" and ns.ItemProbe and ns.ItemProbe.Status then
+				local stt, detail = ns.ItemProbe.Status("usable")
+				return stt .. " (" .. tostring(detail) .. ")"
+			end
+		end
+		local okE, elines = pcall(ns.EligibilityEvidence.ReportLines, extra, { observed = observed })
 		if okE then
 			for _, l in ipairs(elines) do add(l) end
 		else

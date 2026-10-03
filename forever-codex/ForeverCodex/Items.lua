@@ -33,6 +33,29 @@ local function find(tblName, key, globalName)
 end
 I.Find = find
 
+-- THE one place that says how each client function is looked up (namespace table first, then the global of the same purpose). Every read in this file goes through
+-- I.Resolve, and the diagnostics ask it too, so what the readers use and what the report calls "present" cannot disagree.
+I.API = {
+	GetItemInfo = { "C_Item", "GetItemInfo", "GetItemInfo" }, GetItemInfoInstant = { "C_Item", "GetItemInfoInstant", "GetItemInfoInstant" },
+	GetItemStats = { "C_Item", "GetItemStats", "GetItemStats" }, IsUsableItem = { "C_Item", "IsUsableItem", "IsUsableItem" },
+	GetItemSpell = { "C_Item", "GetItemSpell", "GetItemSpell" }, GetItemCount = { "C_Item", "GetItemCount", "GetItemCount" },
+	GetInventoryItemLink = { nil, nil, "GetInventoryItemLink" },
+	GetContainerNumSlots = { "C_Container", "GetContainerNumSlots", "GetContainerNumSlots" }, GetContainerItemLink = { "C_Container", "GetContainerItemLink", "GetContainerItemLink" },
+	GetContainerItemInfo = { "C_Container", "GetContainerItemInfo", "GetContainerItemInfo" },
+	GetNumSkillLines = { nil, nil, "GetNumSkillLines" }, GetSkillLineInfo = { nil, nil, "GetSkillLineInfo" },
+	-- looked up as plain globals by ItemProbe / Context
+	GetQuestItemInfo = { nil, nil, "GetQuestItemInfo" }, GetQuestItemLink = { nil, nil, "GetQuestItemLink" },
+	UnitClass = { nil, nil, "UnitClass" }, UnitLevel = { nil, nil, "UnitLevel" }, UnitRace = { nil, nil, "UnitRace" },
+}
+
+--- The client function for a name in I.API: `fn, via` (via = "C_Item.IsUsableItem" or "IsUsableItem"), or nil when neither form exists RIGHT NOW. Presence only:
+-- it says nothing about whether the function works or answers correctly.
+function I.Resolve(name)
+	local spec = I.API[name]
+	if not spec then return nil end
+	return find(spec[1], spec[2], spec[3])
+end
+
 local function call(fn, ...)
 	local r = { pcall(fn, ...) }
 	if not r[1] then return false, tostring(r[2]) end
@@ -66,7 +89,7 @@ function I.Read(ref)
 	if ref == nil then facts.err.info = "no item reference"; return facts end
 
 	-- name, link, quality, item level, required level, type, subtype, stack, equip location, texture, sell price, class id, subclass id
-	local info, infoName = find("C_Item", "GetItemInfo", "GetItemInfo")
+	local info, infoName = I.Resolve("GetItemInfo")
 	if not info then
 		facts.err.info = "api absent"
 	else
@@ -85,7 +108,7 @@ function I.Read(ref)
 	end
 
 	-- the cache-independent subset (class, subclass, equip location, icon), when the client has it
-	local inst, instName = find("C_Item", "GetItemInfoInstant", "GetItemInfoInstant")
+	local inst, instName = I.Resolve("GetItemInfoInstant")
 	if not inst then
 		facts.err.instant = "api absent"
 	else
@@ -102,7 +125,7 @@ function I.Read(ref)
 
 	-- stats need an item link; a bare id is read through the link the info call returned
 	local link = type(ref) == "string" and ref or f.link
-	local stats, statsName = find("C_Item", "GetItemStats", "GetItemStats")
+	local stats, statsName = I.Resolve("GetItemStats")
 	if not stats then
 		facts.err.stats = "api absent"
 	elseif type(link) ~= "string" then
@@ -119,7 +142,7 @@ function I.Read(ref)
 		end
 	end
 
-	local usable, usableName = find("C_Item", "IsUsableItem", "IsUsableItem")
+	local usable, usableName = I.Resolve("IsUsableItem")
 	if not usable then
 		facts.err.usable = "api absent"
 	else
@@ -129,7 +152,7 @@ function I.Read(ref)
 		else f.usable, f.usableSecond, facts.src.usable = r[1], r[2], usableName end
 	end
 
-	local spell, spellName = find("C_Item", "GetItemSpell", "GetItemSpell")
+	local spell, spellName = I.Resolve("GetItemSpell")
 	if not spell then
 		facts.err.spell = "api absent"
 	else
@@ -142,7 +165,7 @@ function I.Read(ref)
 		end
 	end
 
-	local count, countName = find("C_Item", "GetItemCount", "GetItemCount")
+	local count, countName = I.Resolve("GetItemCount")
 	if not count then
 		facts.err.count = "api absent"
 	else
@@ -158,7 +181,7 @@ end
 
 --- Equipped items: { { slot, link }, ... } and a reason when the API is missing.
 function I.Equipped()
-	local get = find(nil, nil, "GetInventoryItemLink")
+	local get = I.Resolve("GetInventoryItemLink")
 	if not get then return {}, "api absent" end
 	local out, errs = {}, 0
 	for slot = 1, I.EQUIP_SLOTS do
@@ -180,10 +203,10 @@ end
 
 --- Items in the player's bags: { { bag, slot, link, count }, ... } and a reason when the API is missing.
 function I.Bags()
-	local numSlots = find("C_Container", "GetContainerNumSlots", "GetContainerNumSlots")
-	local getLink = find("C_Container", "GetContainerItemLink", "GetContainerItemLink")
+	local numSlots = I.Resolve("GetContainerNumSlots")
+	local getLink = I.Resolve("GetContainerItemLink")
 	if not (numSlots and getLink) then return {}, "api absent" end
-	local getInfo = find("C_Container", "GetContainerItemInfo", "GetContainerItemInfo")
+	local getInfo = I.Resolve("GetContainerItemInfo")
 	local out = {}
 	for bag = 0, I.MAX_BAGS do
 		local ok, r = call(numSlots, bag)
@@ -203,7 +226,7 @@ end
 --- One equipment slot: { slot, state, link, reason, src }. state: POPULATED (an item link came back), EMPTY (the call worked and returned nothing),
 -- FAILED (api absent, an error, or an unusable result; reason says which).
 function I.EquipmentSlot(slot)
-	local get, name = find(nil, nil, "GetInventoryItemLink")
+	local get, name = I.Resolve("GetInventoryItemLink")
 	local e = { slot = slot, src = name }
 	if not get then
 		e.state, e.reason = "FAILED", "api absent"
@@ -226,14 +249,14 @@ end
 
 --- One bag slot: { bag, slot, state, link, count, reason, src } with the same states as EquipmentSlots.
 function I.BagSlot(bag, slot)
-	local getLink, linkName = find("C_Container", "GetContainerItemLink", "GetContainerItemLink")
+	local getLink, linkName = I.Resolve("GetContainerItemLink")
 	local e = { bag = bag, slot = slot, src = linkName }
 	if not getLink then e.state, e.reason = "FAILED", "api absent"; return e end
 	local ok, r = call(getLink, bag, slot)
 	if not ok then e.state, e.reason = "FAILED", "error: " .. r
 	elseif type(r[1]) == "string" and r[1] ~= "" then
 		e.state, e.link = "POPULATED", r[1]
-		e.count = stackCount(find("C_Container", "GetContainerItemInfo", "GetContainerItemInfo"), bag, slot)
+		e.count = stackCount(I.Resolve("GetContainerItemInfo"), bag, slot)
 	elseif r[1] == nil then e.state = "EMPTY"
 	else e.state, e.reason = "FAILED", "unusable result of type " .. type(r[1]) end
 	return e
@@ -241,7 +264,7 @@ end
 
 --- The bag containers the client reports: { { bag, size, state, reason }, ... }, and a reason when the API is missing. size is the slot count.
 function I.BagContainers()
-	local numSlots = find("C_Container", "GetContainerNumSlots", "GetContainerNumSlots")
+	local numSlots = I.Resolve("GetContainerNumSlots")
 	if not numSlots then return {}, "api absent" end
 	local out = {}
 	for bag = 0, I.MAX_BAGS do
@@ -255,8 +278,8 @@ end
 
 --- The character's skill lines: { { name, rank, header }, ... } and a reason when the API is missing (classic GetNumSkillLines / GetSkillLineInfo).
 function I.SkillLines()
-	local num = find(nil, nil, "GetNumSkillLines")
-	local info = find(nil, nil, "GetSkillLineInfo")
+	local num = I.Resolve("GetNumSkillLines")
+	local info = I.Resolve("GetSkillLineInfo")
 	if not (num and info) then return {}, "api absent" end
 	local ok, r = call(num)
 	if not ok then return {}, "error: " .. r end
