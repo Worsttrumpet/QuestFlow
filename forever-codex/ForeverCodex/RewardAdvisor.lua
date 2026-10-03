@@ -3,6 +3,7 @@
 --
 -- The layers stay separate (each is a different function, none calls "up"):
 --   ItemFacts           what the client tells us                                   Items.Facts / Items.Normalize        (Stage 1)
+--   Eligibility         can the character use it now / will they soon             Eligibility.Evaluate                 (its own layer, 0.5.0)
 --   Gear comparison     the factual difference between two items                  Gear.Compare / CompareToEquipped     (Stage 2)
 --   Classification      what kind of value the reward appears to have, and why    Advisor.Classify                     (this file)
 --   Recommendation      what Codex suggests doing                                  Advisor.Recommend                    (an interface only: no opinion yet)
@@ -36,12 +37,13 @@ A.CATEGORIES = {
 	NOT_USABLE        = { tag = "NOT USABLE",       family = "red",    order = 1 },
 	UPGRADE           = { tag = "UPGRADE",          family = "green",  order = 2 },
 	TEMPORARY_UPGRADE = { tag = "TEMPORARY",        family = "yellow", order = 3 },
-	SLIGHT_UPGRADE    = { tag = "SLIGHT UPGRADE",   family = "yellow", order = 4 },
-	MIXED             = { tag = "MIXED",            family = "yellow", order = 5 },
-	COMBAT_UTILITY    = { tag = "COMBAT UTILITY",   family = "blue",   order = 6 },
-	FUTURE_USE        = { tag = "FUTURE USE",       family = "purple", order = 7 },
-	VENDOR            = { tag = "VENDOR",           family = "gold",   order = 8 },
-	UNKNOWN           = { tag = "UNKNOWN",          family = "grey",   order = 9 },
+	FUTURE_UPGRADE    = { tag = "FUTURE UPGRADE",   family = "yellow", order = 4 },
+	SLIGHT_UPGRADE    = { tag = "SLIGHT UPGRADE",   family = "yellow", order = 5 },
+	MIXED             = { tag = "MIXED",            family = "yellow", order = 6 },
+	COMBAT_UTILITY    = { tag = "COMBAT UTILITY",   family = "blue",   order = 7 },
+	FUTURE_USE        = { tag = "FUTURE USE",       family = "purple", order = 8 },
+	VENDOR            = { tag = "VENDOR",           family = "gold",   order = 9 },
+	UNKNOWN           = { tag = "UNKNOWN",          family = "grey",   order = 10 },
 }
 
 local STAT_ORDER = { "armor", "strength", "agility", "stamina", "intellect", "spirit", "weapon_dps" }
@@ -86,43 +88,10 @@ local function cat(id, certainty, reason, evidence)
 	return { id = id, tag = def.tag, family = def.family, certainty = certainty, reason = reason, evidence = evidence }
 end
 
--- ---------------------------------------------------------------- usability evidence
+-- ---------------------------------------------------------------- usability evidence (lives in Eligibility; kept here as a delegate)
 
---- What the evidence says about whether the character can use an item. Sources are kept side by side:
---   IsUsableItem (the client function; on Forever it returned false for items the reward dialog flagged usable, so it is NEVER trusted alone) and the reward
---   dialog's own flag (the 5th GetQuestItemInfo value; its exact meaning is itself unproven, but it is a second independent client answer).
--- verdict: USABLE (every source says true), NOT_USABLE (the dialog flag AND IsUsableItem both say false), CONFLICT (they disagree), UNKNOWN (no second
--- source, or nothing readable). Returns { verdict, sources = { { name, value } }, reason }.
-function A.Usability(facts)
-	local out = { sources = {} }
-	local u = facts and facts.fields and facts.fields.usable
-	local flag = facts and facts.offered and facts.offered.dialogFlag
-	if u and u.state == "PROVEN" then out.sources[#out.sources + 1] = { name = "IsUsableItem", value = u.value, second = u.second } end
-	if type(flag) == "boolean" then out.sources[#out.sources + 1] = { name = "reward dialog flag", value = flag } end
-	local isU = u and u.state == "PROVEN" and u.value
-	if type(flag) ~= "boolean" then
-		if u and u.state == "PROVEN" then
-			out.verdict = "UNKNOWN"
-			out.reason = "only IsUsableItem answered (" .. tostring(u.value) .. "); Codex does not trust it alone on Forever"
-		else
-			out.verdict = "UNKNOWN"
-			out.reason = "no usable evidence: IsUsableItem is " .. (u and fieldWord(u) or "not read")
-		end
-		return out
-	end
-	if not (u and u.state == "PROVEN") then
-		out.verdict = "UNKNOWN"
-		out.reason = "the dialog flag is " .. tostring(flag) .. " but IsUsableItem is " .. (u and fieldWord(u) or "not read")
-		return out
-	end
-	if flag == true and isU == true then out.verdict, out.reason = "USABLE", "IsUsableItem and the reward dialog flag both say true"
-	elseif flag == false and isU == false then out.verdict, out.reason = "NOT_USABLE", "IsUsableItem and the reward dialog flag both say false"
-	else
-		out.verdict = "CONFLICT"
-		out.reason = string.format("IsUsableItem says %s but the reward dialog flag says %s", tostring(isU), tostring(flag))
-	end
-	return out
-end
+--- The client's usability answers side by side (see Eligibility.ClientUsability). Kept so existing callers keep working.
+function A.Usability(facts) return ns.Eligibility.ClientUsability(facts) end
 
 -- ---------------------------------------------------------------- the upgrade judgement (facts in, no weights)
 
@@ -178,11 +147,69 @@ end
 
 -- ---------------------------------------------------------------- classification
 
+-- the factual comparison of the item with what is worn, turned into an outcome the classification can use. Never judges usability.
+--   { kind = "empty_slot" | "upgrade" | "slight" | "mixed" | "none" | "unknown" | "no_slot", text, evidence, note, partial }
+local function compareOutcome(facts, equipped)
+	local fl = facts.fields
+	local slotState = fl.equipSlot.state
+	if slotState == "EMPTY" then return { kind = "no_slot", note = "the item has no equip slot" } end
+	if slotState ~= "PROVEN" then return { kind = "unknown", note = "the item's equip slot is " .. fieldWord(fl.equipSlot) } end
+	if not (ns.Gear and equipped) then return { kind = "unknown", note = "the equipped items were not read" } end
+	local cmp = ns.Gear.CompareToEquipped(facts, equipped)
+	if cmp.state ~= "COMPARABLE" then return { kind = "unknown", note = cmp.reason, comparison = cmp } end
+	local entry = chooseEntry(cmp.entries)
+	if entry and entry.state == "EMPTY_SLOT" then
+		return { kind = "empty_slot", text = string.format("fills your empty %s slot", entry.slotName), evidence = { slot = entry.slot, kind = "empty_slot" }, comparison = cmp, chosen = entry.slot }
+	end
+	if not (entry and entry.state == "COMPARED") then
+		return { kind = "unknown", note = entry and (entry.reason or "the equipped item could not be compared") or "no equipment slot to compare with", comparison = cmp, chosen = entry and entry.slot }
+	end
+	local j = judge(entry.comparison)
+	local cur = nameOf(entry.equipment.itemFacts)
+	local ev = { slot = entry.slot, slotName = entry.slotName, against = cur, gains = j.gains, losses = j.losses, unknown = j.unknown }
+	local o = { evidence = ev, comparison = cmp, chosen = entry.slot, partial = #j.unknown > 0 and tostring(j.unknown[1].reason) or nil }
+	if j.compared == 0 then
+		o.kind, o.note = "unknown", "no stat could be compared" .. (j.unknown[1] and (": " .. tostring(j.unknown[1].reason)) or "")
+	elseif #j.gains > 0 and #j.losses == 0 then
+		local maxRel = 0
+		for _, g in ipairs(j.gains) do maxRel = math.max(maxRel, g.relative) end
+		ev.maxRelative = maxRel
+		o.kind = (maxRel >= A.THRESHOLDS.slightRelative) and "upgrade" or "slight"
+		o.text = string.format("%s over your current %s (%s)", statsText(j.gains), cur, entry.slotName)
+	elseif #j.gains > 0 and #j.losses > 0 then
+		o.kind = "mixed"
+		o.text = string.format("%s, but %s versus your current %s; Codex does not weigh different stats against each other", statsText(j.gains), statsText(j.losses), cur)
+	else
+		o.kind = "none"
+		o.note = (#j.losses > 0) and string.format("%s versus your current %s", statsText(j.losses), cur) or ("no difference in the compared stats versus your current " .. cur)
+	end
+	return o
+end
+
+-- "would be +90 armor over ..." / "would fill your empty CHEST slot": what the item would be, for sentences about an item that is not (yet) usable
+local function wouldText(o)
+	if o.kind == "empty_slot" then return "would " .. (o.text:gsub("^fills", "fill")) end
+	return "would be " .. o.text
+end
+
+-- the words for "why the character cannot use it now", from the eligibility result
+local function blockedText(elig)
+	local f = elig.future
+	local b = elig.current.blockers[1]
+	local base = b and b.detail or "the client reports it as not usable"
+	if f.state == "NOT_RELEVANT" then return "Not usable by this character, and that does not change: " .. f.reason .. "."
+	elseif f.state == "SOON" or f.state == "LATER" then return string.format("Not usable yet: %s. It becomes usable at level %d (%d level(s) away).", base, f.unlockLevel, f.levelsAway)
+	end
+	return "Not usable by this character right now: " .. base .. ". Whether that changes is unknown (" .. tostring(f.reason) .. ")."
+end
+
 --- Classifies one reward item. facts = normalized ItemFacts (Items.Facts / ItemProbe.DialogFacts), equipped = a Gear.Equipped() result (or nil),
--- opts = { character = { level }, context = { replacement = {...} } }.
--- Returns a Classification (see the field list in docs/CODEX_REALCLIENT_FIXES.md section 45):
---   { schema, item = { id, name, state }, primary, categories = { { id, tag, family, certainty, reason, evidence } }, usability, comparison, caveats, futureUse, context }
--- `primary` is a presentation order only. It is not a recommendation.
+-- opts = { character = { level, classToken, ... }, requirements = explicit restrictions, context = { replacement = {...} } }.
+-- Returns a Classification (see docs/CODEX_REALCLIENT_FIXES.md section 45 and 46):
+--   { schema, item = { id, name, state }, primary, categories = { { id, tag, family, certainty, reason, evidence } }, eligibility, usability, comparison, caveats,
+--     futureUse, context }
+-- `primary` is a presentation order only. It is not a recommendation. Upgrade-type categories need PROVEN current eligibility; a proven "not yet" that is
+-- SOON becomes FUTURE_UPGRADE when the item would improve what is worn; everything uncertain stays UNKNOWN.
 function A.Classify(facts, equipped, opts)
 	opts = opts or {}
 	local out = { schema = 1, item = { id = facts and facts.id, name = nameOf(facts), state = facts and facts.state }, categories = {}, caveats = {}, comparison = { state = "NOT_COMPARED" } }
@@ -193,92 +220,72 @@ function A.Classify(facts, equipped, opts)
 		return out
 	end
 	local fl = facts.fields
+	local E = ns.Eligibility
 
 	-- 1. the item itself must be known
 	if facts.state ~= "LOADED" then
 		local why = facts.state == "WAITING" and "the item's data has not loaded yet" or ("the item info could not be read (" .. tostring(fl.name and fl.name.reason) .. ")")
 		add(cat("UNKNOWN", "UNPROVEN", "Not enough is known yet: " .. why .. ". Nothing is assumed about its value."))
 		out.primary = "UNKNOWN"
-		out.usability = A.Usability(facts)
+		out.usability = E.ClientUsability(facts)
 		out.futureUse = { state = "UNKNOWN", reason = "item not loaded" }
 		return out
 	end
 
-	-- 2. usability
-	local us = A.Usability(facts)
-	out.usability = us
+	-- 2. eligibility: current and future, from the Eligibility layer (nothing here decides it)
+	local elig = E.Evaluate(facts, opts.character, { equipped = equipped, requirements = opts.requirements })
+	out.eligibility, out.usability = elig, elig.clientUsability
+	local us = out.usability
 	if us.verdict == "CONFLICT" then out.caveats[#out.caveats + 1] = "usability is unclear: " .. us.reason
 	elseif us.verdict == "UNKNOWN" then out.caveats[#out.caveats + 1] = "usability is not established: " .. us.reason end
-	local lvl = opts.character and opts.character.level
-	local req = fl.requiredLevel
-	if req and req.state == "PROVEN" and type(lvl) == "number" and req.value > lvl then
-		out.caveats[#out.caveats + 1] = string.format("requires level %d (the character is level %d)", req.value, lvl)
-	end
-	local blocked = us.verdict == "NOT_USABLE"
-	local certainty = (us.verdict == "USABLE") and "PROVEN" or "PARTIAL"
+	for _, c in ipairs(elig.current.conflicts) do out.caveats[#out.caveats + 1] = c end
+	local cur = elig.current.state
+	local yes, no = cur == "PROVEN_YES", cur == "PROVEN_NO"
+	local certainty = yes and "PROVEN" or "PARTIAL"
 
-	-- 3. equipment comparison (skipped when the item is not usable by the evidence)
-	local useful = false
-	local comparisonUnknown = false
-	local slotState = fl.equipSlot.state
-	if blocked then
-		add(cat("NOT_USABLE", "PROVEN", "Not usable by this character: " .. us.reason .. ".", { sources = us.sources }))
-	elseif slotState == "PROVEN" and ns.Gear and equipped then
-		local cmp = ns.Gear.CompareToEquipped(facts, equipped)
-		out.comparison = { state = cmp.state, reason = cmp.reason, entries = cmp.entries }
-		if cmp.state ~= "COMPARABLE" then
-			comparisonUnknown = true
-			out.comparison.note = cmp.reason
+	-- 3. the factual comparison with what is worn (made whatever the eligibility is; what it MEANS depends on the eligibility)
+	local o = compareOutcome(facts, equipped)
+	out.comparison = { state = o.comparison and o.comparison.state or (o.kind == "no_slot" and "NO_SLOT" or "UNKNOWN"), chosen = o.chosen, entries = o.comparison and o.comparison.entries, note = o.note }
+	if o.partial then certainty = "PARTIAL"; out.caveats[#out.caveats + 1] = "some stats could not be compared: " .. o.partial end
+	local improves = o.kind == "upgrade" or o.kind == "slight" or o.kind == "empty_slot"
+	local useful, comparisonUnknown = false, (o.kind == "unknown")
+
+	if no then
+		-- the character cannot use it now
+		if elig.future.state == "SOON" and improves then
+			local size = (o.kind == "slight") and ", a slight improvement" or ""
+			local b = elig.current.blockers[1]
+			add(cat("FUTURE_UPGRADE", "PARTIAL", string.format("You can't use this yet: %s. It becomes usable at level %d (%d level(s) away). If it fits, it %s%s.",
+				b and b.detail or "a requirement is not met", elig.future.unlockLevel, elig.future.levelsAway, wouldText(o), size), { eligibility = elig.future, comparison = o.evidence }))
+			useful = true
 		else
-			local entry = chooseEntry(cmp.entries)
-			out.comparison.chosen = entry and entry.slot
-			if entry and entry.state == "EMPTY_SLOT" then
-				add(cat("UPGRADE", certainty, string.format("Fills your empty %s slot.", entry.slotName), { slot = entry.slot, kind = "empty_slot" }))
-				useful = true
-			elseif entry and entry.state == "COMPARED" then
-				local j = judge(entry.comparison)
-				local cur = nameOf(entry.equipment.itemFacts)
-				local ev = { slot = entry.slot, slotName = entry.slotName, against = cur, gains = j.gains, losses = j.losses, unknown = j.unknown }
-				if j.compared == 0 then
-					comparisonUnknown = true
-					out.comparison.note = "no stat could be compared" .. (j.unknown[1] and (": " .. tostring(j.unknown[1].reason)) or "")
-				else
-					if #j.unknown > 0 then certainty = "PARTIAL"; out.caveats[#out.caveats + 1] = "some stats could not be compared: " .. tostring(j.unknown[1].reason) end
-					if #j.gains > 0 and #j.losses == 0 then
-						local maxRel = 0
-						for _, g in ipairs(j.gains) do maxRel = math.max(maxRel, g.relative) end
-						ev.maxRelative = maxRel
-						local big = maxRel >= A.THRESHOLDS.slightRelative
-						add(cat(big and "UPGRADE" or "SLIGHT_UPGRADE", certainty,
-							string.format("%s over your current %s (%s).", statsText(j.gains), cur, entry.slotName), ev))
-						useful = true
-					elseif #j.gains > 0 and #j.losses > 0 then
-						add(cat("MIXED", certainty, string.format("%s, but %s versus your current %s; Codex does not weigh different stats against each other.",
-							statsText(j.gains), statsText(j.losses), cur), ev))
-						useful = true
-					else
-						out.comparison.note = (#j.losses > 0) and string.format("%s versus your current %s", statsText(j.losses), cur) or ("no difference in the compared stats versus your current " .. cur)
-					end
-				end
-			else
-				comparisonUnknown = true
-				out.comparison.note = entry and (entry.reason or "the equipped item could not be compared") or "no equipment slot to compare with"
+			add(cat("NOT_USABLE", "PROVEN", blockedText(elig), { eligibility = elig, sources = us.sources }))
+			comparisonUnknown = false
+			if elig.future.state == "SOON" and not improves then
+				out.caveats[#out.caveats + 1] = "it becomes usable soon, but compared with what is worn it is not an improvement (" .. tostring(o.note or o.kind) .. ")"
 			end
 		end
-	elseif slotState == "PROVEN" then
-		comparisonUnknown = true
-		out.comparison = { state = "UNKNOWN", note = "the equipped items were not read" }
-	elseif slotState == "EMPTY" then
-		out.comparison = { state = "NO_SLOT", note = "the item has no equip slot" }
+	elseif yes then
+		if o.kind == "empty_slot" then
+			add(cat("UPGRADE", certainty, (o.text:gsub("^%l", string.upper)) .. ".", o.evidence)); useful = true
+		elseif o.kind == "upgrade" or o.kind == "slight" then
+			add(cat(o.kind == "upgrade" and "UPGRADE" or "SLIGHT_UPGRADE", certainty, o.text .. ".", o.evidence)); useful = true
+		elseif o.kind == "mixed" then
+			add(cat("MIXED", certainty, o.text .. ".", o.evidence)); useful = true
+		end
 	else
-		comparisonUnknown = true
-		out.comparison = { state = "UNKNOWN", note = "the item's equip slot is " .. fieldWord(fl.equipSlot) }
+		-- eligibility not established: an apparent improvement is NOT called an upgrade
+		if improves or o.kind == "mixed" then
+			add(cat("UNKNOWN", "UNPROVEN", string.format("Whether this character can use the item is not established (%s). If it can be used it %s.",
+				(elig.current.state == "UNKNOWN" and (us.reason or "no evidence")) or "unknown", wouldText(o)), { eligibility = elig, comparison = o.evidence }))
+			useful = true
+		end
 	end
 
 	-- 4. horizon: a KNOWN, nearby replacement (given as context, never invented) makes an upgrade TEMPORARY
 	local rep = opts.context and opts.context.replacement
 	out.context = opts.context
-	if rep and rep.state == "KNOWN" and (useful) and (rep.certainty == "GUARANTEED" or rep.certainty == "POSSIBLE") then
+	if yes and useful and rep and rep.state == "KNOWN" and (rep.certainty == "GUARANTEED" or rep.certainty == "POSSIBLE") then
 		local soonQ = type(rep.quests) == "number" and rep.quests <= A.THRESHOLDS.temporaryQuests
 		local soonM = type(rep.minutes) == "number" and rep.minutes <= A.THRESHOLDS.temporaryMinutes
 		if soonQ or soonM then
@@ -289,7 +296,7 @@ function A.Classify(facts, equipped, opts)
 
 	-- 5. combat utility (a proven use effect; what it does is not known unless a utility source says so)
 	local ue = fl.useEffect
-	if ue.state == "PROVEN" and not blocked then
+	if ue.state == "PROVEN" and not no then
 		add(cat("COMBAT_UTILITY", "PARTIAL", string.format("Has a use effect (%s). Codex does not know what the effect does.", tostring(ue.value)), { spell = ue.value, spellId = ue.spellId }))
 		useful = true
 	elseif ue.state == "UNPROVEN" or ue.state == "FAILED" then
@@ -318,9 +325,9 @@ function A.Classify(facts, equipped, opts)
 	local vv = fl.vendorValue
 	if not useful then
 		if comparisonUnknown then
-			add(cat("UNKNOWN", "UNPROVEN", "Not enough is known to judge this item: " .. tostring(out.comparison.note or "the comparison could not be made") .. ". Nothing is assumed."))
+			add(cat("UNKNOWN", "UNPROVEN", "Not enough is known to judge this item: " .. tostring(o.note or "the comparison could not be made") .. ". Nothing is assumed."))
 		elseif vv.state == "PROVEN" then
-			local why = out.comparison.note and (out.comparison.note .. "; ") or ""
+			local why = (o.note and o.kind ~= "no_slot") and (o.note .. "; ") or ""
 			add(cat("VENDOR", certainty, string.format("No known equipment or utility benefit (%sno use effect known, no future use known). Vendor value: %s.", why, I.Money(vv.value)), { vendorValue = vv.value }))
 		else
 			add(cat("UNKNOWN", "UNPROVEN", "No known benefit, and the vendor value was not read (" .. fieldWord(vv) .. ")."))
@@ -352,11 +359,6 @@ end
 
 -- ---------------------------------------------------------------- evaluating the reward dialog
 
-local function currentCharacter()
-	local lvl = type(UnitLevel) == "function" and select(2, pcall(UnitLevel, "player")) or nil
-	return { level = type(lvl) == "number" and lvl or nil }
-end
-
 --- Evaluates the offered rewards: { live, available, source, q, at, items = { { index, kind, id, name, facts, classification } }, recommendation }.
 -- available is true ONLY while the reward dialog is open right now (live). A dialog that was seen earlier and is closed now is reported as such
 -- (live = false, available = false): its rewards are not currently offered and must not be presented as if they were.
@@ -371,7 +373,7 @@ function A.Evaluate(opts)
 		local ok, snap = pcall(ns.Gear.Snapshot)
 		equipped = ok and snap and snap.equipped or nil
 	end
-	local o = { character = opts.character or currentCharacter(), context = opts.context }
+	local o = { character = opts.character or ns.Eligibility.Character(), context = opts.context, requirements = opts.requirements }
 	local ev = { live = df.live == true, available = df.live == true, q = df.q, at = df.at, items = {} }
 	ev.source = ev.live and "the reward dialog that is open now" or "the last reward dialog seen (it is closed now, so these rewards are not currently offered)"
 	for _, spec in ipairs({ df.choices or {}, df.rewards or {} }) do
@@ -407,6 +409,7 @@ function A.ReportLines(opts)
 		for _, x in ipairs(c.categories) do if x ~= primary then extra[#extra + 1] = "[" .. x.tag .. "] " .. x.reason end end
 		if #extra > 0 then L[#L + 1] = "    also: " .. table.concat(extra, " | ") end
 		if #c.caveats > 0 then L[#L + 1] = "    caveats: " .. table.concat(c.caveats, "; ") end
+		if c.eligibility then L[#L + 1] = "    eligibility: " .. ns.Eligibility.Describe(c.eligibility) end
 		local u = c.usability
 		if u and #u.sources > 0 then
 			local s = {}

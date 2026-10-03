@@ -149,7 +149,7 @@ do
 	local conflict = facts({ id = 51, name = "Leather Wraps", slot = "INVTYPE_FEET", stats = { RESISTANCE0_NAME = 61 }, sell = 19, usable = false, second = false, flag = true })
 	local c = A.Classify(conflict, eq)
 	check(c.usability.verdict == "CONFLICT" and not has(c, "NOT_USABLE"), "IsUsableItem false but the dialog flag true: CONFLICT, not NOT_USABLE")
-	check(has(c, "UPGRADE") and has(c, "UPGRADE").certainty == "PARTIAL" and c.caveats[1]:find("usability is unclear", 1, true), "the upgrade is still described, marked PARTIAL, with the conflict in the caveats")
+	check(not has(c, "UPGRADE") and c.primary == "UNKNOWN" and has(c, "UNKNOWN").reason:find("not established", 1, true) and has(c, "UNKNOWN").reason:find("+45 armor", 1, true) and c.caveats[1]:find("usability is unclear", 1, true), "with conflicting evidence a better item is NOT called an upgrade: UNKNOWN, stating what it would be if usable, with the conflict in the caveats  [" .. has(c, "UNKNOWN").reason .. "]")
 	check(c.usability.sources[1].name == "IsUsableItem" and c.usability.sources[1].value == false and c.usability.sources[2].name == "reward dialog flag" and c.usability.sources[2].value == true, "both evidence sources are preserved")
 	-- IsUsableItem alone (no dialog flag): UNKNOWN, even when false
 	local alone = facts({ id = 52, name = "Owned Item", slot = "INVTYPE_FEET", stats = { RESISTANCE0_NAME = 61 }, sell = 5, usable = false })
@@ -161,7 +161,8 @@ do
 	check(ok.usability.verdict == "USABLE", "both true: USABLE")
 	-- the level requirement is a caveat from proven facts
 	local lvl = A.Classify(facts({ id = 55, name = "Heavy", slot = "INVTYPE_FEET", stats = { RESISTANCE0_NAME = 61 }, req = 12, usable = true, flag = true }), eq, { character = { level = 9 } })
-	check(lvl.caveats[1] == "requires level 12 (the character is level 9)", "a required level above the character's level is a caveat")
+	check(lvl.primary == "NOT_USABLE" and has(lvl, "NOT_USABLE").reason:find("Not usable yet: requires level 12, the character is level 9", 1, true) and lvl.eligibility.future.state == "LATER", "a required level above the character's level is a proven NOT YET, with when it unlocks (the worn leather boots show leather is allowed)  [" .. has(lvl, "NOT_USABLE").reason .. "]")
+	check(lvl.caveats[1]:find("say usable", 1, true), "and the client's contradicting usable answers are noted as a conflict")
 end
 
 section("advisor: a use effect is COMBAT UTILITY (what it does stays unknown); no use effect adds nothing")
