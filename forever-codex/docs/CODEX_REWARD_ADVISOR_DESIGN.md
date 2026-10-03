@@ -1,6 +1,6 @@
 # Forever Codex: Reward & Progression Advisor, design (inspection and staged plan)
 
-Status: design. Stage 0 (the read-only probe) is implemented in 0.4.4, Stage 0.1 (every choice inspected) in 0.4.5 and Stage 1 (the normalized Item Facts reader) in 0.4.6 (see `CODEX_REALCLIENT_FIXES.md` sections 40-42); nothing else here is built. The five decisions in section 18 were approved: probe first, own icons plus text tags, coarse tiers first, no alt inventories, and the reward cache records every dialog seen. Written after inspecting the repository, the local QuestieDB checkout and the
+Status: design. Stage 0 (the read-only probe) is implemented in 0.4.4, Stage 0.1 (every choice inspected) in 0.4.5 Stage 1 (the normalized Item Facts reader) in 0.4.6 and Stage 2 (equipped and bag item facts plus a facts-only comparison) in 0.4.7 (see `CODEX_REALCLIENT_FIXES.md` sections 40-43); nothing else here is built. The five decisions in section 18 were approved: probe first, own icons plus text tags, coarse tiers first, no alt inventories, and the reward cache records every dialog seen. Written after inspecting the repository, the local QuestieDB checkout and the
 project's own real-client research folders.
 
 Evidence labels used throughout:

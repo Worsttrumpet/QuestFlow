@@ -68,7 +68,7 @@ local function install(o)
 	_G.GetItemCount = function() return 1 end
 	if o.equipped then _G.GetInventoryItemLink = function(unit, slot) local id = o.equipped[slot]; return id and link(id, items[id] and items[id].name) or nil end end
 	if o.bags then
-		_G.GetContainerNumSlots = function(bag) return bag == 0 and #o.bags or 0 end
+		_G.GetContainerNumSlots = function(bag) return bag == 0 and (o.bagSize or #o.bags) or 0 end
 		_G.GetContainerItemLink = function(bag, slot) local id = bag == 0 and o.bags[slot]; return id and link(id, items[id] and items[id].name) or nil end
 		_G.GetContainerItemInfo = function(bag, slot) return nil, 1 end
 	end
@@ -450,6 +450,240 @@ do
 	local lines = ns.ItemProbe.ReportLines()
 	check(#lines <= 95, "the whole item section stays bounded with three choices  [" .. #lines .. " lines]")
 	_G.ARMOR, _G.RESISTANCE0_NAME = nil, nil
+end
+
+-- ================================================================ Stage 2: equipped / bag item facts and the facts-only comparison (0.4.7)
+
+local STAGE2 = {
+	[5301] = { name = "Old Wraps", quality = 1, ilvl = 6, minLevel = 0, type = "Armor", subType = "Cloth", equipLoc = "INVTYPE_WRIST", sell = 11, classID = 4, subClassID = 1, stats = { RESISTANCE0_NAME = 10, ITEM_MOD_STAMINA_SHORT = 1 } },
+	[5401] = { name = "Dull Mace", quality = 1, ilvl = 6, minLevel = 0, type = "Weapon", subType = "One-Handed Maces", equipLoc = "INVTYPE_WEAPON", sell = 30, classID = 2, subClassID = 4, stats = { ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 3.1 } },
+	[5402] = { name = "Great Axe", quality = 1, ilvl = 7, minLevel = 0, type = "Weapon", subType = "Two-Handed Axes", equipLoc = "INVTYPE_2HWEAPON", sell = 70, classID = 2, subClassID = 1, stats = { ITEM_MOD_DAMAGE_PER_SECOND_SHORT = 5.0, ITEM_MOD_STRENGTH_SHORT = 4 } },
+	[5403] = { name = "Multi Stat Chest", quality = 2, ilvl = 10, minLevel = 0, type = "Armor", subType = "Leather", equipLoc = "INVTYPE_CHEST", sell = 80, classID = 4, subClassID = 2, stats = { RESISTANCE0_NAME = 40, ITEM_MOD_STRENGTH_SHORT = 3, ITEM_MOD_AGILITY_SHORT = 2, ITEM_MOD_STAMINA_SHORT = 4, ITEM_MOD_INTELLECT_SHORT = 1, ITEM_MOD_SPIRIT_SHORT = 1 } },
+}
+for k, v in pairs(STAGE1) do STAGE2[k] = v end
+
+local function gearWorld(o)
+	local ns = fresh()
+	o.items = o.items or STAGE2
+	install(o)
+	return ns
+end
+
+section("equipped items: an empty slot is EMPTY, a populated slot has normalized facts and a source")
+do
+	local ns = gearWorld({ equipped = { [8] = 5103, [16] = 25 } })
+	local eq = ns.Gear.Equipped()
+	check(eq.state == "OK" and #eq.list == 19, "all 19 slots are present")
+	check(eq.slots[9].state == "EMPTY" and eq.slots[9].itemFacts == nil and eq.slots[9].reason == nil, "slot 9 is EMPTY: read fine, holds nothing (not a failure)")
+	local boots = eq.slots[8]
+	check(boots.state == "POPULATED" and boots.slotName == "FEET" and boots.itemId == 5103 and boots.src == "GetInventoryItemLink", "slot 8 is POPULATED with the item id and the client function that produced it")
+	check(boots.itemFacts.state == "LOADED" and boots.itemFacts.fields.name.value == "Hiking Boots" and boots.itemFacts.fields.equipSlot.value == "INVTYPE_FEET", "with normalized ItemFacts from the same Stage 1 reader")
+	check(eq.slots[16].itemFacts.fields.weaponDps.value == 2.4 and eq.slots[16].slotName == "MAINHAND", "a weapon in the main hand keeps its dps")
+	local t = ns.Gear.EquippedSummary(eq)
+	check(t.populated == 2 and t.empty == 17 and t.slotFailed == 0 and t.normalized == 2 and t.waiting == 0 and t.failed == 0, "summary: 2 populated, 17 empty, 2 normalized")
+end
+
+section("equipped items: a missing equipment API is FAILED, and is never read as 'nothing equipped'")
+do
+	local ns = fresh()
+	clearApi()
+	local eq = ns.Gear.Equipped()
+	check(eq.state == "FAILED" and eq.reason == "api absent", "the equipment read is FAILED, api absent")
+	check(eq.slots[8].state == "FAILED" and eq.slots[8].state ~= "EMPTY", "each slot is FAILED, not EMPTY")
+	local t = ns.Gear.EquippedSummary(eq)
+	check(t.empty == 0 and t.slotFailed == 19 and t.populated == 0, "summary: 0 empty, 19 slot reads failed")
+	install({ items = STAGE2 })
+	local cmp = ns.Gear.CompareToEquipped(ns.Items.Facts(5101), eq)
+	check(cmp.entries[1].state == "UNKNOWN" and cmp.entries[1].state ~= "EMPTY_SLOT", "an item compared to an unreadable slot is UNKNOWN, not 'the slot is empty'")
+end
+
+section("bag items: populated, empty and failed slots are distinct, and counts are read")
+do
+	local ns = gearWorld({ bags = { 4914, 900 }, bagSize = 4 })
+	local pop = ns.Gear.BagSlot(0, 1)
+	check(pop.state == "POPULATED" and pop.itemId == 4914 and pop.count == 1 and pop.bag == 0 and pop.slot == 1 and pop.src == "GetContainerItemLink", "a populated bag slot: bag, slot, item id, count and source")
+	check(pop.itemFacts.state == "LOADED" and pop.itemFacts.fields.name.value == "Battleworn Leather Gloves", "with normalized ItemFacts")
+	local empty = ns.Gear.BagSlot(0, 3)
+	check(empty.state == "EMPTY" and empty.itemFacts == nil, "an empty bag slot is EMPTY")
+	local bags = ns.Gear.Bags()
+	check(bags.state == "OK" and #bags.stacks == 2 and bags.containers[1].size == 4 and bags.containers[1].empty == 2 and bags.containers[1].populated == 2, "the bags: 2 stacks, and the empty slots are counted per container (2 of 4)")
+	local t = ns.Gear.BagSummary(bags)
+	check(t.populated == 2 and t.normalized == 2 and t.waiting == 0 and t.failed == 0 and t.emptySlots == 2, "summary: 2 stacks, 2 normalized, 2 empty slots")
+	local ns2 = fresh()
+	clearApi()
+	local b2 = ns2.Gear.Bags()
+	check(b2.state == "FAILED" and b2.reason == "api absent" and #b2.stacks == 0, "a missing container API is FAILED (not 'empty bags')")
+	check(ns2.Gear.BagSlot(0, 1).state == "FAILED", "and a single slot read is FAILED")
+end
+
+section("equipped / bag items: item data that has not loaded is WAITING, then completed in place by the one late-loading queue")
+do
+	local loaded = { [5103] = false, [4914] = false }
+	local ns = gearWorld({ equipped = { [8] = 5103 }, bags = { 4914 }, loaded = loaded })
+	local snap = ns.Gear.Snapshot()
+	local boots, gloves = snap.equipped.slots[8], snap.bags.stacks[1]
+	check(boots.itemFacts.state == "WAITING" and boots.itemFacts.fields.name.state == "UNPROVEN" and boots.itemFacts.fields.stats.state == "UNPROVEN", "the equipped item is WAITING with UNPROVEN fields (not FAILED)")
+	check(gloves.itemFacts.state == "WAITING", "so is the bag item")
+	local es, bs = ns.Gear.EquippedSummary(snap.equipped), ns.Gear.BagSummary(snap.bags)
+	check(es.waiting == 1 and es.normalized == 0 and es.failed == 0 and bs.waiting == 1 and bs.failed == 0, "the summaries count them as waiting, not failed")
+	check(ns.ItemProbe.PendingCount() == 2, "both are on ItemProbe's one retry queue  [" .. ns.ItemProbe.PendingCount() .. "]")
+	loaded[5103], loaded[4914] = true, true
+	ns.ItemProbe.OnEvent("GET_ITEM_INFO_RECEIVED", 5103, true)
+	check(boots.itemFacts.state == "LOADED" and boots.itemFacts.fields.name.value == "Hiking Boots" and gloves.itemFacts.state == "LOADED", "the same snapshot entries are LOADED after GET_ITEM_INFO_RECEIVED")
+	check(ns.ItemProbe.PendingCount() == 0, "and the queue is empty")
+	local es2 = ns.Gear.EquippedSummary(snap.equipped)
+	check(es2.waiting == 0 and es2.normalized == 1, "the summary follows the completed facts")
+	check(ns.Gear.Pending == nil and ns.Gear.Retry == nil, "Gear has no queue of its own")
+	-- reading again does not pile up watchers
+	loaded[5103] = false
+	ns.Gear.Snapshot(); ns.Gear.Snapshot(); ns.Gear.Snapshot()
+	check(ns.ItemProbe.PendingCount() <= 2, "repeated snapshots do not duplicate the queue entries  [" .. ns.ItemProbe.PendingCount() .. "]")
+end
+
+section("equipped items: armor and several known stats are normalized from the client's own table")
+do
+	_G.ARMOR, _G.RESISTANCE0_NAME = "Armor", "Armor"
+	local ns = gearWorld({ equipped = { [5] = 5403, [8] = 5103 } })
+	local chest = ns.Gear.Equipped().slots[5].itemFacts.fields.stats
+	check(chest.state == "PROVEN" and chest.byStat.armor == 40 and chest.byStat.strength == 3 and chest.byStat.agility == 2 and chest.byStat.stamina == 4 and chest.byStat.intellect == 1 and chest.byStat.spirit == 1, "armor, strength, agility, stamina, intellect and spirit are all normalized")
+	local armorEntry
+	for _, e in ipairs(chest.list) do if e.key == "RESISTANCE0_NAME" then armorEntry = e end end
+	check(armorEntry.stat == "armor" and armorEntry.meaning == "label-match", "armor through the client's own label match")
+	_G.ARMOR, _G.RESISTANCE0_NAME = nil, nil
+end
+
+section("comparison: two items in the same slot are compared by facts only")
+do
+	local ns = gearWorld({})
+	local a, b = ns.Items.Facts(5101), ns.Items.Facts(5301)
+	local c = ns.Gear.Compare(a, b)
+	check(c.slot.state == "SAME" and c.slot.a == "INVTYPE_WRIST" and c.slot.shared[1] == 9, "same slot (INVTYPE_WRIST, inventory slot 9)")
+	check(c.stats.armor.state == "COMPARED" and c.stats.armor.a == 4 and c.stats.armor.b == 10 and c.stats.armor.diff == -6, "armor 4 vs 10, diff -6")
+	check(c.stats.stamina.diff == 2 and c.stats.stamina.assumedZero.a == false and c.stats.stamina.assumedZero.b == false, "stamina 3 vs 1, diff +2")
+	check(c.stats.strength.state == "NOT_LISTED" and c.stats.agility.state == "NOT_LISTED", "a stat neither item lists is NOT_LISTED (no diff invented)")
+	check(c.requiredLevel.state == "COMPARED" and c.requiredLevel.a == 8 and c.requiredLevel.b == 0 and c.requiredLevel.diff == 8, "required level 8 vs 0")
+	check(c.itemLevel.diff == 6 and c.class.same == true and c.subclass.same == true, "item level, class and subclass differences are facts too")
+	-- a stat only one side lists: the other side's absence is counted as 0, and says so
+	local d = ns.Gear.Compare(ns.Items.Facts(5403), ns.Items.Facts(5101))
+	check(d.stats.strength.state == "COMPARED" and d.stats.strength.a == 3 and d.stats.strength.b == nil and d.stats.strength.diff == 3 and d.stats.strength.assumedZero.b == true, "a stat one item does not list is assumedZero on that side, flagged")
+	check(#d.unmapped == 0, "no unmapped stat keys here")
+	local e = ns.Gear.Compare(ns.Items.Facts(5201), ns.Items.Facts(5101))
+	check(e.unmapped[1] == "ITEM_MOD_FANCY_SHORT", "a stat key Codex does not name is listed as unmapped, so the comparison is known to be partial")
+end
+
+section("comparison: different slots, no slot, and unknown slots are reported as such")
+do
+	local ns = gearWorld({ equipped = { [8] = 5103 } })
+	local wraps, boots, skull = ns.Items.Facts(5101), ns.Items.Facts(5103), ns.Items.Facts(900)
+	check(ns.Gear.Compare(wraps, boots).slot.state == "DIFFERENT", "wrist vs feet: DIFFERENT")
+	check(ns.Gear.Compare(wraps, skull).slot.state == "NO_SLOT" and ns.Gear.Compare(wraps, skull).slot.reason:find("no equip slot", 1, true), "an item with no equip slot: NO_SLOT (no slot is invented)")
+	local eq = ns.Gear.Equipped()
+	local toEmpty = ns.Gear.CompareToEquipped(wraps, eq)
+	check(toEmpty.state == "COMPARABLE" and toEmpty.entries[1].slot == 9 and toEmpty.entries[1].state == "EMPTY_SLOT", "a wrist item against equipment with an empty wrist slot: the slot is EMPTY (a fact)")
+	local noSlot = ns.Gear.CompareToEquipped(skull, eq)
+	check(noSlot.state == "NO_SLOT" and #noSlot.entries == 0, "an item with no equip slot has nothing to compare against")
+	local boot2 = ns.Gear.CompareToEquipped(ns.Items.Facts(5103), eq)
+	check(boot2.entries[1].state == "COMPARED" and boot2.entries[1].comparison.slot.state == "SAME", "boots against the equipped boots: COMPARED, same slot")
+	local ring = { fields = setmetatable({ equipSlot = { state = "PROVEN", value = "INVTYPE_FINGER" } }, { __index = function() return { state = "UNPROVEN" } end }) }
+	local rc = ns.Gear.CompareToEquipped(ring, eq)
+	check(#rc.entries == 2 and rc.entries[1].slot == 11 and rc.entries[2].slot == 12, "a ring can go in two slots and both are reported")
+	local odd = { fields = setmetatable({ equipSlot = { state = "PROVEN", value = "INVTYPE_MYSTERY" } }, { __index = function() return { state = "UNPROVEN" } end }) }
+	check(ns.Gear.CompareToEquipped(odd, eq).state == "UNKNOWN" and ns.Gear.CompareToEquipped(odd, eq).reason:find("not in Codex's slot table", 1, true), "an equip location Codex does not know is UNKNOWN, not guessed")
+end
+
+section("comparison: unknown stats stay UNKNOWN (never zero), and a waiting item makes its fields UNKNOWN")
+do
+	local loaded = { [5301] = false }
+	local ns = gearWorld({ loaded = loaded })
+	local wraps, cloak = ns.Items.Facts(5101), ns.Items.Facts(5102)
+	local c = ns.Gear.Compare(wraps, cloak)
+	check(c.stats.armor.state == "UNKNOWN" and c.stats.armor.diff == nil and c.stats.armor.reason:find("EMPTY", 1, true), "an EMPTY stat table is not interpreted: every stat is UNKNOWN with the reason")
+	check(c.slot.state == "DIFFERENT" and c.requiredLevel.state == "COMPARED", "while the other facts are still compared")
+	local waiting = ns.Items.Facts(5301)
+	local w = ns.Gear.Compare(wraps, waiting)
+	check(waiting.state == "WAITING" and w.stats.stamina.state == "UNKNOWN" and w.stats.stamina.diff == nil and w.requiredLevel.state == "UNKNOWN", "a waiting item gives UNKNOWN stats and UNKNOWN required level, not zeros")
+	check(w.slot.state == "SAME", "its equip slot, readable without the cache, is still compared")
+	check(ns.Gear.Compare(nil, wraps).slot.state == "UNKNOWN", "an item with no facts at all compares as UNKNOWN")
+	-- a client label that contradicts the mapping: that stat is UNKNOWN and the raw key is listed
+	_G.ARMOR, _G.RESISTANCE0_NAME = "Armor", "Physical Resistance"
+	local x = ns.Gear.Compare(ns.Items.Facts(5101), ns.Items.Facts(5103))
+	check(x.stats.armor.state == "UNKNOWN" and x.stats.armor.reason:find("label-conflict", 1, true) and x.unmapped[1] == "RESISTANCE0_NAME", "a label-conflicted armor key is UNKNOWN and shows up as unmapped")
+	_G.ARMOR, _G.RESISTANCE0_NAME = nil, nil
+end
+
+section("comparison: usable state and weapons")
+do
+	local ns = gearWorld({})
+	local helm, pants = ns.Items.Facts(5203), ns.Items.Facts(5201)
+	local u = ns.Gear.Compare(helm, pants).usable
+	check(u.state == "COMPARED" and u.a == false and u.b == true and u.same == false and u.diff == nil, "one unusable item: usable false vs true, reported as a difference of fact")
+	check(ns.Gear.Compare(pants, ns.Items.Facts(5101)).usable.same == true, "two usable items agree")
+	local sword, mace, axe = ns.Items.Facts(25), ns.Items.Facts(5401), ns.Items.Facts(5402)
+	local w = ns.Gear.Compare(sword, mace)
+	check(w.slot.state == "SAME" and w.stats.weapon_dps.state == "COMPARED" and w.stats.weapon_dps.a == 2.4 and w.stats.weapon_dps.b == 3.1 and math.abs(w.stats.weapon_dps.diff + 0.7) < 1e-9, "two one-handed weapons: same slot, dps 2.4 vs 3.1")
+	local wa = ns.Gear.Compare(sword, axe)
+	check(wa.slot.state == "SHARED" and wa.slot.shared[1] == 16, "a one-hander and a two-hander share the main hand (SHARED)")
+	check(wa.stats.strength.state == "COMPARED" and wa.stats.strength.assumedZero.a == true, "the axe's strength is compared with the sword's absent strength, flagged assumedZero")
+	check(ns.Gear.Compare(sword, pants).stats.weapon_dps.state == "NOT_APPLICABLE", "weapon dps against armor is NOT_APPLICABLE")
+	check(ns.Gear.Compare(sword, ns.Items.Facts(5204)).stats.weapon_dps.state == "UNKNOWN", "a weapon whose table has no dps key is UNKNOWN, not zero")
+end
+
+section("provenance: every equipped / bag / comparison fact keeps its source, the client wins over QuestieDB")
+do
+	local ns = gearWorld({ equipped = { [8] = 5103 }, bags = { 4914 } })
+	_G.LibQuestieDB = { Item = { Exists = function(id) return id == 5103 end, Get = function(id, k) return ({ name = "Hiking Boots", class = 4, subClass = 3, itemLevel = 8, requiredLevel = 0 })[k] end } }
+	local snap = ns.Gear.Snapshot()
+	local boots = snap.equipped.slots[8]
+	check(boots.src == "GetInventoryItemLink" and boots.itemFacts.fields.name.src == "GetItemInfo" and boots.itemFacts.fields.stats.src == "GetItemStats" and boots.itemFacts.fields.id.src == "item link", "equipment: slot source, item source, stats source, id source")
+	check(snap.bags.stacks[1].src == "GetContainerItemLink", "bags: the container function")
+	check(boots.itemFacts.external.questiedb.verified == false and boots.itemFacts.external.questiedb.src == "questiedb" and boots.itemFacts.conflicts[1].field == "subclass" and boots.itemFacts.conflicts[1].client == 2, "QuestieDB stays external and unverified; its disagreement is a conflict, the client's value stands")
+	check(boots.itemFacts.fields.subclass.value == 2 and boots.itemFacts.fields.subclass.state == "PROVEN", "the client's subclass is untouched")
+	local cmp = ns.Gear.Compare(boots.itemFacts, ns.Items.Facts(5101))
+	check(cmp.subclass.a == 2 and cmp.subclass.aText == "Leather", "a comparison uses the client facts only (QuestieDB's 3 is not used)")
+	_G.LibQuestieDB = nil
+end
+
+section("report: EQUIPPED ITEM FACTS, BAG ITEM FACTS and facts-only COMPARISON FACTS, compact and without advice")
+do
+	local ns = gearWorld({ equipped = { [8] = 5103, [10] = 5201 }, bags = { 4914, 900 }, bagSize = 5, questId = 4881, choices = { { id = 5101 }, { id = 5103 } } })
+	local text = joined(ns.Gear.ReportLines())
+	check(text:find("EQUIPPED ITEM FACTS: populated slots 2 of 19 | empty 17 | slot read failed 0 | normalized 2 | waiting 0 | failed 0", 1, true), "the equipped counts")
+	check(text:find("BAG ITEM FACTS: visible stacks 2 | containers read 5 (empty slots 3, slot reads failed 0) | normalized 2 | waiting 0 | failed 0", 1, true), "the bag counts")
+	check(text:find("COMPARISON FACTS", 1, true) and text:find("Choice 1 (INVTYPE_WRIST) vs slot 9 WRIST: the slot is empty", 1, true), "an offered item against an empty slot")
+	check(text:find("Choice 2 (INVTYPE_FEET) vs slot 8 FEET: equipped Hiking Boots [LOADED] | slot SAME", 1, true), "an offered item against the equipped item in its slot")
+	check(text:find("req level 9 vs 9 | usable true vs true", 1, true), "required level and usable are shown as facts")
+	for _, w in ipairs({ "upgrade", "recommend", "take it", "sell it", "better", "worse", "best" }) do
+		check(not text:lower():find(w, 1, true), "the report text does not say '" .. w .. "'")
+	end
+	check(#ns.Gear.ReportLines() <= 12, "and it stays compact  [" .. #ns.Gear.ReportLines() .. " lines]")
+	local full
+	rawset(ns.UI, "ShowReport", function(t) full = t end)
+	H.slash("report")
+	check(full and full:find("EQUIPPED ITEM FACTS:", 1, true) and full:find("BAG ITEM FACTS:", 1, true), "/codex report contains both sections")
+	local ns2 = fresh()
+	clearApi()
+	local t2 = joined(ns2.Gear.ReportLines())
+	check(t2:find("EQUIPPED ITEM FACTS: FAILED (api absent)", 1, true) and t2:find("BAG ITEM FACTS: FAILED (api absent)", 1, true), "with no APIs both sections say FAILED, not 'nothing equipped'")
+end
+
+section("gear: Stage 2 is read-only, judges nothing, and feeds nothing (no planner, presenter or provider reads it)")
+do
+	local function code(f) return (H.readFile(H.addonDir .. "/" .. f):gsub("%-%-[^\n]*", "")) end
+	local src = code("Gear.lua")
+	for _, pat in ipairs({ "ns%.Planner", "ns%.Engine", "ns%.Strategies", "ns%.State", "ns%.UI", "ns%.Presenter", "ns%.Registry", "ns%.Context", "ns%.Prefs", "ns%.Overlap" }) do
+		check(not src:find(pat), "Gear.lua does not depend on " .. pat:gsub("%%", ""))
+	end
+	for _, word in ipairs({ "upgrade", "recommend", "score", "should ", "take it", "sell it", "best " }) do
+		check(not src:lower():find(word, 1, true), "Gear.lua (code and strings) does not contain '" .. word .. "'")
+	end
+	for _, api in ipairs({ "EquipItemByName", "PickupInventoryItem", "UseContainerItem", "PickupContainerItem", "AutoEquipCursorItem", "SellCursorItem" }) do
+		check(not src:find(api .. "%s*%("), "Gear.lua never calls " .. api)
+	end
+	local readers = {}
+	for _, f in ipairs({ "Planner.lua", "Engine.lua", "Presenter.lua", "Overlap.lua", "PlanAdapter.lua", "Providers/Quest.lua", "State.lua", "Strategies.lua", "Navigation.lua" }) do
+		if code(f):find("ns%.Gear") then readers[#readers + 1] = f end
+	end
+	check(#readers == 0, "no planner, presenter or provider reads Gear")
 end
 
 section("item facts: Stage 1 adds no advice and no consumer (still read-only, ASCII, independent of the planner)")

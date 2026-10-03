@@ -548,6 +548,14 @@ function D.PlaytestLines(snap, lines)
 			add("ITEM PROBE: error: " .. tostring(lines))
 		end
 	end
+	if ns.Gear then
+		local okG, glines = pcall(ns.Gear.ReportLines)
+		if okG then
+			for _, l in ipairs(glines) do add(l) end
+		else
+			add("EQUIPPED ITEM FACTS: error: " .. tostring(glines))
+		end
+	end
 
 	add("")
 	add("--- FULL DIAGNOSTICS ---")

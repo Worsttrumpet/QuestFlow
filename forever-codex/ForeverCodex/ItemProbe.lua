@@ -332,26 +332,52 @@ function P.CaptureDialog(event) return readDialog(event, true) end
 local function resolvePending()
 	local keep = {}
 	for _, p in ipairs(pending) do
-		local e = p.entry
 		local facts = I.Read(p.ref)
 		if p.detail then p.detail.facts = facts end
-		local hadName = e.name ~= nil and e.name ~= ""
-		local state = tallyItem(facts)
-		if state == "loaded" then
-			e.info = compact(facts)
-			if not hadName and facts.f.name then
-				e.name = facts.f.name
-				note("rewardInfo", "ok", string.format("%s x%s (resolved late)", str(e.name), tostring(e.n)))
-				noteLate("rewardInfo")
+		local state
+		if p.entry then
+			-- a reward dialog item: tallied, and its stored observation is completed in place
+			local e = p.entry
+			local hadName = e.name ~= nil and e.name ~= ""
+			state = tallyItem(facts)
+			if state == "loaded" then
+				e.info = compact(facts)
+				if not hadName and facts.f.name then
+					e.name = facts.f.name
+					note("rewardInfo", "ok", string.format("%s x%s (resolved late)", str(e.name), tostring(e.n)))
+					noteLate("rewardInfo")
+				end
+				noteLate("itemInfo")
 			end
-			noteLate("itemInfo")
 		else
+			state = facts.unloaded and "unloaded" or "loaded"
+		end
+		if p.watch then
+			-- a watcher (the equipment / bag reader) is handed every fresh raw read, loaded or not, and refreshes its own facts
+			local ok, err = pcall(p.watch, facts)
+			if not ok and ns.RecordError then ns.RecordError("itemprobe watch", err) end
+		end
+		if state ~= "loaded" then
 			p.tries = p.tries + 1
 			if p.tries < P.RETRIES then keep[#keep + 1] = p end
 		end
 	end
 	pending = keep
 	return #keep
+end
+
+--- Registers a watcher on the ONE late-loading queue: `onRead(raw)` is called with a fresh Items.Read of `ref` each time the retry runs (on
+-- GET_ITEM_INFO_RECEIVED or the timer), until the item has loaded or the tries run out. key de-duplicates (a second Watch with the same key replaces the first).
+function P.Watch(key, ref, onRead)
+	if ref == nil then return end
+	for i, p in ipairs(pending) do
+		if p.key == key then
+			p.ref, p.watch, p.tries = ref, onRead, 0
+			return
+		end
+	end
+	pending[#pending + 1] = { key = key, ref = ref, watch = onRead, tries = 0 }
+	P.ArmRetry()
 end
 
 local function onRetryTimer()

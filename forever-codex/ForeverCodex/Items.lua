@@ -169,6 +169,15 @@ function I.Equipped()
 	return out, nil
 end
 
+local function stackCount(getInfo, bag, slot)
+	if not getInfo then return nil end
+	local ok, r = call(getInfo, bag, slot)
+	if not ok then return nil end
+	local c
+	if type(r[1]) == "table" then c = r[1].stackCount else c = r[2] end
+	return type(c) == "number" and c or nil
+end
+
 --- Items in the player's bags: { { bag, slot, link, count }, ... } and a reason when the API is missing.
 function I.Bags()
 	local numSlots = find("C_Container", "GetContainerNumSlots", "GetContainerNumSlots")
@@ -182,16 +191,61 @@ function I.Bags()
 		for slot = 1, n do
 			local okL, rl = call(getLink, bag, slot)
 			if okL and type(rl[1]) == "string" then
-				local count
-				if getInfo then
-					local okI, ri = call(getInfo, bag, slot)
-					if okI then
-						if type(ri[1]) == "table" then count = ri[1].stackCount else count = ri[2] end
-					end
-				end
-				out[#out + 1] = { bag = bag, slot = slot, link = rl[1], count = type(count) == "number" and count or nil }
+				out[#out + 1] = { bag = bag, slot = slot, link = rl[1], count = stackCount(getInfo, bag, slot) }
 			end
 		end
+	end
+	return out, nil
+end
+
+-- ---------------------------------------------------------------- slot-level reads (Stage 2): an empty slot is not an API failure
+
+--- Every equipment slot 1..EQUIP_SLOTS: { { slot, state, link, reason, src }, ... } indexed by slot.
+-- state: POPULATED (an item link came back), EMPTY (the call worked and returned nothing), FAILED (api absent, an error, or an unusable result; reason says which).
+function I.EquipmentSlots()
+	local get, name = find(nil, nil, "GetInventoryItemLink")
+	local out = {}
+	for slot = 1, I.EQUIP_SLOTS do
+		local e = { slot = slot, src = name }
+		if not get then
+			e.state, e.reason = "FAILED", "api absent"
+		else
+			local ok, r = call(get, "player", slot)
+			if not ok then e.state, e.reason = "FAILED", "error: " .. r
+			elseif type(r[1]) == "string" and r[1] ~= "" then e.state, e.link = "POPULATED", r[1]
+			elseif r[1] == nil then e.state = "EMPTY"
+			else e.state, e.reason = "FAILED", "unusable result of type " .. type(r[1]) end
+		end
+		out[slot] = e
+	end
+	return out
+end
+
+--- One bag slot: { bag, slot, state, link, count, reason, src } with the same states as EquipmentSlots.
+function I.BagSlot(bag, slot)
+	local getLink, linkName = find("C_Container", "GetContainerItemLink", "GetContainerItemLink")
+	local e = { bag = bag, slot = slot, src = linkName }
+	if not getLink then e.state, e.reason = "FAILED", "api absent"; return e end
+	local ok, r = call(getLink, bag, slot)
+	if not ok then e.state, e.reason = "FAILED", "error: " .. r
+	elseif type(r[1]) == "string" and r[1] ~= "" then
+		e.state, e.link = "POPULATED", r[1]
+		e.count = stackCount(find("C_Container", "GetContainerItemInfo", "GetContainerItemInfo"), bag, slot)
+	elseif r[1] == nil then e.state = "EMPTY"
+	else e.state, e.reason = "FAILED", "unusable result of type " .. type(r[1]) end
+	return e
+end
+
+--- The bag containers the client reports: { { bag, size, state, reason }, ... }, and a reason when the API is missing. size is the slot count.
+function I.BagContainers()
+	local numSlots = find("C_Container", "GetContainerNumSlots", "GetContainerNumSlots")
+	if not numSlots then return {}, "api absent" end
+	local out = {}
+	for bag = 0, I.MAX_BAGS do
+		local ok, r = call(numSlots, bag)
+		if not ok then out[#out + 1] = { bag = bag, state = "FAILED", reason = "error: " .. r }
+		elseif type(r[1]) ~= "number" then out[#out + 1] = { bag = bag, state = "FAILED", reason = "unusable result" }
+		else out[#out + 1] = { bag = bag, size = r[1], state = "OK" } end
 	end
 	return out, nil
 end
