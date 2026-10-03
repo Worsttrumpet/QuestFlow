@@ -149,10 +149,23 @@ local function proficiencyCheck(facts, char, equipped)
 			end
 		end
 	end
+	-- (c) observations recorded from the real client (EligibilityEvidence): used only when its policy proves an answer; a conflict stays UNKNOWN
+	local recorded
+	local EE = ns.EligibilityEvidence
+	if EE and type(char.level) == "number" then
+		recorded = EE.GetProficiency(char.classToken, cls.value, sub.value, char.level)
+		if recorded.state == "PROVEN_YES" then
+			return check("YES", text .. " is usable at this level: " .. recorded.reason, { src = "recorded Forever observations", proven = true, evidence = recorded })
+		elseif recorded.state == "PROVEN_NO" then
+			return check("NO", text .. " is not usable at level " .. char.level .. ": " .. recorded.reason, { unlock = recorded.unlockLevel, src = "recorded Forever observations", proven = true, evidence = recorded })
+		elseif recorded.state == "CONFLICT" then
+			return check("UNKNOWN", text .. " proficiency: " .. recorded.reason, { evidence = recorded })
+		end
+	end
 	-- nothing proven: UNKNOWN, with the Classic reference shown as a hint only
 	local hint
 	for _, r in ipairs(matching(reference, char.classToken, cls.value, sub.value)) do hint = { minLevel = r.minLevel, src = r.src } end
-	return check("UNKNOWN", text .. " proficiency for " .. char.classToken .. " is not established on Forever", { referenceHint = hint })
+	return check("UNKNOWN", text .. " proficiency for " .. char.classToken .. " is not established on Forever", { referenceHint = hint, evidence = recorded })
 end
 
 -- explicit restrictions, only when ItemFacts carries them (facts.requirements = { classes = {tokens}, races = {tokens}, faction = "Horde", src })

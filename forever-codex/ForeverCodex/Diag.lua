@@ -556,6 +556,19 @@ function D.PlaytestLines(snap, lines)
 			add("EQUIPPED ITEM FACTS: error: " .. tostring(glines))
 		end
 	end
+	if ns.EligibilityEvidence then
+		local extra = {}
+		if ns.ItemProbe and ns.ItemProbe.EventStatus then
+			extra[1] = "  events it relies on: " .. ns.ItemProbe.EventStatus("QUEST_DETAIL") .. " " .. ns.ItemProbe.EventStatus("QUEST_COMPLETE") .. " " .. ns.ItemProbe.EventStatus("PLAYER_EQUIPMENT_CHANGED")
+				.. " (observations are recorded at those moments and when the report is made; detail: /dump ForeverCodexDB.items.evidence)"
+		end
+		local okE, elines = pcall(ns.EligibilityEvidence.ReportLines, extra)
+		if okE then
+			for _, l in ipairs(elines) do add(l) end
+		else
+			add("ELIGIBILITY EVIDENCE: error: " .. tostring(elines))
+		end
+	end
 	if ns.Advisor then
 		local okA, alines = pcall(ns.Advisor.ReportLines)
 		if okA then

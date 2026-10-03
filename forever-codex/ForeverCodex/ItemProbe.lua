@@ -461,10 +461,12 @@ function P.OnEvent(event, ...)
 	local ok, err = pcall(function()
 		if event == "QUEST_DETAIL" or event == "QUEST_COMPLETE" or event == "QUEST_ITEM_UPDATE" then
 			P.CaptureDialog(event)
+			P.ObserveEvidence("dialog")
 		elseif event == "GET_ITEM_INFO_RECEIVED" then
 			if #pending > 0 then resolvePending() end
 		elseif event == "PLAYER_EQUIPMENT_CHANGED" then
 			if ns.Gear then ns.Gear.OnEquipmentChanged(a1, a2) end
+			P.ObserveEvidence("worn")
 		elseif event == "BAG_UPDATE_DELAYED" then
 			if ns.Gear then ns.Gear.OnBagsChanged(a1) end
 		end
@@ -670,6 +672,33 @@ function P.FactsLines()
 	return L
 end
 
+-- ---------------------------------------------------------------- eligibility evidence (natural observation points; no extra polling)
+
+--- Records proficiency evidence from items Codex already inspected, for the character AS THEY ARE NOW:
+--   "dialog": the open reward dialog's items (the client's usability answers; only while the dialog is live, so the level stamped on it is right)
+--   "worn":   the items the character is wearing (the game let them equip them)
+-- Nothing is polled: the dialog events and PLAYER_EQUIPMENT_CHANGED call this, and /codex report calls it for the worn items.
+function P.ObserveEvidence(which)
+	local EE, E = ns.EligibilityEvidence, ns.Eligibility
+	if not (EE and E) then return end
+	local char = E.Character()
+	if which == "dialog" then
+		local df = P.DialogFacts(false)
+		if df then
+			for _, spec in ipairs({ df.choices, df.rewards }) do
+				for _, it in ipairs(spec) do EE.ObserveFacts(it.facts, char, E.ClientUsability(it.facts), { evidenceSource = "reward_dialog" }) end
+			end
+		end
+	elseif which == "worn" and ns.Gear then
+		local ok, snap = pcall(ns.Gear.Get)
+		if ok and snap and snap.equipped and snap.equipped.list then
+			for _, e in ipairs(snap.equipped.list) do
+				if e.state == "POPULATED" and e.itemFacts then EE.ObserveWorn(e.itemFacts, char, e.slot, { evidenceSource = "equipment" }) end
+			end
+		end
+	end
+end
+
 -- ---------------------------------------------------------------- the report section
 
 local function eventStatus(ev)
@@ -681,11 +710,19 @@ local function eventStatus(ev)
 	return "UNPROVEN", fired
 end
 
+--- The status of the item events the evidence recorder relies on: "PROVEN fired=N" / "UNPROVEN fired=0" / "FAILED (not registered)".
+function P.EventStatus(ev)
+	local st, fired = eventStatus(ev)
+	return string.format("%s[%s fired=%d]", ev, st, fired)
+end
+
+
 --- The ITEM PROBE section of /codex report (a list of lines). Runs a fresh character probe first; never errors.
 function P.ReportLines()
 	local L = {}
 	local okP, errP = pcall(P.ProbeCharacter)
 	if not okP and ns.RecordError then ns.RecordError("itemprobe character", errP) end
+	pcall(P.ObserveEvidence, "worn")
 	L[#L + 1] = "--- ITEM PROBE (read-only: what the Forever client exposes; no advice is built on it) ---"
 	L[#L + 1] = "PROVEN = a real value was read on this client | UNPROVEN = not seen working yet | FAILED = missing or returned nothing"
 	local n, newest, dialogs = P.RewardStats()
