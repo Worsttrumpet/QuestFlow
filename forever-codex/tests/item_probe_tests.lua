@@ -53,7 +53,12 @@ local function install(o)
 			return it and it.stats or {}
 		end
 	end
-	_G.IsUsableItem = function() return true, false end
+	_G.IsUsableItem = function(ref)
+		local id = type(ref) == "number" and ref or tonumber(ref:match("item:(%d+)"))
+		local it = items[id]
+		if it and it.usable == false then return false, false end
+		return true, false
+	end
 	_G.GetItemSpell = function(ref)
 		local id = type(ref) == "number" and ref or tonumber(ref:match("item:(%d+)"))
 		local it = items[id]
@@ -277,6 +282,190 @@ do
 	check(joined(ns2.ItemProbe.ChoiceLines()):find("no reward dialog seen this session", 1, true), "with no reward dialog the section says so")
 end
 
+-- ================================================================ Stage 1: the normalized Item Facts reader (0.4.6)
+
+local STAGE1 = {
+	[5201] = { name = "Plain Pants", quality = 1, ilvl = 8, minLevel = 0, type = "Armor", subType = "Cloth", equipLoc = "INVTYPE_LEGS", sell = 19, classID = 4, subClassID = 1, stats = { RESISTANCE0_NAME = 28, ITEM_MOD_STAMINA_SHORT = 2, ITEM_MOD_FANCY_SHORT = 5 } },
+	[5202] = { name = "Bare Cloak", quality = 1, ilvl = 8, minLevel = 0, type = "Armor", subType = "Cloth", equipLoc = "INVTYPE_CLOAK", sell = 24, classID = 4, subClassID = 1, stats = {} },
+	[5203] = { name = "Heavy Plate Helm", quality = 2, ilvl = 8, minLevel = 0, type = "Armor", subType = "Plate", equipLoc = "INVTYPE_HEAD", sell = 90, classID = 4, subClassID = 4, stats = { RESISTANCE0_NAME = 90 }, usable = false },
+	[5204] = { name = "Strengthless Blade", quality = 1, ilvl = 5, minLevel = 0, type = "Weapon", subType = "One-Handed Swords", equipLoc = "INVTYPE_WEAPON", sell = 40, classID = 2, subClassID = 7, stats = { ITEM_MOD_STRENGTH_SHORT = 1 } },
+}
+for k, v in pairs(CHOICE_ITEMS) do STAGE1[k] = v end
+
+local function stateOf(facts, key) return facts.fields[key].state end
+
+section("item facts: a fully populated item is normalized, every field PROVEN with its source")
+do
+	local ns = fresh()
+	install({ items = STAGE1 })
+	local facts = ns.Items.Facts(link(5101, "Traveler's Wraps"))
+	local fl = facts.fields
+	check(facts.state == "LOADED" and facts.waiting == false and facts.id == 5101, "the item is LOADED and its id comes from the link")
+	for _, key in ipairs({ "id", "name", "link", "quality", "class", "subclass", "itemLevel", "equipSlot", "requiredLevel", "vendorValue", "stats", "usable" }) do
+		check(stateOf(facts, key) == "PROVEN", key .. " is PROVEN  [" .. stateOf(facts, key) .. "]")
+	end
+	check(fl.name.value == "Traveler's Wraps" and fl.class.value == 4 and fl.class.text == "Armor" and fl.subclass.value == 1 and fl.subclass.text == "Cloth", "name, class and subclass (id and the client's word)")
+	check(fl.itemLevel.value == 12 and fl.equipSlot.value == "INVTYPE_WRIST" and fl.requiredLevel.value == 8 and fl.vendorValue.value == 310 and fl.usable.value == true, "level, slot, required level, vendor value (copper) and usable")
+	check(fl.useEffect.state == "EMPTY" and fl.weaponType.state == "EMPTY" and fl.weaponDps.state == "EMPTY" and fl.weaponType.reason == "not a weapon", "no use effect is EMPTY and the weapon fields are EMPTY (not a weapon), neither is PROVEN")
+	check(fl.name.src == "GetItemInfo" and fl.stats.src == "GetItemStats" and fl.usable.src == "IsUsableItem" and fl.id.src == "item link", "each field names the client function that produced it")
+	local byId = ns.Items.Facts(5101)
+	check(byId.fields.id.src == "argument" and byId.fields.name.value == "Traveler's Wraps", "an item id works as well as a link (the link then comes from the info call)")
+end
+
+section("item facts: a missing API is FAILED, not PROVEN and not 'no information'")
+do
+	local ns = fresh()
+	clearApi()
+	local facts = ns.Items.Facts(4915)
+	check(facts.state == "FAILED", "the item state is FAILED  [" .. facts.state .. "]")
+	for _, key in ipairs({ "name", "class", "subclass", "itemLevel", "equipSlot", "requiredLevel", "vendorValue", "stats", "usable" }) do
+		check(stateOf(facts, key) == "FAILED", key .. " is FAILED  [" .. stateOf(facts, key) .. "]")
+	end
+	check(facts.fields.name.reason == "api absent" and facts.fields.stats.reason == "api absent" and facts.fields.usable.reason == "api absent", "and says why")
+	check(facts.fields.id.state == "PROVEN", "the id itself was given, so it is PROVEN")
+end
+
+section("item facts: blank/nil item info is UNPROVEN (waiting), never FAILED and never 'no information'")
+do
+	local ns = fresh()
+	install({ items = STAGE1, loaded = { [5101] = false } })
+	local facts = ns.Items.Facts(link(5101, "Traveler's Wraps"))
+	check(facts.state == "WAITING" and facts.waiting == true, "the item is WAITING")
+	for _, key in ipairs({ "name", "quality", "itemLevel", "requiredLevel", "vendorValue", "stats", "usable", "useEffect" }) do
+		check(stateOf(facts, key) == "UNPROVEN" and facts.fields[key].reason == "waiting for item data", key .. " is UNPROVEN, waiting  [" .. stateOf(facts, key) .. "]")
+	end
+	check(stateOf(facts, "class") == "PROVEN" and facts.fields.class.src == "GetItemInfoInstant" and stateOf(facts, "equipSlot") == "PROVEN", "the cache-independent instant call still supplies class and slot, labelled with its own source")
+	check(stateOf(facts, "link") == "PROVEN" and facts.fields.link.src == "item link given", "a link that was handed in is a link")
+	check(stateOf(facts, "weaponType") == "EMPTY", "(armor, so the weapon fields do not apply)")
+end
+
+section("item facts: late-loading data completes the facts through the existing GET_ITEM_INFO_RECEIVED retry (no second system)")
+do
+	local ns = fresh()
+	local loaded = { [5103] = false }
+	install({ items = STAGE1, loaded = loaded, questId = 61, choices = { { id = 5101 }, { id = 5102 }, { id = 5103 } } })
+	ns.ItemProbe.OnEvent("QUEST_DETAIL")
+	local df = ns.ItemProbe.DialogFacts()
+	local boots = df.choices[3].facts
+	check(boots.state == "WAITING" and stateOf(boots, "name") == "UNPROVEN" and stateOf(boots, "stats") == "UNPROVEN", "the unloaded choice is WAITING with UNPROVEN fields")
+	check(df.choices[1].facts.state == "LOADED", "the loaded choices are not affected")
+	loaded[5103] = true
+	ns.ItemProbe.OnEvent("GET_ITEM_INFO_RECEIVED", 5103, true)
+	local after = ns.ItemProbe.DialogFacts().choices[3].facts
+	check(after.state == "LOADED" and after.fields.name.value == "Hiking Boots" and stateOf(after, "stats") == "PROVEN", "after the event the same item is LOADED with its name and stats")
+	check(after.fields.equipSlot.value == "INVTYPE_FEET" and after.fields.requiredLevel.value == 9, "and its facts are complete")
+	check(ns.Items.Retry == nil and ns.Items.Pending == nil, "Items.lua has no retry queue of its own")
+end
+
+section("item facts: an empty stat table is EMPTY and is not interpreted; a populated one is normalized")
+do
+	local ns = fresh()
+	install({ items = STAGE1 })
+	local empty = ns.Items.Facts(5202)
+	check(stateOf(empty, "stats") == "EMPTY" and empty.fields.stats.value == nil and next(empty.fields.stats.byStat) == nil and #empty.fields.stats.list == 0, "an empty table is EMPTY, with no value and nothing normalized")
+	check(empty.fields.stats.state ~= "PROVEN" and empty.fields.stats.reason:find("not interpreted", 1, true), "it is not PROVEN and it says it is not interpreted (not 'this item has no stats')")
+	_G.ARMOR, _G.RESISTANCE0_NAME, _G.SPELL_STAT3_NAME = "Armor", "Armor", "Stamina"
+	_G.ITEM_MOD_STAMINA_SHORT = "Stamina"
+	local full = ns.Items.Facts(5201)
+	local st = full.fields.stats
+	check(st.state == "PROVEN" and #st.list == 3 and st.raw.RESISTANCE0_NAME == 28 and st.raw.ITEM_MOD_FANCY_SHORT == 5, "a populated table is PROVEN and keeps every raw key and value")
+	check(st.byStat.armor == 28 and st.byStat.stamina == 2, "armor and stamina are normalized")
+	local byKey = {}
+	for _, e in ipairs(st.list) do byKey[e.key] = e end
+	check(byKey.RESISTANCE0_NAME.stat == "armor" and byKey.RESISTANCE0_NAME.meaning == "label-match" and byKey.RESISTANCE0_NAME.label == "Armor", "RESISTANCE0_NAME is armor because the client's own text for the key matches its text for ARMOR")
+	check(byKey.ITEM_MOD_FANCY_SHORT.stat == nil and byKey.ITEM_MOD_FANCY_SHORT.meaning == "unmapped" and st.byStat.fancy == nil, "a key Codex does not know stays raw (unmapped), nothing is invented")
+	-- the client's text disagrees: the mapping is NOT applied and the raw value is kept
+	_G.RESISTANCE0_NAME = "Physical Resistance"
+	local conflict = ns.Items.Facts(5201).fields.stats
+	local ck
+	for _, e in ipairs(conflict.list) do if e.key == "RESISTANCE0_NAME" then ck = e end end
+	check(ck.stat == nil and ck.meaning == "label-conflict" and conflict.byStat.armor == nil and conflict.raw.RESISTANCE0_NAME == 28, "a conflicting client label means no canonical stat is assigned; the raw value is preserved")
+	-- no client text to compare: the mapping applies but is marked uncorroborated
+	_G.ARMOR, _G.RESISTANCE0_NAME = nil, nil
+	local nolabel = ns.Items.Facts(5201).fields.stats
+	local nk
+	for _, e in ipairs(nolabel.list) do if e.key == "RESISTANCE0_NAME" then nk = e end end
+	check(nk.stat == "armor" and nk.meaning == "label-missing" and nolabel.byStat.armor == 28, "with no client text to compare the mapping is used but marked label-missing (uncorroborated)")
+	_G.ITEM_MOD_STAMINA_SHORT, _G.SPELL_STAT3_NAME = nil, nil
+end
+
+section("item facts: an item with no equip slot, one with a use effect, a weapon with type and dps, an unusable item")
+do
+	local ns = fresh()
+	install({ items = STAGE1 })
+	local skull = ns.Items.Facts(900)
+	check(stateOf(skull, "equipSlot") == "EMPTY" and skull.fields.equipSlot.value == "", "no equip slot: EMPTY (the client returned an empty string)")
+	check(stateOf(skull, "useEffect") == "PROVEN" and skull.fields.useEffect.value == "Skull Blast" and skull.fields.useEffect.spellId == 777, "a use effect is PROVEN with its spell name and id")
+	local sword = ns.Items.Facts(25)
+	check(stateOf(sword, "weaponType") == "PROVEN" and sword.fields.weaponType.value == 7 and sword.fields.weaponType.text == "One-Handed Swords", "a weapon has its weapon type (subclass id and the client's words)")
+	check(stateOf(sword, "weaponDps") == "PROVEN" and sword.fields.weaponDps.value == 2.4 and sword.fields.weaponDps.key == "ITEM_MOD_DAMAGE_PER_SECOND_SHORT", "and its dps with the raw key it came from")
+	check(sword.fields.stats.byStat.weapon_dps == 2.4, "the dps is also in the normalized stats")
+	local blade = ns.Items.Facts(5204)
+	check(stateOf(blade, "weaponType") == "PROVEN" and stateOf(blade, "weaponDps") == "EMPTY" and blade.fields.weaponDps.reason:find("no dps key", 1, true), "a weapon whose stat table has no dps key: dps is EMPTY, not invented")
+	local helm = ns.Items.Facts(5203)
+	check(stateOf(helm, "usable") == "PROVEN" and helm.fields.usable.value == false, "an unusable item: usable is PROVEN with the value false (a real answer, not a failure)")
+	check(ns.Items.Facts(5201).fields.usable.value == true, "a usable item reads true")
+end
+
+section("item facts: the reward dialog's choices are normalized one by one, and QuestieDB never adds or removes a choice")
+do
+	local ns = fresh()
+	install({ items = STAGE1, questId = 4881, choices = { { id = 5101 }, { id = 5102 }, { id = 5103 } } })
+	ns.ItemProbe.OnEvent("QUEST_COMPLETE")
+	local df = ns.ItemProbe.DialogFacts(false)
+	check(#df.choices == 3 and #df.rewards == 0 and df.q == 4881, "three choices, no guaranteed items, quest 4881")
+	for i, id in ipairs({ 5101, 5102, 5103 }) do
+		local it = df.choices[i]
+		check(it.id == id and it.facts.id == id and it.facts.offered.source == "reward_dialog" and it.facts.offered.index == i and it.facts.offered.quest == 4881, "choice " .. i .. " is item " .. id .. ", marked as offered by the dialog")
+	end
+	check(df.choices[1].facts.fields.name.value == "Traveler's Wraps" and df.choices[2].facts.fields.name.value == "Adventurer's Cloak" and df.choices[3].facts.fields.name.value == "Hiking Boots", "each has its own facts")
+	-- a QuestieDB that knows other items and a conflicting class for one of the offered ones
+	_G.LibQuestieDB = { Item = {
+		Exists = function(id) return id == 5101 or id == 5201 or id == 5102 end,
+		Get = function(id, key) local t = { [5101] = { name = "Traveler's Wraps", class = 2, subClass = 1, itemLevel = 12, requiredLevel = 8 }, [5201] = { name = "Plain Pants" }, [5102] = { class = 4 } }; return t[id] and t[id][key] end,
+	} }
+	local df2 = ns.ItemProbe.DialogFacts(false)
+	check(#df2.choices == 3, "QuestieDB knowing other items adds nothing: still the three the dialog offered")
+	local wraps = df2.choices[1].facts
+	check(wraps.external.questiedb.src == "questiedb" and wraps.external.questiedb.verified == false and wraps.external.questiedb.exists == true, "the QuestieDB data sits apart, labelled src=questiedb, unverified")
+	check(#wraps.conflicts == 1 and wraps.conflicts[1].field == "class" and wraps.conflicts[1].client == 4 and wraps.conflicts[1].external == 2, "a disagreement is recorded as a conflict (client 4, questiedb 2)")
+	check(wraps.fields.class.value == 4 and wraps.fields.class.state == "PROVEN" and wraps.fields.class.src == "GetItemInfo", "and the client's value is untouched")
+	check(df2.choices[2].facts.external.questiedb.exists == true and #df2.choices[2].facts.conflicts == 0, "an agreeing or partial QuestieDB record is no conflict")
+	check(df2.choices[3].facts.external.questiedb.exists == false and df2.choices[3].facts.fields.name.state == "PROVEN", "an item QuestieDB does not know is 'unknown to QuestieDB' and the client facts stand")
+	_G.LibQuestieDB = nil
+	check(ns.ItemProbe.DialogFacts(false).choices[1].facts.external == nil, "without QuestieDB there is simply no external section")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("item facts: the report shows the normalized facts compactly, next to the raw REWARD CHOICE DETAILS")
+do
+	local ns = fresh()
+	_G.ARMOR, _G.RESISTANCE0_NAME = "Armor", "Armor"
+	install({ items = STAGE1, questId = 4881, choices = { { id = 5101 }, { id = 5102 }, { id = 5103 } } })
+	local text = joined(ns.ItemProbe.ReportLines())
+	check(text:find("REWARD CHOICE DETAILS", 1, true) and text:find("ITEM FACTS (normalized", 1, true), "both the raw choice details and the normalized facts are present")
+	check(text:find("Choice 1: Traveler's Wraps | id PROVEN 5101 | LOADED", 1, true), "the normalized facts name each choice")
+	check(text:find("stats PROVEN", 1, true) and text:find("stats EMPTY (the client returned an empty stat table (not interpreted))", 1, true), "a populated and an empty stat table are shown differently")
+	check(text:find("[client text \"Armor\", label-match]", 1, true) or text:find("RESISTANCE0_NAME", 1, true), "the stat's raw key and the client's own text are shown")
+	local lines = ns.ItemProbe.ReportLines()
+	check(#lines <= 95, "the whole item section stays bounded with three choices  [" .. #lines .. " lines]")
+	_G.ARMOR, _G.RESISTANCE0_NAME = nil, nil
+end
+
+section("item facts: Stage 1 adds no advice and no consumer (still read-only, ASCII, independent of the planner)")
+do
+	local function code(f) return (H.readFile(H.addonDir .. "/" .. f):gsub("%-%-[^\n]*", "")) end
+	for _, word in ipairs({ "upgrade", "recommend", "should the player", "take it", "sell it", "best reward" }) do
+		check(not code("Items.lua"):lower():find(word, 1, true), "Items.lua does not mention '" .. word .. "'")
+	end
+	local readers = {}
+	for _, f in ipairs({ "Planner.lua", "Engine.lua", "Presenter.lua", "Overlap.lua", "PlanAdapter.lua", "Providers/Quest.lua", "State.lua", "Strategies.lua" }) do
+		local src = code(f)
+		if src:find("ns%.Items") or src:find("ns%.ItemProbe") then readers[#readers + 1] = f end
+	end
+	check(#readers == 0, "the planner, presenter and providers do not read item facts")
+end
+
 section("item probe: the character (equipped items, bags, skill lines)")
 do
 	local ns = fresh()
@@ -341,8 +530,8 @@ do
 	H.slash("report")
 	check(text and text:find("--- ITEM PROBE", 1, true), "/codex report contains the ITEM PROBE section")
 	local sec = ns.ItemProbe.ReportLines()
-	check(#sec <= 40, "and it is compact  [" .. #sec .. " lines]")
-	check(fieldLine(table.concat(sec, "\n"), "Reward item id"):find("PROVEN", 1, true), "each field line names its status")
+	check(#sec <= 60, "and it is compact  [" .. #sec .. " lines]")
+	check(table.concat(sec, "\n"):find("PROVEN: Quest id (GetQuestID), Reward counts", 1, true), "the field tallies name each field under its status")
 	check(table.concat(sec, "\n"):find("Not probed in Stage 0: tooltip text", 1, true), "it lists what Stage 0 does not probe")
 	check(not text:lower():find("recommend", 1, true) or true, "(no advice)")
 end

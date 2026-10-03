@@ -8,6 +8,13 @@
 --   * facts.unloaded   true when the item's data was not available yet (a blank name or nil): item data loads asynchronously, so the
 --                      caller retries later (GET_ITEM_INFO_RECEIVED); this was seen on Forever for quest reward names
 -- Client functions are looked up at CALL time (never captured at load), so a test double or a late-defined API is honoured.
+--
+-- Two layers (Stage 1):
+--   I.Read(ref)       the raw read above (what the client returned, per group, and why anything is missing)
+--   I.Normalize(raw)  the same read as ONE normalized ItemFacts object with a state per field (see the block below). It is a pure function of a raw read,
+--                     so a read that completes later (item data loads asynchronously) is simply normalized again; there is no second late-loading system:
+--                     ItemProbe's existing GET_ITEM_INFO_RECEIVED retry refreshes the raw read and callers normalize what it holds.
+--   I.Facts(ref)      Read + Normalize + the optional QuestieDB cross-reference
 
 local addonName, ns = ...
 
@@ -203,4 +210,233 @@ function I.SkillLines()
 		if okI and type(ri[1]) == "string" then out[#out + 1] = { name = ri[1], header = ri[2] == true or ri[2] == 1, rank = type(ri[4]) == "number" and ri[4] or nil } end
 	end
 	return out, nil
+end
+
+-- ================================================================ normalized ItemFacts (Stage 1)
+--
+-- ItemFacts = {
+--   schema = 1, id = number|nil,
+--   state = "LOADED" | "WAITING" (item data not loaded yet) | "FAILED" (the info call is absent or errored),
+--   waiting = boolean,
+--   fields = { id, name, link, quality, class, subclass, itemLevel, equipSlot, requiredLevel, vendorValue, stats, usable, useEffect, weaponType, weaponDps },
+--   external = { questiedb = {...} } (only when QuestieDB answers; never mixed into fields), conflicts = { { field, client, external } },
+-- }
+-- Every field = { state, value, src, reason, ... }:
+--   PROVEN    a real usable value was read from the client (src names the client function)
+--   UNPROVEN  not successfully read yet: the item is still loading ("waiting for item data") or the field was not read. NEVER a failure.
+--   FAILED    the API is absent, errored, or returned a genuinely unusable result (reason says which)
+--   EMPTY     the API worked and returned an empty value (an empty stat table, an empty equip slot string, no use effect), or the field does not apply
+--             (a weapon field on armor, reason "not a weapon"). EMPTY is NOT interpreted: an empty stat table does not mean "this item has no stats".
+-- class / subclass also carry `text` (the client's type / subtype words). stats also carries `list`, `byStat` and `raw` (see below).
+
+local function F(state, value, src, reason, extra)
+	local t = { state = state, value = value, src = src, reason = reason }
+	if extra then for k, v in pairs(extra) do t[k] = v end end
+	return t
+end
+
+-- The stat keys Codex knows how to name. The stat table's KEYS come from the client (GetItemStats); this table only says what Codex believes a key means,
+-- and `label` names a client GLOBAL STRING whose text should equal the key's own text if the belief is right (RESISTANCE0_NAME should read like ARMOR).
+-- A key that is not here stays raw ("unmapped"). Nothing here is a claim about the Forever client until the report shows the label comparison.
+I.STAT_KEYS = {
+	RESISTANCE0_NAME        = { stat = "armor",     label = "ARMOR" },
+	ITEM_MOD_STRENGTH_SHORT  = { stat = "strength",  label = "SPELL_STAT1_NAME" },
+	ITEM_MOD_AGILITY_SHORT   = { stat = "agility",   label = "SPELL_STAT2_NAME" },
+	ITEM_MOD_STAMINA_SHORT   = { stat = "stamina",   label = "SPELL_STAT3_NAME" },
+	ITEM_MOD_INTELLECT_SHORT = { stat = "intellect", label = "SPELL_STAT4_NAME" },
+	ITEM_MOD_SPIRIT_SHORT    = { stat = "spirit",    label = "SPELL_STAT5_NAME" },
+}
+local DPS_PATTERN = "DAMAGE_PER_SECOND"
+
+local function globalText(name)
+	local v = type(name) == "string" and rawget(_G, name) or nil
+	return type(v) == "string" and v ~= "" and v or nil
+end
+
+--- A raw stat table { key = value } -> { list, byStat, raw }. list is sorted by key; each entry =
+--   { key, value, stat, label, meaning }   meaning: "label-match" (the client's text for the key equals its text for the expected stat: canonical `stat` set),
+--   "label-missing" (Codex's mapping applies but the client strings could not be compared: `stat` set, uncorroborated), "label-conflict" (the texts differ:
+--   `stat` NOT set, raw kept), "key-pattern" (the weapon dps key, matched by name), "unmapped" (raw only).
+-- byStat holds only entries whose canonical stat was set.
+function I.NormalizeStats(raw)
+	local keys = {}
+	for k in pairs(raw) do keys[#keys + 1] = k end
+	table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+	local list, byStat = {}, {}
+	for _, k in ipairs(keys) do
+		local v = raw[k]
+		local e = { key = k, value = v, label = globalText(k) }
+		local map = I.STAT_KEYS[k]
+		if map then
+			local expect = globalText(map.label)
+			if e.label and expect then
+				if e.label:lower() == expect:lower() then e.stat, e.meaning = map.stat, "label-match"
+				else e.meaning = "label-conflict" end
+			else
+				e.stat, e.meaning = map.stat, "label-missing"
+			end
+		elseif tostring(k):find(DPS_PATTERN, 1, true) then
+			e.stat, e.meaning = "weapon_dps", "key-pattern"
+		else
+			e.meaning = "unmapped"
+		end
+		if e.stat then byStat[e.stat] = (byStat[e.stat] or 0) + (type(v) == "number" and v or 0) end
+		list[#list + 1] = e
+	end
+	return { list = list, byStat = byStat, raw = raw }
+end
+
+--- One raw read (I.Read) -> ItemFacts. Pure: no client calls except reading the client's own label strings for the stat comparison.
+function I.Normalize(raw)
+	raw = raw or { f = {}, src = {}, err = { info = "no item reference" } }
+	local f, src, err = raw.f or {}, raw.src or {}, raw.err or {}
+	local inst = raw.instant
+	local waiting = raw.unloaded == true
+	local infoFailed = err.info ~= nil and not waiting
+	local facts = { schema = 1, id = raw.id, waiting = waiting, fields = {}, conflicts = {} }
+	facts.state = infoFailed and "FAILED" or (waiting and "WAITING" or "LOADED")
+	local fl = facts.fields
+
+	local function missing()
+		if waiting then return F("UNPROVEN", nil, nil, "waiting for item data") end
+		if infoFailed then return F("FAILED", nil, nil, err.info) end
+		return F("FAILED", nil, nil, "not returned")
+	end
+	local function numberField(key)
+		if type(f[key]) == "number" then return F("PROVEN", f[key], src[key]) end
+		return missing()
+	end
+
+	if raw.id then fl.id = F("PROVEN", raw.id, type(raw.ref) == "number" and "argument" or "item link")
+	elseif inst and type(inst.id) == "number" then fl.id = F("PROVEN", inst.id, src.instant)
+	else fl.id = F("FAILED", nil, nil, "no item id") end
+	facts.id = facts.id or fl.id.value
+
+	if type(f.name) == "string" and f.name ~= "" then fl.name = F("PROVEN", f.name, src.name) else fl.name = missing() end
+	if type(f.link) == "string" and f.link ~= "" then fl.link = F("PROVEN", f.link, src.link)
+	elseif type(raw.ref) == "string" and raw.ref:find("item:", 1, true) then fl.link = F("PROVEN", raw.ref, "item link given")
+	else fl.link = missing() end
+	fl.quality = numberField("quality")
+
+	-- class and subclass: the info call, or the cache-independent instant call when the item has not loaded yet
+	local function classLike(key, textKey, instKey, instTextKey)
+		if type(f[key]) == "number" then return F("PROVEN", f[key], src[key], nil, { text = f[textKey] }) end
+		if inst and type(inst[instKey]) == "number" then return F("PROVEN", inst[instKey], src.instant, nil, { text = inst[instTextKey] }) end
+		return missing()
+	end
+	fl.class = classLike("classID", "type", "classID", "type")
+	fl.subclass = classLike("subClassID", "subType", "subClassID", "subType")
+
+	if type(f.equipLoc) == "string" then
+		fl.equipSlot = f.equipLoc ~= "" and F("PROVEN", f.equipLoc, src.equipLoc) or F("EMPTY", "", src.equipLoc, "the client returned an empty equip slot")
+	elseif inst and type(inst.equipLoc) == "string" then
+		fl.equipSlot = inst.equipLoc ~= "" and F("PROVEN", inst.equipLoc, src.instant) or F("EMPTY", "", src.instant, "the client returned an empty equip slot")
+	else
+		fl.equipSlot = missing()
+	end
+	fl.itemLevel = numberField("level")
+	fl.requiredLevel = numberField("minLevel")
+	fl.vendorValue = numberField("sellPrice")
+
+	-- the read of usable / use effect / stats depends on the item being loaded: while it is not, none of them means anything yet
+	if waiting then
+		fl.usable = F("UNPROVEN", nil, nil, "waiting for item data")
+	elseif err.usable then
+		fl.usable = F("FAILED", nil, nil, err.usable)
+	elseif type(f.usable) == "boolean" then
+		fl.usable = F("PROVEN", f.usable, src.usable)
+	else
+		fl.usable = F("FAILED", nil, nil, "not returned")
+	end
+
+	if waiting then
+		fl.useEffect = F("UNPROVEN", nil, nil, "waiting for item data")
+	elseif err.spell then
+		fl.useEffect = F("FAILED", nil, nil, err.spell)
+	elseif f.spell then
+		fl.useEffect = F("PROVEN", f.spell, src.spell, nil, { spellId = f.spellId })
+	else
+		fl.useEffect = F("EMPTY", nil, nil, "the call worked and returned no spell")
+	end
+
+	if waiting then
+		fl.stats = F("UNPROVEN", nil, nil, "waiting for item data")
+	elseif err.stats then
+		fl.stats = F("FAILED", nil, nil, err.stats)
+	elseif type(f.stats) == "table" and next(f.stats) ~= nil then
+		local n = I.NormalizeStats(f.stats)
+		fl.stats = F("PROVEN", n.byStat, src.stats, nil, { list = n.list, byStat = n.byStat, raw = n.raw })
+	elseif type(f.stats) == "table" then
+		fl.stats = F("EMPTY", nil, src.stats, "the client returned an empty stat table (not interpreted)", { list = {}, byStat = {}, raw = {} })
+	else
+		fl.stats = F("FAILED", nil, nil, "not returned")
+	end
+
+	-- weapon type and dps: only meaningful for a weapon (item class 2)
+	local classID = fl.class.state == "PROVEN" and fl.class.value or nil
+	if classID == nil then
+		fl.weaponType = F("UNPROVEN", nil, nil, fl.class.reason or "item class not known yet")
+		fl.weaponDps = F("UNPROVEN", nil, nil, fl.class.reason or "item class not known yet")
+	elseif classID ~= 2 then
+		fl.weaponType = F("EMPTY", nil, nil, "not a weapon")
+		fl.weaponDps = F("EMPTY", nil, nil, "not a weapon")
+	else
+		if fl.subclass.state == "PROVEN" then
+			fl.weaponType = F("PROVEN", fl.subclass.value, fl.subclass.src, nil, { text = fl.subclass.text })
+		else
+			fl.weaponType = F(fl.subclass.state, nil, nil, fl.subclass.reason)
+		end
+		if fl.stats.state == "PROVEN" or fl.stats.state == "EMPTY" then
+			local dps, key
+			for _, e in ipairs(fl.stats.list) do if e.stat == "weapon_dps" and type(e.value) == "number" then dps, key = e.value, e.key end end
+			if dps then fl.weaponDps = F("PROVEN", dps, fl.stats.src, nil, { key = key })
+			else fl.weaponDps = F("EMPTY", nil, fl.stats.src, "the stat table has no dps key") end
+		else
+			fl.weaponDps = F(fl.stats.state, nil, nil, fl.stats.reason)
+		end
+	end
+	return facts
+end
+
+-- ---------------------------------------------------------------- the optional QuestieDB cross-reference (never overrides the client)
+
+--- What QuestieDB's documented consumer API says about an item id, kept apart from the client's facts: { src = "questiedb", verified = false, exists,
+-- name, class, subClass, itemLevel, requiredLevel }, or nil when QuestieDB is not installed or has no Item table. exists = false means "unknown to QuestieDB",
+-- not "no such item" (QuestieDB has no Forever-added items).
+function I.External(id)
+	local lib = rawget(_G, "LibQuestieDB")
+	if type(id) ~= "number" or type(lib) ~= "table" or type(lib.Item) ~= "table" then return nil end
+	local Item = lib.Item
+	local out = { src = "questiedb", verified = false }
+	local okE, e = pcall(Item.Exists, id)
+	out.exists = okE and e == true
+	if not out.exists then return out end
+	for _, k in ipairs({ "name", "class", "subClass", "itemLevel", "requiredLevel" }) do
+		local ok, v = pcall(Item.Get, id, k)
+		if ok and v ~= nil then out[k] = v end
+	end
+	return out
+end
+
+--- Attaches facts.external.questiedb and records disagreements in facts.conflicts (field, the client's value, QuestieDB's value). The client's fields are
+-- never changed. Returns facts.
+function I.Annotate(facts)
+	local x = I.External(facts.id)
+	if not x then return facts end
+	facts.external = { questiedb = x }
+	if x.exists then
+		local fl = facts.fields
+		for _, pair in ipairs({ { "name", "name" }, { "class", "class" }, { "subclass", "subClass" }, { "itemLevel", "itemLevel" }, { "requiredLevel", "requiredLevel" } }) do
+			local c, e = fl[pair[1]], x[pair[2]]
+			if c and c.state == "PROVEN" and e ~= nil and c.value ~= e then
+				facts.conflicts[#facts.conflicts + 1] = { field = pair[1], client = c.value, external = e }
+			end
+		end
+	end
+	return facts
+end
+
+--- One call: read the item, normalize it, cross-reference QuestieDB. ref = an item link or a numeric item id.
+function I.Facts(ref)
+	return I.Annotate(I.Normalize(I.Read(ref)))
 end

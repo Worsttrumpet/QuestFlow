@@ -558,6 +558,87 @@ function P.ChoiceLines()
 	return L
 end
 
+-- ---------------------------------------------------------------- normalized facts for the offered rewards (Stage 1)
+
+--- The reward dialog's items as normalized ItemFacts (Items.Normalize of the raw reads this probe already keeps, plus the QuestieDB cross-reference):
+--   { q, at, live, choices = { item }, rewards = { item } }   item = { index, kind, id, name, count, quality, facts, offered }
+-- The DIALOG is the source of truth for what was offered (the choices, the guaranteed rewards, their ids); QuestieDB is only an annotation on each item's
+-- facts and never adds or removes an item. refresh = true re-reads a dialog that is still open first. Items still loading are WAITING (UNPROVEN fields); the
+-- existing GET_ITEM_INFO_RECEIVED retry completes the raw reads, so asking again later returns the completed facts. nil when no dialog was seen this session.
+function P.DialogFacts(refresh)
+	local live = false
+	if refresh and dialogOpen() then
+		local ok = pcall(readDialog, "FACTS", false)
+		live = ok
+	end
+	local dlg = P.dialog
+	if not dlg then return nil end
+	local out = { q = dlg.q, at = dlg.at, live = live, choices = {}, rewards = {} }
+	for _, spec in ipairs({ { dlg.choices, out.choices }, { dlg.rewards, out.rewards } }) do
+		for i, d in ipairs(spec[1]) do
+			local raw = d.facts or { id = d.e.id, ref = d.e.id, f = {}, src = {}, err = { info = "not read" } }
+			local facts = I.Annotate(I.Normalize(raw))
+			facts.offered = { source = "reward_dialog", kind = d.kind, index = d.i, quest = dlg.q }
+			spec[2][#spec[2] + 1] = { index = d.i, kind = d.kind, id = d.e.id, name = d.e.name, count = d.e.n, quality = d.e.q, facts = facts }
+		end
+	end
+	return out
+end
+
+local function factWord(fld, shown)
+	if fld == nil then return "UNPROVEN not read" end
+	if fld.state == "PROVEN" then return "PROVEN " .. tostring(shown ~= nil and shown or fld.value) end
+	return fld.state .. (fld.reason and (" (" .. fld.reason .. ")") or "")
+end
+
+local function factsItemLines(label, it)
+	local facts, fl = it.facts, it.facts.fields
+	local L = {}
+	local name = fl.name.state == "PROVEN" and fl.name.value or "(name not loaded yet)"
+	L[#L + 1] = string.format("%s: %s | id %s | %s", label, name, factWord(fl.id), facts.state)
+	local function cls(f) return f.state == "PROVEN" and ((f.text and (tostring(f.text) .. " ") or "") .. tostring(f.value)) or nil end
+	L[#L + 1] = string.format("  class %s | subclass %s | ilvl %s | slot %s | req level %s | vendor %s | usable %s | use effect %s",
+		factWord(fl.class, cls(fl.class)), factWord(fl.subclass, cls(fl.subclass)), factWord(fl.itemLevel), factWord(fl.equipSlot), factWord(fl.requiredLevel),
+		factWord(fl.vendorValue, fl.vendorValue.state == "PROVEN" and I.Money(fl.vendorValue.value) or nil), factWord(fl.usable), factWord(fl.useEffect))
+	local st = fl.stats
+	if st.state == "PROVEN" then
+		local parts = {}
+		for _, e in ipairs(st.list) do
+			local what = e.stat and (e.stat .. "=" .. tostring(e.value)) or ("(raw) " .. e.key .. "=" .. tostring(e.value))
+			parts[#parts + 1] = string.format("%s [%s%s, %s]", what, e.stat and (e.key .. ", ") or "", e.label and ("client text \"" .. e.label .. "\"") or "no client text", e.meaning)
+		end
+		L[#L + 1] = "  stats PROVEN " .. table.concat(parts, " ; ")
+	else
+		L[#L + 1] = "  stats " .. factWord(st)
+	end
+	if fl.weaponType.state ~= "EMPTY" then
+		L[#L + 1] = string.format("  weapon type %s | dps %s", factWord(fl.weaponType, fl.weaponType.state == "PROVEN" and ((fl.weaponType.text and (tostring(fl.weaponType.text) .. " ") or "") .. tostring(fl.weaponType.value)) or nil), factWord(fl.weaponDps))
+	end
+	local qd = facts.external and facts.external.questiedb
+	if qd then
+		if not qd.exists then
+			L[#L + 1] = "  questiedb (unverified): unknown to QuestieDB (not the same as no such item)"
+		else
+			local c = {}
+			for _, x in ipairs(facts.conflicts) do c[#c + 1] = string.format("%s: client %s vs questiedb %s", x.field, tostring(x.client), tostring(x.external)) end
+			L[#L + 1] = string.format("  questiedb (unverified): class %s/%s ilvl %s req %s | %s", tostring(qd.class), tostring(qd.subClass), tostring(qd.itemLevel), tostring(qd.requiredLevel),
+				#c > 0 and ("CONFLICT " .. table.concat(c, "; ")) or "no conflict with the client")
+		end
+	end
+	return L
+end
+
+--- The compact ITEM FACTS section: the normalized facts of the dialog's offered items. Uses the dialog ChoiceLines just read; never errors.
+function P.FactsLines()
+	local L = {}
+	local df = P.DialogFacts(false)
+	if not df then return L end
+	L[#L + 1] = "ITEM FACTS (normalized by the shared reader; per field PROVEN / UNPROVEN / FAILED / EMPTY; EMPTY is not interpreted)"
+	for i, it in ipairs(df.choices) do for _, l in ipairs(factsItemLines("Choice " .. i, it)) do L[#L + 1] = l end end
+	for i, it in ipairs(df.rewards) do for _, l in ipairs(factsItemLines("Reward " .. i, it)) do L[#L + 1] = l end end
+	return L
+end
+
 -- ---------------------------------------------------------------- the report section
 
 local function eventStatus(ev)
@@ -581,15 +662,32 @@ function P.ReportLines()
 		newest and string.format(" | latest Q:%s at %s, %d choice(s), %d guaranteed", tostring(newest.q), tostring(newest.at), #newest.choices, #newest.rewards) or "")
 	local okC, choice = pcall(P.ChoiceLines)
 	if okC then for _, l in ipairs(choice) do L[#L + 1] = l end elseif ns.RecordError then ns.RecordError("itemprobe choices", choice) end
-	L[#L + 1] = "Field tallies over every item read since install (reward items, equipped items, a few bag items):"
-	local group
+	local okF, fl = pcall(P.FactsLines)
+	if okF then for _, l in ipairs(fl) do L[#L + 1] = l end elseif ns.RecordError then ns.RecordError("itemprobe facts", fl) end
+	-- the per-field tallies over every item read since install: condensed (the per-item blocks above carry the detail); the character fields keep their samples
+	local by = { PROVEN = {}, UNPROVEN = {}, FAILED = {} }
+	local lateNotes = {}
 	for _, fld in ipairs(P.FIELDS) do
-		if fld.group ~= group then
-			group = fld.group
-			L[#L + 1] = (group == "reward" and "Reward dialog:") or (group == "item" and "Item data:") or "Character:"
+		if fld.group ~= "character" then
+			local st, detail = P.Status(fld.key)
+			local item = fld.label
+			if st == "FAILED" then item = item .. " (" .. detail .. ")" end
+			by[st][#by[st] + 1] = item
+			local late = detail:match("late x(%d+)")
+			if late then lateNotes[#lateNotes + 1] = fld.label .. " x" .. late end
 		end
-		local st, detail = P.Status(fld.key)
-		L[#L + 1] = string.format("  %-24s %-9s %s", fld.label, st, detail)
+	end
+	L[#L + 1] = "Field tallies since install (reward and item reads): PROVEN = a real value was read at least once"
+	L[#L + 1] = "  PROVEN: " .. (#by.PROVEN > 0 and table.concat(by.PROVEN, ", ") or "none")
+	L[#L + 1] = "  UNPROVEN: " .. (#by.UNPROVEN > 0 and table.concat(by.UNPROVEN, ", ") or "none")
+	L[#L + 1] = "  FAILED: " .. (#by.FAILED > 0 and table.concat(by.FAILED, "; ") or "none")
+	if #lateNotes > 0 then L[#L + 1] = "  resolved late: " .. table.concat(lateNotes, ", ") end
+	L[#L + 1] = "Character:"
+	for _, fld in ipairs(P.FIELDS) do
+		if fld.group == "character" then
+			local st, detail = P.Status(fld.key)
+			L[#L + 1] = string.format("  %-24s %-9s %s", fld.label, st, detail)
+		end
 	end
 	local evs = {}
 	for _, ev in ipairs(P.EVENTS) do
