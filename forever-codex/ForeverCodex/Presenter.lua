@@ -224,7 +224,10 @@ function Pr.Guidance(plan, ctx)
 	for _, a in ipairs(plan.turnIns or {}) do if usable(a) then pick = a break end end
 	if not pick then
 		for _, a in ipairs(plan.objectives or {}) do
-			if a.kind == "OBJECTIVE" and usable(a) and #unfinished(a) + (a.objectiveState and a.objectiveState.known and 0 or 1) > 0 then pick = a break end
+			if a.kind == "OBJECTIVE" and usable(a) and #unfinished(a) + (a.objectiveState and a.objectiveState.known and 0 or 1) > 0 then
+				-- a quest with a live countdown comes first (the soonest deadline), otherwise the first by id
+				if not pick or (a.timer and (not pick.timer or a.timer.remaining < pick.timer.remaining)) then pick = a end
+			end
 		end
 	end
 	if not pick then return nil end
@@ -270,6 +273,7 @@ function Pr.Card(plan, ctx)
 		if not a.offered and #card.reminders < 3 then card.reminders[#card.reminders + 1] = questName(a) end
 	end
 	local offers = Pr.Offers(plan)
+	card.timers = ns.QuestTimers and ns.QuestTimers.List(ctx) or {}          -- TIMED QUEST: the game's own countdown, shown whatever NOW is
 	if not (plan and plan.now) then
 		local g = Pr.Guidance(plan, ctx)
 		if not g and offers[1] then

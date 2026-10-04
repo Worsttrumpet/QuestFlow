@@ -912,6 +912,10 @@ function D.PlaytestLines(snap, lines)
 			add("REWARD ADVISOR: error: " .. tostring(alines))
 		end
 	end
+	if ns.QuestTimers then
+		local okT, tlines = pcall(ns.QuestTimers.ReportLines, ns.State and ns.State.ctx)
+		if okT then for _, l in ipairs(tlines) do add(l) end end
+	end
 	if ns.Feedback then
 		local okF, flines = pcall(ns.Feedback.ReportLines)
 		if okF then for _, l in ipairs(flines) do add(l) end end

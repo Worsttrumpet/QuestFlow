@@ -133,7 +133,7 @@ function reader.questLog()
 		if type(info) == "table" and not info.isHeader and type(info.questID) == "number" then
 			local id = info.questID
 			local complete = try(C_QuestLog.IsComplete, id) == true or try(C_QuestLog.ReadyForTurnIn, id) == true
-			log[id] = { id = id, title = info.title, complete = complete, objectives = readObjectives(id), header = header }
+			log[id] = { id = id, title = info.title, complete = complete, objectives = readObjectives(id), header = header, index = i }
 			n = n + 1
 		end
 	end

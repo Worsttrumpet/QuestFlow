@@ -234,6 +234,19 @@ function Pl.PossibleOnly(a, pos, S)
 	return nil
 end
 
+-- TIMED QUESTS. A quest with a live countdown is not automatically the most urgent thing: only the SLACK matters, the time left minus the walk to it and the work on it (both the
+-- planner's own estimates). With plenty of slack nothing changes; as it shrinks the quest's value rises smoothly; at or below CRITICAL it is a must-do-first stop (the same way a quest
+-- the player added is). The numbers are design values, not game facts.
+Pl.TIMER = { relaxed = 600, critical = 90, maxBoost = 5 }
+
+--- boost (>= 1) and critical (bool) for a timed action with this many seconds of slack.
+function Pl.TimerUrgency(slack)
+	local t = Pl.TIMER
+	if slack >= t.relaxed then return 1, false end
+	if slack <= t.critical then return t.maxBoost, true end
+	return 1 + (t.maxBoost - 1) * (t.relaxed - slack) / (t.relaxed - t.critical), false
+end
+
 --- Can the Planner sequence this action at all? Returns true, or false + a reason key (for diagnostics).
 local function usable(a)
 	if a.skip and a.skip.logical and not a.pinned then return false, "skipped" end
@@ -393,9 +406,17 @@ local function gather(S, c)
 		end
 		local possible, pd = Pl.PossibleOnly(a, pos, S)
 		local val, comps = valueOf(a, pos, ctx, env, par)
+		local timerInfo
+		if a.timer and a.kind == "OBJECTIVE" then
+			local walk = (S.player and seconds(ctx, S.player, pos)) or 0
+			local slack = a.timer.remaining - walk - (par.dwell[a.kind] or par.dwellDefault)
+			local boost, critical = Pl.TimerUrgency(slack)
+			timerInfo = { remaining = a.timer.remaining, slack = slack, boost = boost, critical = critical }
+			if boost > 1 then val = val * boost; comps.timer = boost end
+		end
 		local conf = Pl.Confidence(a, par)
 		local it = { a = a, id = a.id, pos = pos, status = status, assumed = assumed, conf = conf, comps = comps,
-			val = val * conf, dwell = par.dwell[a.kind] or par.dwellDefault }
+			val = val * conf, dwell = par.dwell[a.kind] or par.dwellDefault, timer = timerInfo, urgent = timerInfo and timerInfo.critical or nil }
 		-- the time left on an objective shrinks with the progress the quest log reports (counts only; never a map to objective indexes)
 		if a.kind == "OBJECTIVE" and a.objectiveState and a.objectiveState.known then
 			local n, done = #a.objectiveState.list, 0
@@ -436,6 +457,8 @@ local function gather(S, c)
 			return n > 0 and d / n or 0
 		end
 		table.sort(localWork, function(x, y)
+			if (x.timer ~= nil) ~= (y.timer ~= nil) then return x.timer ~= nil end                     -- a timed quest first, the soonest deadline first
+			if x.timer and y.timer and x.timer.remaining ~= y.timer.remaining then return x.timer.remaining < y.timer.remaining end
 			local dx, dy = done(x), done(y)
 			if dx ~= dy then return dx > dy end
 			return x.id < y.id
@@ -460,7 +483,7 @@ local function makeStops(S)
 		end
 		table.insert(home.items, it)
 		home.val, home.dwell = home.val + it.val, home.dwell + it.dwell
-		if it.a.pinned then home.pinned = true end
+		if it.a.pinned or it.urgent then home.pinned = true end          -- (a quest about to run out of time is a must-do-first stop, like one the player added)
 		it.stop = home
 	end
 	S.stops = stops
@@ -639,7 +662,8 @@ local function bestOf(stop, preferId)
 	if preferId then
 		for _, it in ipairs(list) do
 			-- (the previous NOW is kept for stability, but not in front of a hand-in / objective that has just become the better state)
-			if it.id == preferId and tierOf(it) <= tierOf(list[1]) then return it, list end
+			-- (nor in front of a quest about to run out of time)
+			if it.id == preferId and tierOf(it) <= tierOf(list[1]) and (it.urgent or not list[1].urgent) then return it, list end
 		end
 	end
 	return list[1], list

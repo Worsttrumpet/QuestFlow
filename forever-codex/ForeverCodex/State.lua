@@ -17,6 +17,7 @@ local dirty = true
 local sinceCompute = 0
 local DIRTY_DELAY = 0.4      -- seconds before a dirty state recomputes
 local PERIODIC = 3           -- seconds between refreshes while the window is open
+local TIMED_PERIODIC = 10    -- seconds between refreshes while the window is CLOSED and a timed quest is counting down (only then)
 
 -- Lightweight performance counters (no timer, no polling: they are updated only where work already happens). Read by /codex report.
 local perf = { dirtyBy = {}, recomputeBy = {}, count = 0, total = 0, worst = 0, last = nil, worstReason = nil }
@@ -96,6 +97,7 @@ function S.RecomputeInner()
 		end
 	end
 	if ns.Prefs.NoteLevel then ns.Prefs.NoteLevel(ctx.char and ctx.char.level) end
+	observeCtx("questtimers", ns.QuestTimers, "Observe")           -- BEFORE the planner: a timed quest's live remaining time is an input to its value
 	observeCtx("journey", ns.Journey, "OnContext")
 	observeCtx("party", ns.Party, "OnContext")
 	observeCtx("newforyou", ns.NewForYou, "OnContext")
@@ -151,5 +153,7 @@ function S.Tick(elapsed)
 		S.Recompute("dirty")
 	elseif ns.UI and ns.UI.IsShown and ns.UI.IsShown() and sinceCompute >= PERIODIC then
 		S.Recompute("periodic")
+	elseif ns.QuestTimers and ns.QuestTimers.AnyActive() and sinceCompute >= TIMED_PERIODIC then
+		S.Recompute("timed quest")           -- the window is closed but a quest is counting down: the plan (and the arrow) must follow the deadline
 	end
 end

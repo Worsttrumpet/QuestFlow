@@ -294,6 +294,8 @@ local function progressAction(view, entry, pinned, ctx)
 		level = view.level, reqLevel = view.req, target = t, pinned = pinned or false, lines = lines,
 		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name, giver = who,
 		noLocation = t == nil, areaMap = (not complete) and areaMapOf(view) or nil,
+		-- a quest with a live countdown (the client's own, never quest data): the planner reads it to raise this action's value as the deadline nears
+		timer = (not complete) and ns.QuestTimers and ns.QuestTimers.Get(view.id) or nil,
 	}), view.id, view, ctx, t)
 end
 
@@ -307,6 +309,7 @@ local function unknownLogAction(entry, ctx)
 		quest = entry.id, skipKey = "QT:" .. entry.id, name = entry.title, title = (complete and "Turn in: " or "Continue: ") .. (entry.title or ("quest " .. entry.id)),
 		lines = { t and "This quest is not in Codex data; the game's quest map shows where it is." or "This quest is not in Codex data yet, so there is no location to show." },
 		target = t, src = t and "game" or "log", verified = false, noLocation = t == nil, unknown = not t and true or nil, unknownData = true,
+		timer = (not complete) and ns.QuestTimers and ns.QuestTimers.Get(entry.id) or nil,
 	}), entry.id, nil, ctx, t)
 end
 

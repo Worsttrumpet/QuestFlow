@@ -183,6 +183,11 @@ local function buildTracker()
 		if sinceCheck < 0.5 then return end
 		sinceCheck = 0
 		if ns.NewForYou and (ns.NewForYou.Active() ~= nil) ~= (UI.main.nfyShown == true) then UI.Refresh() end
+		-- a timed quest's countdown: the texts follow the clock (no recompute); a card that appeared or disappeared since the last draw is a full refresh
+		if ns.QuestTimers then
+			local active = ns.QuestTimers.AnyActive()
+			if active ~= (UI.main.timerShown == true) then UI.main.timerShown = active; UI.Refresh() elseif active and UI.RefreshTimers then UI.RefreshTimers() end
+		end
 	end)
 	local close = W.Button(frame, 18, 18, "x", function() frame:Hide(); P.SetTrackerShown(false) end)
 	close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -4, -4)

@@ -72,6 +72,13 @@ local function build(page)
 	c.thenFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")
 	c.thenWhereFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")      -- "496 yd - Nazgrel" under the THEN line
 
+	-- TIMED QUEST: the game's own countdown for quests that have one, soonest first; present only while one is active. Updated every second by the tracker while it is open.
+	c.tmBox = W.Card(page, FULL, 40, W.STYLE_DUNGEON)
+	c.tmLabel = W.Label(c.tmBox, "TIMED QUEST", W.STYLE_DUNGEON.label)
+	c.tmLabel:SetPoint("TOPLEFT", c.tmBox, "TOPLEFT", c.tmBox.insetX, -PAD + 2)
+	c.tmRows = {}
+	for i = 1, 3 do c.tmRows[i] = { head = W.Line(c.tmBox, 12, W.TEXT, "LEFT"), time = W.Line(c.tmBox, 13, W.WARM_GOLD, "LEFT") } end
+
 	-- NEW QUEST ITEM: a quest-starting item in the bags (present only when there is one that is actionable)
 	c.qiBox = W.Card(page, FULL, 60, W.STYLE_NEW)
 	c.qiLabel = W.Label(c.qiBox, "NEW QUEST ITEM", W.STYLE_NEW.label)
@@ -228,6 +235,46 @@ local function drawNow(c, card)
 		c.thenWhereFS:Hide()
 	end
 	return math.max(NOW_MIN, math.floor(st.y + PAD + 0.5))
+end
+
+local TIMER_COLOR = { OK = W.TEXT, WARN = W.WARM_GOLD, CRITICAL = W.ALERT, EXPIRED = W.DIM }
+
+--- Writes the timer rows' text and colours (called by the full draw and, every second, by the tracker's own update).
+local function paintTimers(c, list)
+	for i, row in ipairs(c.tmRows) do
+		local t = list[i]
+		row.time:SetText(t and t.text or "")
+		if t then W.SetColor(row.time, TIMER_COLOR[t.level] or W.TEXT) end
+	end
+end
+
+--- TIMED QUEST. Returns the card height, or nil when no quest is counting down (the card is then hidden).
+local function drawTimers(c, list)
+	if #list == 0 then return nil end
+	local box = c.tmBox
+	local inner = FULL - box.insetX - PAD
+	local st = W.Stack(box, inner)
+	st:Skip(16)
+	for i, row in ipairs(c.tmRows) do
+		local t = list[i]
+		row.head:SetText(t and t.title or "")
+		row.time:SetText(t and t.text or "")
+		st:Add(row.head, 1)
+		st:Add(row.time, 4)
+	end
+	paintTimers(c, list)
+	return math.floor(st.y + PAD - 2 + 0.5)
+end
+
+--- Called by the tracker about once a second while it is open: only the timer texts change, nothing is recomputed. Returns true when a timed quest is on screen.
+function UI.RefreshTimers()
+	local c = UI.main and UI.main.codex
+	local ctx = ns.State and ns.State.ctx
+	if not (c and c.tmBox and ctx and ns.QuestTimers) then return false end
+	local list = ns.QuestTimers.List(ctx)
+	if #list == 0 then return false end
+	paintTimers(c, list)
+	return true
 end
 
 --- NEW QUEST ITEM. Returns the card height, or nil when there is no actionable quest-starting item (the card is then hidden).
@@ -502,6 +549,15 @@ local function refresh()
 	local nowH = drawNow(c, card)
 	placeCard(c, c.nowBox, TOP, FULL, nowH)
 	local bottom = TOP + nowH
+
+	local tmH = drawTimers(c, card.timers or {})
+	if tmH then
+		c.tmBox:Show()
+		placeCard(c, c.tmBox, bottom + GAP - 2, FULL, tmH)
+		bottom = bottom + GAP - 2 + tmH
+	else
+		c.tmBox:Hide()
+	end
 
 	local qiH = drawQuestItems(c, card.questItems or {})
 	if qiH then
