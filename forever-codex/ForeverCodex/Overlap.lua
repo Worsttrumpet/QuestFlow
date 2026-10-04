@@ -141,7 +141,7 @@ function Ov.List(plan, ctx)
 				if also.quest then seen[also.quest] = true end
 				out[#out + 1] = { kind = "objective", title = questName(also) .. suffix(ctx, also.quest), objectives = unfinishedOf(also), fraction = fractionOf(also), quest = also.quest,
 					dist = ns.Presenter.Dist(distanceTo(also, ctx), true), why = ns.Presenter.AlsoWhy(plan, also) }
-			elseif also.type ~= "FLIGHT" and also.kind ~= "TURN_IN" and actions < Ov.MAX_ACTIONS then
+			elseif also.type ~= "FLIGHT" and also.type ~= "QUEST_ITEM" and also.kind ~= "TURN_IN" and actions < Ov.MAX_ACTIONS then
 				local d = distanceTo(also, ctx)
 				-- an opportunity the planner priced (same stop, or a detour within its limit) is listed whatever its distance FROM YOU: what matters is the
 				-- extra travel against the route, and a hub 600 yd ahead is still "while you're there". The old distance gate stays for a plan with no list.
@@ -150,7 +150,7 @@ function Ov.List(plan, ctx)
 					if also.quest then seen[also.quest] = true end
 					local it = ns.Presenter.Describe(also, plan, ctx, "diamond")
 					out[#out + 1] = { kind = "action", title = it.title, where = Ov.ShortWhere(d), quest = also.quest, verb = also.kind,
-						dist = it.dist, npc = it.npc, why = ns.Presenter.AlsoWhy(plan, also), cost = o.costClass }
+						dist = it.dist, npc = it.npc, why = ns.Presenter.AlsoWhy(plan, also), cost = o.costClass, caution = it.caution }
 				end
 			end
 		end

@@ -42,6 +42,7 @@ I.API = {
 	GetInventoryItemLink = { nil, nil, "GetInventoryItemLink" },
 	GetContainerNumSlots = { "C_Container", "GetContainerNumSlots", "GetContainerNumSlots" }, GetContainerItemLink = { "C_Container", "GetContainerItemLink", "GetContainerItemLink" },
 	GetContainerItemInfo = { "C_Container", "GetContainerItemInfo", "GetContainerItemInfo" },
+	GetContainerItemQuestInfo = { "C_Container", "GetContainerItemQuestInfo", "GetContainerItemQuestInfo" },
 	GetNumSkillLines = { nil, nil, "GetNumSkillLines" }, GetSkillLineInfo = { nil, nil, "GetSkillLineInfo" },
 	-- looked up as plain globals by ItemProbe / Context
 	GetQuestItemInfo = { nil, nil, "GetQuestItemInfo" }, GetQuestItemLink = { nil, nil, "GetQuestItemLink" },
@@ -491,7 +492,7 @@ function I.External(id)
 	local okE, e = pcall(Item.Exists, id)
 	out.exists = okE and e == true
 	if not out.exists then return out end
-	for _, k in ipairs({ "name", "class", "subClass", "itemLevel", "requiredLevel" }) do
+	for _, k in ipairs({ "name", "class", "subClass", "itemLevel", "requiredLevel", "startQuest" }) do
 		local ok, v = pcall(Item.Get, id, k)
 		if ok and v ~= nil then out[k] = v end
 	end

@@ -673,6 +673,7 @@ do
 	local equipped = { [8] = 5103 }
 	local bags = { 4914 }
 	local ns = gearWorld({ equipped = equipped, bags = bags, bagSize = 3 })
+	ns.Gear.last = nil                       -- (the quest-item provider already took a snapshot of the empty stub world at boot: start from a clean first read)
 	local snap = ns.Gear.Get()
 	check(snap.equipped.slots[8].itemId == 5103 and snap.equipped.slots[9].state == "EMPTY" and #snap.bags.stacks == 1, "the first Get reads the equipment and the bags")
 	local untouched = snap.equipped.slots[8]
@@ -1282,4 +1283,195 @@ do
 	check(#ns.errors == 0, "no errors")
 	for _, n in ipairs(NAMES) do _G[n] = nil end
 	reset()
+end
+
+-- ---------------------------------------------------------------- 0.6.7: availability evidence in the planner, and quest-starting items
+section("pickup availability: database knowledge is ELIGIBLE-level support; only the client's own dialog establishes OFFERED, and progress makes a 'not offered' stale")
+do
+	local NAMES = { "C_GossipInfo", "UnitName", "UnitGUID" }
+	local ns = boot({ char = { level = 11 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	for _, n in ipairs(NAMES) do _G[n] = nil end
+	local O, Pl = ns.OfferProbe, ns.Planner
+	local function reset() ForeverCodexDB.offers = nil; ForeverCodexDB.items = nil end
+	local function stubNpc(name, id)
+		_G.UnitName = function(u) return u == "npc" and name or nil end
+		_G.UnitGUID = function(u) return u == "npc" and id and ("Creature-0-1-2-3-" .. id .. "-ABCDEF") or nil end
+	end
+	local function gossip(avail)
+		_G.C_GossipInfo = { GetAvailableQuests = function() return avail end, GetActiveQuests = function() return {} end, GetOptions = function() return {} end }
+		O.OnEvent("GOSSIP_SHOW")
+	end
+	local function e(id, title) return { questID = id, title = title, questLevel = 11 } end
+	local function pickup(id) return { kind = "ACCEPT", quest = id, evidence = "unverified", target = { map = 9001, x = 0.52, y = 0.5 } } end
+	-- the Ties That Bind case: the data knows nothing of a prerequisite, so the quest is "eligible", but the NPC does not offer it until Feathers for Binding is done
+	H.attPack(ns, {
+		{ id = 300, name = "Feathers for Binding", map = 9001, x = 0.52, y = 0.5, req = 1, giverNpc = 9001, giverName = "Hub NPC" },
+		{ id = 301, name = "The Ties That Bind", map = 9001, x = 0.52, y = 0.5, req = 1, giverNpc = 9001, giverName = "Hub NPC" },
+		{ id = 302, name = "Elsewhere", map = 9001, x = 0.53, y = 0.5, req = 1, giverNpc = 9002, giverName = "Other NPC" },
+	}, nil)
+	local W = H.world()
+	W.log, W.objectives, W.completed = {}, {}, {}
+	ns.Prefs.FinishSetup()
+	reset()
+	ns.State.Recompute()
+
+	-- 1: exists in the database, no availability evidence: UNKNOWN, and the existing small discount only
+	local st, ev = Pl.OfferState(pickup(301))
+	check(st == "UNKNOWN" and ev == nil, "1: a database quest with no client evidence is UNKNOWN (eligible, not proven offered)")
+	local c0 = Pl.Confidence(pickup(301))
+	check(c0 > 0.5 and c0 < 1, "1: it keeps the existing unverified discount (" .. string.format("%.2f", c0) .. "): still recommendable, just not certain")
+
+	-- 2: eligible by the data, but the NPC's complete list (read now) does not offer it
+	stubNpc("Hub NPC", 9001)
+	gossip({ e(300, "Feathers for Binding") })
+	local st2, ev2 = Pl.OfferState(pickup(301))
+	check(st2 == "NOT_OFFERED" and ev2.kind == "NOT_LISTED_AT_NPC", "2: the giver's complete list did not offer it: NOT_OFFERED (contextual)")
+	check(Pl.Confidence(pickup(301)) < 0.3 * c0 + 0.001 and Pl.Confidence(pickup(301)) < Pl.Confidence(pickup(302)), "2: its value is strongly discounted below an unevidenced pickup (" .. string.format("%.2f", Pl.Confidence(pickup(301))) .. ")")
+	check(Pl.OfferState(pickup(300)) == "OBSERVED" and Pl.Confidence(pickup(300)) == 1, "4: a quest the client listed is OBSERVED: no discount at all")
+	check(Pl.OfferState(pickup(302)) == "UNKNOWN", "evidence about one NPC does not touch another NPC's quests")
+	-- the player-facing line says it plainly
+	local card = ns.Presenter.Describe({ kind = "ACCEPT", quest = 301, name = "The Ties That Bind", title = "Accept: The Ties That Bind", giver = "Hub NPC", id = "Q:301:ACCEPT", target = { map = 9001, x = 0.52, y = 0.5 } }, { diag = { reasons = {} } }, ns.State.ctx, nil)
+	check(card.caution and card.caution:find("Not offered by Hub NPC", 1, true) and card.offerState == "NOT_OFFERED", "2: the tracker says 'Not offered by Hub NPC the last time you asked' instead of promising an accept")
+
+	-- 3: Feathers for Binding is turned in: progression changed, so the earlier 'not offered' is STALE and the quest is back to UNKNOWN (re-check at the NPC)
+	W.completed[300] = true
+	ns.Journey.OnQuestTurnedIn(300, 100)
+	ns.State.Recompute()
+	local st3, ev3 = Pl.OfferState(pickup(301))
+	check(st3 == "UNKNOWN" and ev3 and ev3.stale, "3: after the prerequisite is turned in the old 'not offered' is stale: UNKNOWN again, with the stale note")
+	check(math.abs(Pl.Confidence(pickup(301)) - c0) < 1e-9, "3: and the quest is valued as before (not penalised by a fact that progress has outdated)")
+	-- the NPC is asked again and now offers both
+	gossip({ e(301, "The Ties That Bind"), e(303, "The Wounds of Betrayal") })
+	check(Pl.OfferState(pickup(301)) == "OBSERVED" and Pl.Confidence(pickup(301)) == 1, "3/4: the new dialog lists it: OBSERVED")
+	-- a positive observation is not undone by later progress...
+	W.completed[999] = true
+	ns.Journey.OnQuestTurnedIn(999, 100)
+	ns.State.Recompute()
+	check(Pl.OfferState(pickup(301)) == "OBSERVED", "5: a positive observation survives later progress (it is not stale just because the character moved on)")
+	-- ...but a newer complete list at the CURRENT progression that omits it contradicts it
+	gossip({ e(303, "The Wounds of Betrayal") })
+	local st5, ev5 = Pl.OfferState(pickup(301))
+	check(st5 == "NOT_OFFERED" and ev5.contradicted, "5: a newer dialog at the same progression that no longer lists it contradicts the old observation")
+	-- ...and that contradiction in turn goes stale with the next progress
+	ns.Journey.OnQuestTurnedIn(998, 100)
+	ns.State.Recompute()
+	check(Pl.OfferState(pickup(301)) == "OBSERVED", "5: once progress changes again the contradiction is stale and the earlier positive stands")
+
+	-- an empty dialog (nothing offered) is the same kind of contextual negative, with the same expiry
+	reset()
+	stubNpc("Other NPC", 9002)
+	gossip({})
+	check(Pl.OfferState(pickup(302)) == "NOT_OFFERED", "an EMPTY list at the giver is NOT_OFFERED right now")
+	ns.Journey.OnQuestTurnedIn(997, 10)
+	ns.State.Recompute()
+	check(Pl.OfferState(pickup(302)) == "UNKNOWN", "and stale after any progress")
+
+	-- a prerequisite the DATA knows about still blocks it outright (existing progression handling)
+	H.attPack(ns, { { id = 310, name = "Needs A Prereq", map = 9001, x = 0.52, y = 0.5, req = 1, prereq = { 311 } }, { id = 311, name = "The Prereq", map = 9001, x = 0.5, y = 0.52, req = 1 } }, nil)
+	local ctx = ns.Context.Build()
+	local c = ns.Engine.Candidates(ctx)
+	local has310 = false
+	for _, a in ipairs(c.candidates) do if a.quest == 310 then has310 = true end end
+	check(not has310 and (c.env.stats.filtered.prereq or 0) >= 1, "a quest with an unmet prerequisite in the data is not even a candidate")
+	H.world().completed[311] = true
+	local c2 = ns.Engine.Candidates(ns.Context.Build())
+	local has310b = false
+	for _, a in ipairs(c2.candidates) do if a.quest == 310 then has310b = true end end
+	check(has310b, "and becomes one when the prerequisite is completed")
+	check(#ns.errors == 0, "no errors")
+	for _, n in ipairs(NAMES) do _G[n] = nil end
+	reset()
+end
+
+section("quest-starting items: detected from client / QuestieDB evidence only, filtered by the existing progression rules, shown as NEW QUEST ITEM")
+do
+	local ns = gearWorld({ bags = { 4914, 900 }, bagSize = 4 })
+	_G.LibQuestieDB = nil
+	local QI = ns.QuestItems
+	check(QI ~= nil, "the module is loaded")
+	local info = {}                                   -- [bag .. ":" .. slot] = table the client would return
+	_G.GetContainerItemQuestInfo = function(bag, slot) return info[bag .. ":" .. slot] or { isQuestItem = false } end
+	H.attPack(ns, { { id = 555, name = "The Missive Quest", map = 9001, x = 0.52, y = 0.5, req = 1 }, { id = 556, name = "A High Level Quest", map = 9001, x = 0.52, y = 0.5, req = 40 } }, nil)
+	local W = H.world()
+	W.log, W.objectives, W.completed = {}, {}, {}
+	ns.Prefs.FinishSetup()
+	local function refresh()
+		ns.Gear.Snapshot()
+		ns.State.Recompute()
+		return ns.State.plan, ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	end
+
+	-- possession alone proves nothing
+	local plan, card = refresh()
+	check(#plan.questItems == 0 and #card.questItems == 0, "an item in the bags with no evidence it starts a quest is NOT surfaced")
+	-- the client reports that bag 0 slot 1 starts quest 555
+	info["0:1"] = { isQuestItem = true, questID = 555, isActive = false }
+	plan, card = refresh()
+	check(#plan.questItems == 1 and plan.questItems[1].itemId == 4914 and plan.questItems[1].quest == 555, "the client's container quest info marks the item as starting Q555")
+	check(plan.questItems[1].verified == true and plan.questItems[1].src == "client", "provenance: client-reported (verified)")
+	check(#card.questItems == 1 and card.questItems[1].title == "Battleworn Leather Gloves" and card.questItems[1].detail:find("This item starts a quest. Use it to continue your progression.", 1, true), "the NEW QUEST ITEM row says what it is and what to do")
+	check(card.questItems[1].questName == "The Missive Quest", "and names the quest when Codex has data for it")
+	-- it is a candidate through the normal funnel but never takes NOW / ALSO DO
+	check((plan.now == nil or plan.now.type ~= "QUEST_ITEM") and (plan.alsoDo == nil or plan.alsoDo.type ~= "QUEST_ITEM"), "it never becomes NOW or ALSO DO")
+	for _, o in ipairs(plan.onTheWay or {}) do check(o.action.type ~= "QUEST_ITEM", "and is not an on-the-way row") end
+	for _, it in ipairs(ns.Overlap.List(plan, ns.State.ctx)) do check(it.title ~= "Use: Battleworn Leather Gloves", "nor an ALSO row (it has its own card)") end
+	-- the tracker draws it
+	ns.UI.Open("codex")
+	ns.State.Recompute()
+	local c = ns.UI.main.codex
+	check(c.qiBox.__shown and c.qiLabel.__text == "NEW QUEST ITEM" and c.qiRows[1].head.__text == "Battleworn Leather Gloves", "the tracker shows the NEW QUEST ITEM card")
+	local report
+	rawset(ns.UI, "ShowReport", function(t) report = t end)
+	H.slash("report")
+	check(report and report:find("QUEST-STARTING ITEMS", 1, true) and report:find("starts Q555 | evidence: client (client-reported) | ACTIONABLE", 1, true), "the report shows the evidence and the ACTIONABLE verdict")
+
+	-- filtered by the existing rules
+	W.log = { { questID = 555, title = "The Missive Quest", complete = false } }
+	plan = refresh()
+	check(#plan.questItems == 0 and (plan.stats.filtered.questItemIN_LOG or 0) == 1, "the quest is already in the quest log: not surfaced (IN_LOG)")
+	W.log, W.completed[555] = {}, true
+	plan = refresh()
+	check(#plan.questItems == 0 and (plan.stats.filtered.questItemCOMPLETED or 0) == 1, "the quest is already completed: not surfaced (COMPLETED)")
+	W.completed[555] = nil
+	info["0:1"] = { isQuestItem = true, questID = 555, isActive = true }
+	plan = refresh()
+	check(#plan.questItems == 0 and (plan.stats.filtered.questItemACTIVE or 0) == 1, "the client says the quest is already active: not surfaced (ACTIVE)")
+	info["0:1"] = { isQuestItem = true, questID = 555, isActive = false }
+	ns.Prefs.Skip("QI:4914")
+	plan = refresh()
+	check(#plan.questItems == 0 and (plan.stats.filtered.questItemSKIPPED or 0) == 1, "skipped by the player (QI:<item id>): not surfaced (SKIPPED)")
+	ns.Prefs.Unskip("QI:4914")
+	ns.Prefs.Skip("Q:555")
+	plan = refresh()
+	check(#plan.questItems == 0, "the quest itself skipped: not surfaced")
+	ns.Prefs.Unskip("Q:555")
+	info["0:1"] = { isQuestItem = true, questID = 556, isActive = false }
+	plan = refresh()
+	check(#plan.questItems == 0 and (plan.stats.filtered.questItemELIGIBILITY_level or 0) == 1, "the quest needs a higher level (existing pickup eligibility): not surfaced")
+	info["0:1"] = { isQuestItem = true, questID = 777, isActive = false }
+	plan = refresh()
+	check(#plan.questItems == 1, "a quest Codex has no data for is still offered when the CLIENT said the item starts it")
+	check(ns.State.perf and true, "no new timers or polling: scanning is keyed to the Gear snapshot")
+
+	-- QuestieDB evidence: unverified, labelled as such, and the client wins a disagreement
+	info["0:1"] = nil
+	_G.LibQuestieDB = { Item = { Exists = function(id) return id == 4914 end, Get = function(id, k) if k == "startQuest" then return 555 end end } }
+	plan, card = refresh()
+	check(#plan.questItems == 1 and plan.questItems[1].src == "questiedb" and plan.questItems[1].verified == false, "QuestieDB's Item.startQuest is used, labelled unverified third-party data")
+	check(card.questItems[1].detail:find("Codex's data says this item starts a quest.", 1, true), "and the player-facing line does not claim more than that")
+	info["0:1"] = { isQuestItem = true, questID = 556, isActive = false }
+	local list = QI.Scan(ns.Gear.Snapshot().bags)
+	check(list[1].quest == 556 and list[1].src == "client" and list[1].conflict and list[1].conflict.questiedb == 555, "when the client disagrees with QuestieDB the client wins and the conflict is recorded")
+	_G.LibQuestieDB = nil
+
+	-- evidence tallies and bounded memory
+	check(ForeverCodexDB.questItems.proof.ok and ForeverCodexDB.questItems.proof.ok >= 1, "the client function is tallied PROVEN once it returned a quest id")
+	local n = 0
+	for _ in pairs(ForeverCodexDB.questItems.seen) do n = n + 1 end
+	check(n >= 1 and n <= QI.MAX_SEEN, "remembered quest-starting items are bounded")
+	-- a missing function simply means no client evidence
+	_G.GetContainerItemQuestInfo = nil
+	plan = refresh()
+	check(#plan.questItems == 0 and #ns.errors == 0, "without the client function (and QuestieDB) nothing is surfaced and nothing fails")
+	_G.GetContainerItemQuestInfo = nil
 end

@@ -657,6 +657,10 @@ function D.PlaytestLines(snap, lines)
 		end
 		add(string.format("quest tags (game, unverified on Forever): API %s | %d of %d logged quests came back tagged | %d dungeon-style | area-name API %s", api, tagged, #ids, dungeon, (type(C_Map) == "table" and type(C_Map.GetAreaInfo) == "function") and "present" or "absent"))
 	end
+	if ns.QuestItems then
+		local okQ, qlines = pcall(ns.QuestItems.ReportLines)
+		if okQ then for _, l in ipairs(qlines) do add(l) end else add("QUEST-STARTING ITEMS: error: " .. tostring(qlines)) end
+	end
 	if ns.OfferProbe then
 		local okF, flines = pcall(ns.OfferProbe.ReportLines)
 		if okF then for _, l in ipairs(flines) do add(l) end else add("OFFERED QUESTS PROBE: error: " .. tostring(flines)) end

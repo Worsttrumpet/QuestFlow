@@ -230,6 +230,27 @@ local function signature(via, npc, answers)
 end
 
 
+--- A short stamp of the character's PROGRESSION: level, quests turned in (as Codex saw them) and quests finished and waiting to be handed in. An NPC's list is only
+-- evidence about the progression it was read at: when the stamp changes (a level, a turn-in, a finished quest) a NEGATIVE observation is STALE (it may no longer be true,
+-- e.g. a quest that opens after its prerequisite is done) and is treated as unknown until the NPC is asked again. A positive observation is not undone by progress.
+-- Cached per context (one computation per recompute).
+local stampFor, stampValue, activeCtx
+
+--- The planner tells the probe which context it is planning FOR (State.ctx is still the previous one while a recompute runs), so the stamp is never one recompute late.
+function O.SetContext(ctx) activeCtx = ctx end
+
+function O.Stamp()
+	local ctx = activeCtx or (ns.State and ns.State.ctx)
+	if ctx and ctx == stampFor then return stampValue end
+	local level = ctx and ctx.char and ctx.char.level or "?"
+	local ready = 0
+	for _, e in pairs(ctx and ctx.log or {}) do if e.complete then ready = ready + 1 end end
+	local turned = ns.Journey and ns.Journey.TurnedInCount and ns.Journey.TurnedInCount() or 0
+	local v = tostring(level) .. ":" .. turned .. ":" .. ready
+	stampFor, stampValue = ctx, v
+	return v
+end
+
 local function dropOldest(t, cap)
 	local n = 0
 	for _ in pairs(t) do n = n + 1 end
@@ -258,7 +279,7 @@ local function summary(a)
 	end
 	local shown = {}
 	for _, e in ipairs(a.entries or {}) do shown[#shown + 1] = { id = e.id, title = e.title, complete = e.complete } end
-	return { state = a.state, api = a.api, n = a.n, ids = ids, entries = shown, complete = complete or nil, at = wall(), seq = nil }
+	return { state = a.state, api = a.api, n = a.n, ids = ids, entries = shown, complete = complete or nil, at = wall(), seq = nil, prog = O.Stamp() }
 end
 
 -- A listing counts as NPC evidence only when it came from the PROVEN modern gossip API (C_GossipInfo.*). QUEST_GREETING counts are recorded but unproven.
@@ -282,7 +303,7 @@ local function index(s, via, npc, answers)
 					local r = s.quests[e.id]
 					if not r then r = { first = now, n = 0 }; s.quests[e.id] = r end
 					r.n = r.n + 1
-					r.last, r.seq = now, s.seq
+					r.last, r.seq, r.prog = now, s.seq, O.Stamp()
 					r.by = type(r.by) == "table" and r.by or {}
 					r.by[src] = (r.by[src] or 0) + 1                 -- observations per source (QUEST_DETAIL / AVAILABLE_LIST), both are positive evidence
 					if (VIA_RANK[src] or 0) >= (VIA_RANK[r.via] or 0) then r.via = src end
@@ -332,9 +353,10 @@ end
 function O.OfferEvidence(qid, giverNpcId, giverName)
 	local ctx = O.NpcContext(giverNpcId, giverName)
 	local av = ctx and ctx.avail
-	-- the contextual kind from the giver's latest listing (never from an incomplete one)
-	local ctxKind, ctxAt
+	-- the contextual kind from the giver's latest listing (never from an incomplete one); `current` = read at the character's present progression
+	local ctxKind, ctxAt, current
 	if av then
+		current = av.prog == nil or av.prog == O.Stamp()
 		if av.state == "EMPTY" then ctxKind, ctxAt = "EMPTY_AT_NPC", av.at
 		elseif av.state == "LISTED" and av.complete then
 			local listed = false
@@ -342,14 +364,16 @@ function O.OfferEvidence(qid, giverNpcId, giverName)
 			ctxKind, ctxAt = listed and "LISTED_AT_NPC" or "NOT_LISTED_AT_NPC", av.at
 		end
 	end
+	local negative = ctxKind == "EMPTY_AT_NPC" or ctxKind == "NOT_LISTED_AT_NPC"
 	local q = O.QuestEvidence(qid)
 	if q then
-		-- positive evidence is kept whatever the NPC lists later (it may have been accepted or completed since); a NEWER contrary listing is reported beside it
-		local newer = (ctxKind == "EMPTY_AT_NPC" or ctxKind == "NOT_LISTED_AT_NPC") and (av.seq or 0) > (q.seq or 0) and ctxKind or nil
-		return { kind = "OBSERVED", via = q.via, npc = q.npcName, last = q.last, n = q.n, by = q.by, newer = newer }
+		-- positive evidence is kept whatever the NPC lists later (it may have been accepted or completed since); a NEWER contrary listing is reported beside it.
+		-- Only a newer contrary listing read at the CURRENT progression contradicts it (a quest listed before and now omitted with nothing changed).
+		local newer = negative and (av.seq or 0) > (q.seq or 0) and ctxKind or nil
+		return { kind = "OBSERVED", via = q.via, npc = q.npcName, last = q.last, n = q.n, by = q.by, newer = newer, contradicted = (newer ~= nil and current) or nil }
 	end
 	if ctxKind == "LISTED_AT_NPC" then return { kind = "OBSERVED", via = "AVAILABLE_LIST", npc = ctx.name, last = ctxAt, n = 1, by = { AVAILABLE_LIST = 1 } } end
-	if ctxKind then return { kind = ctxKind, npc = ctx.name, last = ctxAt } end
+	if negative then return { kind = ctxKind, npc = ctx.name, last = ctxAt, stale = not current or nil } end
 	return nil
 end
 

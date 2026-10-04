@@ -98,12 +98,16 @@ function A.ToLegacy(plan, ctx, c)
 		end
 	end
 	table.sort(turnIns, function(x, y) return x.id < y.id end)
+	-- quest-starting items in the bags that passed the candidate funnel (the NEW QUEST ITEM card reads this; nothing here decides anything)
+	local questItems = {}
+	for _, a in ipairs(c.hints) do if a.type == "QUEST_ITEM" then questItems[#questItems + 1] = a end end
+	table.sort(questItems, function(x, y) return x.id < y.id end)
 
 	return {
 		next = seq[1], sequence = seq, upcoming = upcoming, nearby = nearby, inProgress = inProgress,
 		stats = env.stats, warnings = env.warnings, strategy = env.strategy.key, routeZone = ctx.prefs.routeZone, routeMap = env.routeMap,
 		player = env.player,
-		now = plan.now, alsoDo = plan.alsoDo, onTheWay = plan.onTheWay or {}, thenAction = plan.thenAction, reminders = plan.reminders, diag = plan.diag, objectives = objectives, turnIns = turnIns,
+		now = plan.now, alsoDo = plan.alsoDo, onTheWay = plan.onTheWay or {}, thenAction = plan.thenAction, reminders = plan.reminders, diag = plan.diag, objectives = objectives, turnIns = turnIns, questItems = questItems,
 	}
 end
 

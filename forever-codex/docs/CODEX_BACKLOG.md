@@ -244,7 +244,9 @@ inert systems (see E). Tier rules (route / stop / extra / context) are in the de
   (A to D in `CODEX_OFFER_PROBE.md`).
 
 ### C-02 Using actionability in the planner
-**Status:** DEFERRED (deliberately unbuilt)
+**Status:** PARTIAL (0.6.7: confidence only; no hard gate)
+* **Update 0.6.7:** `Planner.OfferState` (OBSERVED / NOT_OFFERED / UNKNOWN) now drives ACCEPT confidence: OBSERVED no discount, a current-progression NOT_OFFERED a strong discount (0.25), UNKNOWN unchanged; negatives go stale on progress (progression stamp). See `CODEX_AVAILABILITY_AND_QUEST_ITEMS.md`. Not built: a hard exclusion, an UNKNOWN discount for observed-pack pickups (would change golden baselines), staleness for non-progress changes.
+* Original note:
 * Today UNKNOWN pickups are valued at full strength when their evidence is "observed" (observed pack) and at 0.9 otherwise. No gate, discount or label uses OBSERVED / EMPTY_AT_NPC.
 * **Options not chosen:** drop a pickup whose giver just returned EMPTY (stale-evidence and name-vs-id risks); discount or demote unconfirmed pickups; label them in the tracker.
 * **Remains:** a time-bounded, narrow rule reviewed against golden baselines; wording "not offered at this NPC in the observed dialog", never "unavailable".
@@ -274,7 +276,8 @@ inert systems (see E). Tier rules (route / stop / extra / context) are in the de
 **Status:** PARTIAL: a fixed set of 15 holiday category ids hides such quests (0.2.15). Which events are active (a calendar API) is unverified, so event quests are never offered at all.
 
 ### C-08 Quest-starting items / conditional quests
-**Status:** UNBUILT: the report states "CONDITIONAL (quest-starting drops / items): not modelled yet".
+**Status:** PARTIAL (0.6.7: bag items that start a quest are detected and surfaced; unproven on Forever)
+* Built: generic detection from the client's container quest info or QuestieDB `startQuest`, filtered by the planner's progression rules, shown as a NEW QUEST ITEM card (`CODEX_AVAILABILITY_AND_QUEST_ITEMS.md`). Not built: the funnel line "CONDITIONAL: not modelled yet" in the report still says so for quest-starting DROPS (items not yet in the bags); the client function's behaviour on Forever is unproven.
 
 ### C-09 Unlocated quests and reminders
 **Status:** BUILT: quests with no usable location become reminders, never destinations.

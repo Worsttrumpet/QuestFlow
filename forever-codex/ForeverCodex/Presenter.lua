@@ -161,6 +161,10 @@ local function describe(a, plan, ctx, icon)
 		it.title = "Accept " .. name
 		it.who = a.giver
 		it.npc = a.giver
+		-- the quest giver's own dialog declined to offer it when last asked (OfferProbe, at the character's current progression): say so instead of promising an accept
+		local st, ev = Pl.OfferState(a)
+		it.offerState = st
+		if st == "NOT_OFFERED" then it.caution = "Not offered by " .. tostring((ev and ev.npc) or a.giver or "its quest giver") .. " the last time you asked." end
 		local view = a.quest and R.Quest(a.quest)
 		local obj = view and view.objectives and Pr.CleanObjective(view.objectives[1])
 		it.detail = obj and ("Goal: " .. obj .. ".") or (a.giver and ("Talk to " .. a.giver .. ".") or nil)
@@ -190,8 +194,20 @@ end
 
 Pr.Describe = describe
 
+--- The NEW QUEST ITEM rows: quest-starting items in the bags that are actionable (the candidate funnel already removed completed / in-log / skipped / ineligible ones).
+function Pr.QuestItems(plan)
+	local out = {}
+	for _, a in ipairs(plan and plan.questItems or {}) do
+		local verified = a.verified == true
+		out[#out + 1] = { title = a.name or "Quest item", id = a.id, quest = a.quest, questName = a.questName, verified = verified,
+			detail = (verified and "This item starts a quest." or "Codex's data says this item starts a quest.") .. " Use it to continue your progression." }
+	end
+	return out
+end
+
 function Pr.Card(plan, ctx)
 	local card = { reminders = {} }
+	card.questItems = Pr.QuestItems(plan)
 	for _, a in ipairs(plan and plan.reminders or {}) do
 		if #card.reminders < 3 then card.reminders[#card.reminders + 1] = questName(a) end
 	end

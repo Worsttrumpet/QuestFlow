@@ -63,7 +63,7 @@ local BASE = {
 	detour = 30,           -- seconds of extra time an ALSO DO may add
 	alsoFloor = 5,         -- points of net value an ALSO DO must still clear after paying for its time
 	stickiness = 3,        -- points: keep the previous NOW unless another sequence is better by more than this
-	confidence = { approx = 0.8, assumed = 0.8, unverifiedAccept = 0.9, logUnavailable = 0.5 },
+	confidence = { approx = 0.8, assumed = 0.8, unverifiedAccept = 0.9, logUnavailable = 0.5, notOffered = 0.25 },
 }
 
 -- Per-strategy differences only. The strategies themselves (and their level-fit / maxGap / allow filters) are the
@@ -176,6 +176,23 @@ function Pl.Locate(a)
 	return nil
 end
 
+--- What the CLIENT has said about a pickup being offered, reduced to the three states the planner uses (the evidence itself is OfferProbe's):
+--   "OBSERVED"     the client offered it to this character (a quest dialog opened, or an NPC's available list carried its id) and nothing newer contradicts that
+--   "NOT_OFFERED"  the quest giver's dialog, read at the character's CURRENT progression, did not offer it (an empty list, or a complete list without it)
+--   "UNKNOWN"      no client evidence, or evidence that progress has made stale (a negative read before a level / turn-in / finished quest)
+-- Database knowledge (where it starts, its prerequisites, its level) stays what it was: supporting evidence that makes a pickup ELIGIBLE, never proof that it is offered.
+function Pl.OfferState(a)
+	if not a or a.kind ~= "ACCEPT" or not a.quest then return "UNKNOWN", nil end
+	if Pl.Actionability(a) == "OBSERVED" then
+		local ev = Pl.OfferEvidence(a)
+		if ev and ev.contradicted then return "NOT_OFFERED", ev end
+		return "OBSERVED", ev
+	end
+	local ev = Pl.OfferEvidence(a)
+	if ev and (ev.kind == "EMPTY_AT_NPC" or ev.kind == "NOT_LISTED_AT_NPC") and not ev.stale then return "NOT_OFFERED", ev end
+	return "UNKNOWN", ev
+end
+
 --- 0..1: how much to trust the action's data when valuing it. Never raises a value, only discounts it.
 function Pl.Confidence(a, par)
 	par = par or Pl.Params("efficient")
@@ -183,7 +200,13 @@ function Pl.Confidence(a, par)
 	local _, status, assumed = Pl.Locate(a)
 	local f = 1
 	if assumed then f = c.assumed elseif status == "approx" then f = c.approx end
-	if a.kind == "ACCEPT" and a.evidence ~= "observed" then f = f * c.unverifiedAccept end   -- the quest may not exist on Forever
+	if a.kind == "ACCEPT" then
+		-- a pickup is valued by how sure we are the client would OFFER it now: observed = full; no evidence = the existing small discount (the quest may not be offered
+		-- on Forever, or not yet); the giver just declined to offer it = a strong discount (a contextual fact about that dialog, not a rule about the quest)
+		local st = Pl.OfferState(a)
+		if st == "NOT_OFFERED" then f = f * c.notOffered
+		elseif st ~= "OBSERVED" and a.evidence ~= "observed" then f = f * c.unverifiedAccept end    -- (unchanged: data labelled observed was not discounted before)
+	end
 	if a.state == "UNKNOWN" and a.stateWhy == "LOG_UNAVAILABLE" then f = f * c.logUnavailable end
 	return f
 end
@@ -861,6 +884,7 @@ end
 --                                (for the evaluation harness; changes nothing about the decision, costs nothing when off)
 function Pl.Compute(ctx, c, opts)
 	opts = opts or {}
+	if ns.OfferProbe then ns.OfferProbe.SetContext(ctx) end        -- the progression stamp for offer evidence is read from THIS context
 	local env = c.env
 	local par = Pl.Params(env.strategy and env.strategy.key)
 	local diag = { strategy = env.strategy and env.strategy.key, filtered = {}, warnings = {}, reasons = {}, rejected = {}, basis =

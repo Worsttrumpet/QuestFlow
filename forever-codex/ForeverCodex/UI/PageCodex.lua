@@ -63,6 +63,16 @@ local function build(page)
 	c.thenFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")
 	c.thenWhereFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")      -- "496 yd - Nazgrel" under the THEN line
 
+	-- NEW QUEST ITEM: a quest-starting item in the bags (present only when there is one that is actionable)
+	c.qiBox = W.Card(page, FULL, 60, W.STYLE_NEW)
+	c.qiLabel = W.Label(c.qiBox, "NEW QUEST ITEM", W.STYLE_NEW.label)
+	c.qiLabel:SetPoint("TOPLEFT", c.qiBox, "TOPLEFT", c.qiBox.insetX, -PAD + 2)
+	c.qiRows = {}
+	for i = 1, 2 do
+		c.qiRows[i] = { head = W.Line(c.qiBox, 13, W.WARM_GOLD, "LEFT"), body = W.Line(c.qiBox, 11, W.TEXT, "LEFT", true) }
+	end
+	c.qiMore = W.Line(c.qiBox, 11, W.DIM, "LEFT")
+
 	-- ALSO COMPLETE THIS: supporting, cooler and smaller; present only when there is something to say
 	c.alsoBox = W.Card(page, FULL, 40, W.STYLE_NEAR)
 	c.alsoLabel = W.Label(c.alsoBox, "ALSO COMPLETE THIS", W.STYLE_NEAR.label)
@@ -137,7 +147,7 @@ local function drawNow(c, card)
 		c.nowTitle:SetText(n.title or "")
 		c.nowWho:SetText(n.who or "")
 		-- the one-line detail is only for an objective whose counts the quest log did not report
-		c.nowDetail:SetText((n.kind == "OBJECTIVE" and #objectives == 0) and (n.detail or "") or "")
+		c.nowDetail:SetText(n.caution or ((n.kind == "OBJECTIVE" and #objectives == 0) and (n.detail or "")) or "")
 		-- the distance as a number ("600 yd", "Here"), then the quest's level when the data has one: secondary information
 		c.nowInfo:SetText(ns.Presenter.Join(n.dist or n.whereShort or n.where, n.level and ("Lv " .. n.level)) or "")
 	else
@@ -180,6 +190,25 @@ local function drawNow(c, card)
 		c.thenWhereFS:Hide()
 	end
 	return math.max(NOW_MIN, math.floor(st.y + PAD + 0.5))
+end
+
+--- NEW QUEST ITEM. Returns the card height, or nil when there is no actionable quest-starting item (the card is then hidden).
+local function drawQuestItems(c, items)
+	if #items == 0 then return nil end
+	local box = c.qiBox
+	local inner = FULL - box.insetX - PAD
+	local st = W.Stack(box, inner)
+	st:Skip(16)
+	for i, row in ipairs(c.qiRows) do
+		local it = items[i]
+		row.head:SetText(it and it.title or "")
+		row.body:SetText(it and (it.detail .. (it.questName and (" Starts: " .. it.questName .. ".") or "")) or "")
+		st:Add(row.head, 1)
+		st:Add(row.body, 4)
+	end
+	c.qiMore:SetText(#items > #c.qiRows and string.format("+ %d more", #items - #c.qiRows) or "")
+	st:Add(c.qiMore, 0)
+	return math.floor(st.y + PAD - 2 + 0.5)
 end
 
 --- ALSO COMPLETE THIS. Returns the card height, or nil when there is nothing to show (the card is then hidden).
@@ -241,7 +270,7 @@ local function drawAlso(c, items)
 			local head = c.alsoHeads[headsUsed]
 			if head then
 				-- the title, then (dim) how far, who, and why: "Here - Aamelia Windfield - Same stop."
-				local sub = ns.Presenter.Join(it.dist or it.where, it.npc, it.why and it.why:gsub("%.$", ""):lower() or nil)
+				local sub = ns.Presenter.Join(it.dist or it.where, it.npc, it.caution and it.caution:gsub("%.$", ""):lower() or (it.why and it.why:gsub("%.$", ""):lower() or nil))
 				head:SetText(it.title)
 				st:Add(head, sub and 0 or 3)
 				if sub then
@@ -368,6 +397,15 @@ local function refresh()
 	local nowH = drawNow(c, card)
 	placeCard(c, c.nowBox, TOP, FULL, nowH)
 	local bottom = TOP + nowH
+
+	local qiH = drawQuestItems(c, card.questItems or {})
+	if qiH then
+		c.qiBox:Show()
+		placeCard(c, c.qiBox, bottom + GAP - 2, FULL, qiH)
+		bottom = bottom + GAP - 2 + qiH
+	else
+		c.qiBox:Hide()
+	end
 
 	local alsoH = drawAlso(c, card.also or {})
 	if alsoH then

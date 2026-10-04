@@ -169,7 +169,7 @@ local function collect(ctx, env)
 		if on then
 			local ok, list = pcall(prov.generate, ctx, env)
 			if ok and type(list) == "table" then
-				env.stats.providers[#env.stats.providers + 1] = { key = prov.key, count = #list }
+				if #list > 0 or not prov.quiet then env.stats.providers[#env.stats.providers + 1] = { key = prov.key, count = #list } end   -- (a `quiet` provider with nothing to say is not listed)
 				for _, a in ipairs(list) do all[#all + 1] = a end
 			else
 				ns.RecordError("provider " .. tostring(prov.key), list)

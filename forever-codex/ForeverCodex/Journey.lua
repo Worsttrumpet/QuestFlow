@@ -66,6 +66,13 @@ end
 --- True if Codex itself saw this quest turned in.
 function J.SawTurnIn(id) return store().turnedIn[id] == true end
 
+--- How many turn-ins Codex has seen for this character (part of the progression stamp, see OfferProbe.Stamp).
+function J.TurnedInCount()
+	local n = 0
+	for _ in pairs(store().turnedIn) do n = n + 1 end
+	return n
+end
+
 local function questName(id)
 	local v = R.Quest(id)
 	return v and v.name or "a quest"

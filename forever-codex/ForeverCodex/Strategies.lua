@@ -45,7 +45,7 @@ C.RegisterStrategy({
 	key = "questing_only", label = "Questing-only", active = true,
 	desc = "Only quest actions (plus the travel between them): no flight or other hints.",
 	w = weights(),
-	allow = { QUEST = true, TRAVEL = true },
+	allow = { QUEST = true, TRAVEL = true, QUEST_ITEM = true },
 })
 
 C.RegisterStrategy({
