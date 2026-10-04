@@ -23,3 +23,8 @@ Assumption: rank services carry the profession name; recipes (which do not) are 
 Per character (`Prefs.Char().professions`: `rankUps`, `hidden`), keyed by skill-line id when the client gives one, else by lower-cased name. "Not Learned" rows have a Hide button
 (`/codex professions hide fishing`, `restore`). No rows (reader failed, or nothing to say): no section. Updates: `SKILL_LINES_CHANGED`, `CHAT_MSG_SKILL`, `TRAINER_*`, `SPELLS_CHANGED`
 (optional registrations) plus every recompute; nothing polls.
+
+## Observed on Forever (build 70205, 0.7.1 playtest)
+`GetProfessions` + `GetProfessionInfo` answer (the skill-line functions are absent). Five professions were read with skill, cap and skill-line ids matching the assumed list (Fishing 356, Cooking 185, First Aid 129; Leatherworking 165, Skinning 393).
+Caps above 150 exist (Skinning 185/225), and a cap change (Leatherworking 75 -> 150 after training Journeyman) is read live. Still unverified: the number of primary slots (2 is assumed) and the rank-up reminder
+(depends on a profession trainer's service names; see the spell-training note on trainer reads).

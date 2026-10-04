@@ -30,3 +30,11 @@ dismissal. `/codex spells restore` brings dismissed spells back. The store is st
 ## Not done / limits
 No trainer locations, no automatic training, no planner input (the planner, adapter and engine do not reference it; a test checks that). Profession trainers are ignored here (they feed PROFESSIONS).
 A profession-trainer check relies on `IsTradeskillTrainer`; when it is absent the snapshot is flagged `trainerKind = unknown`.
+
+## Observed on Forever (build 70205, 0.7.1 playtest, level 23 Hunter)
+* Present: `GetNumTrainerServices`, `GetTrainerServiceInfo`, `GetTrainerServiceCost`, `GetTrainerServiceLevelReq`, `GetTrainerServiceItemLink`, `IsTradeskillTrainer`, `IsPlayerSpell`, `IsSpellKnown`.
+  **Absent:** `GetNumSpellTabs`, `GetSpellBookItemName` (so the spellbook name/rank fallback cannot work on Forever).
+* A class trainer window returned **89 services** and `IsTradeskillTrainer()` false; `GetTrainerServiceItemLink` gave **no spell id for any of them** (0 of 89 matched `spell:<id>`), and **no service was stored**,
+  so the category values Forever returns are not the Classic strings `available` / `unavailable` / `used` (or are not strings). Without ids the known-spell check by `IsPlayerSpell` cannot run either.
+* A profession trainer window read once returned 0 services (probably an empty update as the window closed; `TRAINER_UPDATE` fires many times).
+* 0.7.2 adds diagnostics only (the exact categories, the first six raw services including the link, the latest non-empty read, and which other spell names exist). The next report decides how to read the list; nothing is guessed.

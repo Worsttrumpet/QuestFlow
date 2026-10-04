@@ -267,3 +267,26 @@ do
 end
 
 clearClient()
+
+section("spell training: a trainer whose categories Codex does not recognise is reported exactly, and an empty later read does not hide the good one")
+do
+	resetClient()
+	T.services = { svc(nil, "Aspect of the Hawk", "Rank 2", 1000, 10, 1), svc(nil, "Mend Pet", "Rank 1", 500, 12, 2), svc(nil, "Tame Beast", nil, 100, 10, "Header") }
+	local ns = rogue()
+	visit(ns)
+	check(titles(ns) == "", "an unrecognised category value stores nothing (no guessing)")
+	local text = table.concat(ns.SpellTraining.ReportLines(ns.State.ctx), "\n")
+	check(text:find("categories the client gave: number:1 x1, number:2 x1, string:Header x1", 1, true) ~= nil, "the report tallies the categories exactly as given (type and value)")
+	check(text:find('#1 Aspect of the Hawk | rank "Rank 2" | category number:1 | cost 1000 | level 10 | link nil', 1, true) ~= nil, "and prints the first services raw, including the (absent) link")
+	T.services = {}
+	visit(ns, "TRAINER_UPDATE")                      -- the window closed: an empty list
+	local after = table.concat(ns.SpellTraining.ReportLines(ns.State.ctx), "\n")
+	check(after:find("latest trainer read was empty", 1, true) and after:find("3 service(s)", 1, true), "the report keeps the latest read that listed services")
+	-- a capitalised standard category is still understood
+	resetClient(); BASE()
+	for _, s in ipairs(T.services) do if s.cat == nil then s.cat = "Available" end end
+	local ns2 = rogue()
+	visit(ns2)
+	check(titles(ns2) ~= "", "category strings are compared case-insensitively")
+	resetClient()
+end

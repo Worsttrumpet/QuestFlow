@@ -86,16 +86,25 @@ function S.ReadTrainer()
 		local okT, t = call(_G.IsTradeskillTrainer)
 		if okT and t ~= nil then r.tradeskill = t and true or false end
 	end
+	r.categories, r.sample, r.n = {}, {}, n
 	for i = 1, n do
 		local okI, name, rank, category = call(_G.GetTrainerServiceInfo, i)
 		if okI and type(name) == "string" and name ~= "" then
-			local s = { index = i, name = name, rank = (type(rank) == "string" and rank ~= "") and rank or nil, category = category }
+			-- the category the client gave, exactly (type and value): Codex only acts on "available" / "unavailable" / "used" (compared lower-case); anything else is tallied for the report
+			local ck = type(category) .. ":" .. tostring(category)
+			r.categories[ck] = (r.categories[ck] or 0) + 1
+			if type(category) == "string" then category = category:lower() end
+			local s = { index = i, name = name, rank = (type(rank) == "string" and rank ~= "") and rank or nil, category = category, rawRank = rank }
 			local okC, cost = call(_G.GetTrainerServiceCost, i)
 			if okC and type(cost) == "number" then s.cost = cost end
 			local okL, lvl = call(_G.GetTrainerServiceLevelReq, i)
 			if okL and type(lvl) == "number" then s.levelReq = lvl end
 			local okK, link = call(_G.GetTrainerServiceItemLink, i)
 			if okK then s.id = S.IdFromLink(link) end
+			if #r.sample < 6 then
+				r.sample[#r.sample + 1] = string.format("#%d %s | rank %s | category %s | cost %s | level %s | link %s", i, name, type(rank) == "string" and ('"' .. rank .. '"') or type(rank),
+					type(category) .. ":" .. tostring(category), tostring(s.cost), tostring(s.levelReq), okK and (type(link) == "string" and ('"' .. link:gsub("|", "||"):sub(1, 70) .. '"') or type(link)) or "call failed")
+			end
 			r.services[#r.services + 1] = s
 		end
 	end
@@ -104,10 +113,12 @@ function S.ReadTrainer()
 end
 
 S.lastRead = nil
+S.lastGood = nil            -- the latest read that listed at least one service (TRAINER_UPDATE also fires with an empty list when the window closes)
 
 --- Folds one trainer read into the character's store. A profession trainer is not class training and is ignored. Returns the number of entries touched.
 function S.Record(read, ctx)
 	S.lastRead = read
+	if read and read.ok and #read.services > 0 then S.lastGood = read end
 	if not (read and read.ok) or read.tradeskill == true then return 0 end
 	local st = store(ctx)
 	local lvl = ctx and ctx.char and ctx.char.level
@@ -277,10 +288,20 @@ function S.ReportLines(ctx)
 		apis[#apis + 1] = n .. "=" .. (type(_G[n]) == "function" and "yes" or "NO")
 	end
 	L[#L + 1] = "  client APIs: " .. table.concat(apis, " ")
-	local r = S.lastRead
+	for _, n in ipairs({ "GetSpellInfo", "C_Spell", "C_SpellBook", "GetSpellLink", "C_Trainer" }) do apis[#apis + 1] = n .. "=" .. (_G[n] ~= nil and "yes" or "NO") end
+	L[#L + 1] = "  other spell / trainer client names present: " .. table.concat(apis, " ", 11)
+	local r = S.lastGood or S.lastRead
+	if S.lastRead and S.lastGood and S.lastRead ~= S.lastGood then
+		L[#L + 1] = string.format("  latest trainer read was empty (%d service(s): the window closed or was not loaded yet); showing the latest read that listed services", #S.lastRead.services)
+	end
 	if r then
 		L[#L + 1] = string.format("  last trainer read: %s, %d service(s), profession trainer: %s%s", r.ok and "ok" or "FAILED", #r.services,
 			r.tradeskill == nil and "unknown" or tostring(r.tradeskill), r.err and (" (" .. r.err .. ")") or "")
+		local cats = {}
+		for k, v in pairs(r.categories or {}) do cats[#cats + 1] = k .. " x" .. v end
+		table.sort(cats)
+		L[#L + 1] = "  categories the client gave: " .. (#cats > 0 and table.concat(cats, ", ") or "none")
+		for _, line in ipairs(r.sample or {}) do L[#L + 1] = "    " .. line end
 		local withId = 0
 		for _, s in ipairs(r.services) do if s.id then withId = withId + 1 end end
 		L[#L + 1] = string.format("  spell ids in trainer links: %d of %d (a missing id falls back to name and rank)", withId, #r.services)
