@@ -99,6 +99,14 @@ function S.ReadTrainer()
 		local okT, t = call(_G.IsTradeskillTrainer)
 		if okT and t ~= nil then r.tradeskill = t and true or false end
 	end
+	-- which service categories the window currently shows (the Classic trainer filters); nil = the client does not say (GetTrainerServiceTypeFilter is not proven on Forever)
+	r.filters = {}
+	if type(_G.GetTrainerServiceTypeFilter) == "function" then
+		for _, k in ipairs({ "available", "unavailable", "used" }) do
+			local okF, v = call(_G.GetTrainerServiceTypeFilter, k)
+			if okF and v ~= nil then r.filters[k] = (v == true or v == 1) end
+		end
+	end
 	r.categories, r.sample, r.n = {}, {}, n
 	for i = 1, n do
 		local okI, rv = callN(_G.GetTrainerServiceInfo, i)
@@ -141,6 +149,88 @@ end
 S.lastRead = nil
 S.lastGood = nil            -- the latest read that listed at least one service (TRAINER_UPDATE also fires with an empty list when the window closes)
 
+-- ---------------------------------------------------------------- the observed spell CATALOG (account-wide, per class)
+--
+-- Codex ships NO spell data: there is no Forever spell/trainer dataset in this repository and importing Era / Classic tables would present another game's rules as Forever's. What exists is
+-- what the Forever client itself showed: every class-trainer window a character of this account opens is recorded here, per class (name, rank text, level requirement, cost, the build). A
+-- later character of the same class then learns about level-gated spells WITHOUT visiting a trainer. The catalog is OBSERVED trainer-window data (src "trainer window"), never QuestieDB or
+-- ATT, and is only as complete as the windows that were opened. It is class data, not character state: it is not reset when a character is re-created.
+-- A catalog row is shown to a character only when it became learnable while Codex was watching that character (its level requirement is above the level Codex first saw it at): a
+-- spell at or below that level may have been learned before Codex ran and Forever offers no spellbook API to check, so it waits for the character's own trainer visit.
+
+local function catalogStore()
+	if type(ForeverCodexDB) ~= "table" then return nil end
+	local c = ForeverCodexDB.spellCatalog
+	if type(c) ~= "table" then c = {}; ForeverCodexDB.spellCatalog = c end
+	c.v = c.v or 1
+	c.classes = type(c.classes) == "table" and c.classes or {}
+	return c
+end
+
+local function classOf(ctx)
+	return (ctx and ctx.char and ctx.char.classToken) or S._classToken()
+end
+
+--- Merges one class-trainer read into the account's catalog for the character's class. Only rows that were still to learn carry a level requirement and cost (a learned row reports level 0).
+local function recordCatalog(read, ctx)
+	local cat, class = catalogStore(), classOf(ctx)
+	if not cat or not class then return 0 end
+	local c = cat.classes[class]
+	if type(c) ~= "table" then c = { entries = {} }; cat.classes[class] = c end
+	c.entries = type(c.entries) == "table" and c.entries or {}
+	-- a window that shares no spell with what this class's catalog already holds is not this class's trainer (a hunter's pet-training window): it never enters the catalog
+	local known, overlap, any = {}, false, false
+	for _, e in pairs(c.entries) do known[e.name] = true; any = true end
+	if any then
+		for _, s in ipairs(read.services) do if known[s.name] then overlap = true break end end
+		if not overlap then return 0 end
+	end
+	local ok, _, build = pcall(_G.GetBuildInfo)
+	c.build, c.at, c.src = ok and build or c.build, type(_G.time) == "function" and _G.time() or 0, "trainer window"
+	local n = 0
+	for _, s in ipairs(read.services) do
+		if (s.category == "available" or s.category == "unavailable") and type(s.levelReq) == "number" and s.levelReq > 0 then
+			local key = keyOf(s.id, s.name, s.rank, s.levelReq)
+			c.entries[key] = { id = s.id, name = s.name, rank = s.rank, rankNum = rankNumber(s.rank), levelReq = s.levelReq, cost = s.cost }
+			n = n + 1
+		end
+	end
+	return n
+end
+
+--- The level Codex first saw this character at (the journey's start entry), or nil.
+local function startLevel()
+	local j = ns.Prefs.Char().journey
+	local first = type(j) == "table" and type(j.entries) == "table" and j.entries[1]
+	return type(first) == "table" and first.k == "start" and type(first.lvl) == "number" and first.lvl or nil
+end
+
+--- Adds the catalog rows this character should now hear about to its own entries (never touches an entry it already has, so a learned or dismissed spell stays that way).
+local function seedFromCatalog(st, ctx)
+	local cat, class = catalogStore(), classOf(ctx)
+	local c = cat and class and cat.classes[class]
+	local from = startLevel()
+	if not (c and from) then return 0 end
+	local n = 0
+	for key, row in pairs(c.entries or {}) do
+		if not st.entries[key] and type(row.levelReq) == "number" and (row.levelReq > from or (from == 1 and row.levelReq == 1)) then
+			st.entries[key] = { id = row.id, name = row.name, rank = row.rank, rankNum = row.rankNum, levelReq = row.levelReq, cost = row.cost, cat = "catalog", fromCatalog = true }
+			n = n + 1
+		end
+	end
+	return n
+end
+
+--- The stored entry a trainer row refers to: the exact key, or (a learned row reports level 0) the same name and rank text, or the same name and cost.
+local function matchEntry(st, s)
+	local e = st.entries[keyOf(s.id, s.name, s.rank, s.levelReq)]
+	if e then return e end
+	for _, e2 in pairs(st.entries) do
+		if e2.name == s.name and ((s.id and e2.id == s.id) or (s.rank and e2.rank == s.rank) or (s.cost and e2.cost == s.cost and (s.rank == nil or e2.rank == nil))) then return e2 end
+	end
+	return nil
+end
+
 --- Folds one trainer read into the character's store. A profession trainer is not class training and is ignored. Returns the number of entries touched.
 function S.Record(read, ctx)
 	S.lastRead = read
@@ -149,25 +239,32 @@ function S.Record(read, ctx)
 	local st = store(ctx)
 	local lvl = ctx and ctx.char and ctx.char.level
 	local touched = 0
+	if read.tradeskill == false or read.tradeskill == nil then recordCatalog(read, ctx) end
+	seedFromCatalog(st, ctx)
+	local seen, matched, shows = {}, 0, {}
 	for _, s in ipairs(read.services) do
-		local key = keyOf(s.id, s.name, s.rank, s.levelReq)
-		local e = st.entries[key]
+		if s.category then shows[s.category] = true end
+		local e = matchEntry(st, s)
+		if e then seen[e] = true; matched = matched + 1 end
 		if s.category == "used" then
-			-- the trainer itself says this is already known. OBSERVED on Forever: a spell shown as already known reports level requirement 0, so its key (which contains the level) does not
-			-- match the entry stored while it was still to learn; the same name with the same cost (or the same spell id) is the same service.
-			if not e then
-				for _, e2 in pairs(st.entries) do
-					if e2.name == s.name and not e2.learned and ((s.id and e2.id == s.id) or (s.cost and e2.cost == s.cost)) then e = e2 break end
-				end
-			end
+			-- the trainer itself says this is already known (OBSERVED on Forever: such a row reports level requirement 0, so it is matched by name and rank text / cost, not by key)
 			if e then e.learned = true end
 		elseif s.category == "available" or s.category == "unavailable" then
-			if not e then e = {}; st.entries[key] = e end
+			local key = keyOf(s.id, s.name, s.rank, s.levelReq)
+			if not e then e = {}; st.entries[key] = e; seen[e] = true end
 			e.id, e.name, e.rank, e.rankNum = s.id, s.name, s.rank, rankNumber(s.rank)
-			e.cost, e.levelReq, e.cat = s.cost, s.levelReq, s.category
+			e.cost, e.levelReq, e.cat, e.fromCatalog = s.cost, s.levelReq, s.category, nil
 			e.seenLevel = lvl
 			e.trainerKind = read.tradeskill == false and "class" or "unknown"
 			touched = touched + 1
+		end
+	end
+	-- ABSENCE: a spell the character can already learn that this class-trainer window does not list was learned (the window hides learned spells when its "known" filter is off). Only trusted
+	-- when the window clearly is this class's trainer (at least one stored spell appears in it: a hunter's pet-training window shares none) and shows "available" rows at all (so that filter is on).
+	local availableShown = read.filters and read.filters.available == true or (read.filters and read.filters.available == nil and shows.available)
+	if matched > 0 and availableShown and type(lvl) == "number" then
+		for _, e in pairs(st.entries) do
+			if not e.learned and not seen[e] and type(e.levelReq) == "number" and e.levelReq <= lvl then e.learned, e.learnedBy = true, "absent from the trainer window" end
 		end
 	end
 	return touched
@@ -217,6 +314,9 @@ end
 
 -- ---------------------------------------------------------------- the list
 
+--- Ranks are only compared with ranks of the same kind: by rank text when the entry has it, by level requirement when it has none (the two are not on one scale).
+local function groupOf(e) return e.name .. (e.rankNum and "#rank" or "#level") end
+
 local function displayName(e)
 	return e.name .. (e.rank and (" " .. e.rank) or "")
 end
@@ -227,6 +327,7 @@ function S.List(ctx)
 	local st = store(ctx)
 	local lvl = ctx and ctx.char and ctx.char.level
 	if type(lvl) ~= "number" then return nil end
+	seedFromCatalog(st, ctx)                      -- level-gated spells seen on this account's earlier trainer visits appear on level-up, with no visit
 	local book = { idx = nil }
 	do
 		local idx = spellbookIndex()
@@ -239,26 +340,29 @@ function S.List(ctx)
 	local knownRank = {}
 	for _, k in ipairs(keys) do
 		local e = st.entries[k]
-		if isKnown(e, book) and e.rankNum then knownRank[e.name] = math.max(knownRank[e.name] or 0, e.rankNum) end
+		local ordK = e.rankNum or e.levelReq
+		if isKnown(e, book) and ordK then local g = groupOf(e) knownRank[g] = math.max(knownRank[g] or 0, ordK) end
 	end
 	local cand = {}
 	for _, k in ipairs(keys) do
 		local e = st.entries[k]
 		local show = not e.learned and not st.dismissed[k] and type(e.levelReq) == "number" and e.levelReq <= lvl
-		if show and e.rankNum and (knownRank[e.name] or 0) > e.rankNum then show = false end      -- a higher rank is already known
+		local ordS = e.rankNum or e.levelReq
+		if show and ordS and (knownRank[groupOf(e)] or 0) > ordS then show = false end      -- a higher rank is already known (rank text, else the level requirement orders the ranks)
 		if show then cand[#cand + 1] = { key = k, e = e } end
 	end
 	-- one rank of a spell at a time: the lowest one still to learn (the trainer sells the next rank after the previous)
 	local lowest = {}
 	for _, c in ipairs(cand) do
 		local n = c.e.rankNum or c.e.levelReq          -- (no rank text, as on Forever: the level requirement orders the ranks of one spell)
-		if n and (lowest[c.e.name] == nil or n < lowest[c.e.name]) then lowest[c.e.name] = n end
+		local g = groupOf(c.e)
+		if n and (lowest[g] == nil or n < lowest[g]) then lowest[g] = n end
 	end
 	local rows, total, partial = {}, 0, false
 	for _, c in ipairs(cand) do
 		local e = c.e
 		local ord = e.rankNum or e.levelReq
-		if not (ord and lowest[e.name] ~= ord) then
+		if not (ord and lowest[groupOf(e)] ~= ord) then
 			rows[#rows + 1] = { key = c.key, id = e.id, name = e.name, rank = e.rank, title = displayName(e), cost = e.cost, levelReq = e.levelReq }
 		end
 	end
