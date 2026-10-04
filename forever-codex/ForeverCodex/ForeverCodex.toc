@@ -37,6 +37,7 @@ Overlap.lua
 Dungeons.lua
 Items.lua
 SpellTraining.lua
+Professions.lua
 ItemProbe.lua
 OfferProbe.lua
 Gear.lua

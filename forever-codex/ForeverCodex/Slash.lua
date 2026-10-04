@@ -27,6 +27,7 @@ local function helpLines()
 	say("  /codex questiedb [quest id] [npc id]   whether the QuestieDB addon is in use, and a check of what it knows")
 	say("  /codex minimap reset   put the (draggable) minimap button back at its default spot")
 	say("  /codex spells [restore]   SPELL TRAINING: what the client reported; restore = bring back spells you marked Don't Want to Learn")
+	say("  /codex professions [hide <name>|restore]   PROFESSIONS: what the client reported")
 	say("  /codex where | reset | help")
 end
 
@@ -210,6 +211,16 @@ local function handle(msg)
 		else
 			for _, l in ipairs(ns.SpellTraining.ReportLines(ns.State.ctx)) do say(l) end
 			say("/codex spells restore brings back spells you marked Don't Want to Learn.")
+		end
+	elseif cmd == "professions" then
+		local a, b = restLower:match("^(%S+)%s*(%S*)")
+		if a == "hide" and b ~= "" then
+			say(ns.Professions.Hide(b) and ("Hiding " .. b .. " from PROFESSIONS.") or "usage: /codex professions hide fishing|cooking|firstaid")
+		elseif a == "restore" then
+			say(string.format("Brought back %d hidden profession reminder(s).", ns.Professions.RestoreAll()))
+		else
+			for _, l in ipairs(ns.Professions.ReportLines(ns.State.ctx)) do say(l) end
+			say("/codex professions hide fishing|cooking|firstaid  or  restore")
 		end
 	elseif cmd == "help" or cmd == "?" then
 		helpLines()

@@ -6,6 +6,7 @@
 --                       and how many follow-up quests it opens when the data supports it; hidden when there are none
 --   SPELL TRAINING      class spells the trainer offered that you can now learn, with cost and a total; "Don't Want to Learn" hides one for this
 --                       character; spells that are learned leave by themselves; hidden when there are none (SpellTraining.lua)
+--   PROFESSIONS         status (skill/cap), a secondary profession not learned, a free primary slot, a trainer-offered rank-up; hidden when there is nothing (Professions.lua)
 --   NEW FOR YOU         a temporary card for a level you just reached (secondary, never in front of NOW)
 --   Party               what party members finished, only when there is something to say
 -- Before the first-time setup is finished this page shows the setup panel instead (UI/PageSetup.lua).
@@ -26,6 +27,7 @@ local NOW_MIN = 56                  -- a card never gets smaller than this
 local READY_ROWS = 12              -- hand-ins listed in READY TO TURN IN (the window grows to fit; the rest are summarised in one line)
 local DG_GROUPS, DG_ROWS = 4, 12      -- DUNGEON QUESTS: dungeons and quest lines drawn (the rest are summarised in one line)
 local ST_ROWS = ns.SpellTraining and ns.SpellTraining.MAX_ROWS or 12   -- SPELL TRAINING rows drawn (the rest are summarised in one line)
+local PF_ROWS = 12                  -- PROFESSIONS rows drawn
 local MAX_ROWS = 8                  -- objective rows drawn in one card (the rest are summarised in one line)
 
 --- Places a card at a vertical offset below the page top and sizes it.
@@ -124,6 +126,17 @@ local function build(page)
 	end
 	c.stMore = W.Line(c.stBox, 11, W.DIM, "LEFT")
 	c.stTotal = W.Line(c.stBox, 12, W.WARM_GOLD, "LEFT")
+
+	-- PROFESSIONS: status and reminders (skill/cap, a secondary not learned, a free primary slot, a trainer-offered rank-up); present only when there is something to say
+	c.pfBox = W.Card(page, FULL, 40, W.STYLE_NEAR)
+	c.pfLabel = W.Label(c.pfBox, "PROFESSIONS", W.STYLE_NEAR.label)
+	c.pfLabel:SetPoint("TOPLEFT", c.pfBox, "TOPLEFT", c.pfBox.insetX, -PAD + 2)
+	c.pfRows = {}
+	for i = 1, PF_ROWS do
+		local row = { line = W.Line(c.pfBox, 12, W.TEXT, "LEFT") }
+		row.btn = W.Button(c.pfBox, 40, 16, "Hide", function() if row.key then ns.Professions.Hide(row.key) end end)
+		c.pfRows[i] = row
+	end
 
 	-- NEW FOR YOU: secondary, fits its content; present only while active
 	c.nfyBox = W.Card(page, FULL, 80, W.STYLE_NEW)
@@ -417,6 +430,39 @@ local function drawSpells(c, sp)
 	return math.floor(st.y + PAD - 2 + 0.5)
 end
 
+--- PROFESSIONS. Returns the card height, or nil when there is nothing to show (the card is then hidden entirely).
+local function drawProfessions(c, pf)
+	if not pf or #pf.rows == 0 then
+		for _, row in ipairs(c.pfRows) do row.key = nil; row.btn:Hide() end
+		return nil
+	end
+	local box = c.pfBox
+	local inner = FULL - box.insetX - PAD
+	local st = W.Stack(box, inner)
+	st:Skip(16)
+	for i, row in ipairs(c.pfRows) do
+		local r = pf.rows[i]
+		row.key = r and r.kind == "missing" and r.key or nil
+		row.line:SetText(r and r.text or "")
+		if r then
+			local y0 = st.y
+			W.SetColor(row.line, (r.kind == "rank") and W.WARM_GOLD or ((r.kind == "missing" or r.kind == "slots") and W.DIM or W.TEXT))
+			st:Add(row.line, 3, box.insetX + (r.kind == "rank" and 10 or 0), inner - (r.kind == "missing" and 46 or 0))
+			if r.kind == "missing" then
+				row.btn:ClearAllPoints()
+				row.btn:SetPoint("TOPRIGHT", box, "TOPRIGHT", -PAD, -(y0 - 2))
+				row.btn:Show()
+			else
+				row.btn:Hide()
+			end
+		else
+			row.line:Hide()
+			row.btn:Hide()
+		end
+	end
+	return math.floor(st.y + PAD - 2 + 0.5)
+end
+
 local function drawNewForYou(c, nfy)
 	local box = c.nfyBox
 	local inner = FULL - box.insetX - PAD
@@ -496,6 +542,15 @@ local function refresh()
 		bottom = bottom + GAP - 2 + stH
 	else
 		c.stBox:Hide()
+	end
+
+	local pfH = drawProfessions(c, card.professions)
+	if pfH then
+		c.pfBox:Show()
+		placeCard(c, c.pfBox, bottom + GAP - 2, FULL, pfH)
+		bottom = bottom + GAP - 2 + pfH
+	else
+		c.pfBox:Hide()
 	end
 
 	if nfy then

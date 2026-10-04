@@ -912,6 +912,14 @@ function D.PlaytestLines(snap, lines)
 			add("REWARD ADVISOR: error: " .. tostring(alines))
 		end
 	end
+	if ns.Professions then
+		local okP, plines = pcall(ns.Professions.ReportLines, ns.State and ns.State.ctx)
+		if okP then
+			for _, l in ipairs(plines) do add(l) end
+		else
+			add("PROFESSIONS: error: " .. tostring(plines))
+		end
+	end
 	if ns.SpellTraining then
 		local okS, slines = pcall(ns.SpellTraining.ReportLines, ns.State and ns.State.ctx)
 		if okS then
