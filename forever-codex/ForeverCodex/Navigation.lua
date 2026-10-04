@@ -116,21 +116,104 @@ local function clearOwned(status)
 	N.state = { status = status or "idle" }
 end
 
---- The point Codex would navigate to for this plan's NOW, or nil.
-local function desired(plan)
-	local a = plan and plan.now
-	if not a then return nil end
-	local pos = Pl.Locate(a)
-	if not pos then return nil end
-	return { action = a.id, map = pos.map, x = pos.x, y = pos.y }
-end
-
 local function playerDistanceTo(ctx, pt)
 	local loc = ctx and ctx.loc
 	if not (loc and loc.available) then return nil end
 	local d = E.Distance(ctx, { map = loc.map, x = loc.x, y = loc.y, world = loc.world or false }, { map = pt.map, x = pt.x, y = pt.y })
 	if d == nil or d >= E.DIFFERENT_CONTINENT then return nil end
 	return d
+end
+
+-- ---------------------------------------------------------------- NAVIGATION SAFETY
+-- The game's waypoint and Codex's arrow are STRAIGHT LINES: they know nothing about cliffs, water, portals, boats or zeppelins. Codex has no path, portal or transport data and
+-- invents none. So a destination only gets a pin or arrow when Codex can say it is a sensible thing to walk toward in a straight line:
+--   * it must be MEASURABLE (a known player position and a known distance: not another continent, not a map Codex cannot convert),
+--   * an exact NPC coordinate may be far (MAX_EXACT_YD), an approximate one (an objective area, an assumed hand-in, the game's quest-map point) only moderately far (MAX_APPROX_YD),
+--   * a position that is the recorder's PLAYER position (the observed pack) is not an NPC coordinate: only a short distance (MAX_PLAYER_POS_YD), where the last steps are visible,
+--   * a far quest whose own objective text names special travel (a boat, portal, zeppelin ...) gets that text, not an arrow, and
+--   * a pin farther than STRAIGHT_NOTE_YD is still labelled "straight line only".
+-- Quest text, location and the plan are untouched: this only decides whether to POINT. Thresholds are design values, not game facts.
+N.MAX_EXACT_YD = 2500
+N.MAX_APPROX_YD = 600
+N.MAX_PLAYER_POS_YD = 150
+N.STRAIGHT_NOTE_YD = 1000
+N.TRAVEL_NEAR_YD = 300       -- a target this close is walked to even when its text names a vehicle (the vehicle is probably right there)
+N.TRAVEL_WORDS = { "skycutter", "boat", "ship", "zeppelin", "airship", "portal", "ferry", "teleport" }
+
+--- Whether the quest's own objective text (the quest log's words, never Codex data) names special travel. Returns the matching word or nil.
+function N.TravelWord(a)
+	local texts = {}
+	for _, o in ipairs(a and a.objectiveState and a.objectiveState.list or {}) do
+		if not o.finished and type(o.text) == "string" then texts[#texts + 1] = o.text:lower() end
+	end
+	for _, t in ipairs(texts) do
+		for _, w in ipairs(N.TRAVEL_WORDS) do
+			if t:find("%f[%a]" .. w .. "%f[%A]") then return w end
+		end
+	end
+	return nil
+end
+
+local REASON_TEXT = {
+	UNMEASURED = "Codex cannot measure the way there from here, so there is no arrow.",
+	APPROX_FAR = "Only an approximate area is known and it is far away, so there is no arrow.",
+	PLAYER_POSITION_FAR = "Only a spot where someone once stood is known for this, not the NPC's own position, so there is no arrow.",
+	SPECIAL_TRAVEL = "This quest's own text names special travel (a boat, portal or similar). Follow it: Codex has no route for that, so there is no arrow.",
+}
+N.REASON_TEXT = REASON_TEXT
+
+--- Should Codex point at this action's destination? Returns { pin = true|false, reason = code|nil, straight = bool, distance = yards|nil, text = player-facing note|nil }.
+-- (No location at all is not an assessment: the caller has nothing to point at.)
+function N.Assess(a, ctx)
+	local out = { pin = false }
+	if not a then return out end
+	local pos, status
+	local kind
+	for _, t in ipairs(a.targets or {}) do
+		local w = t.where
+		if w and w.status ~= "unknown" and w.points and w.points[1] then pos, status, kind = w.points[1], w.status, w.kind break end
+	end
+	if not pos then
+		local p, st = Pl.Locate(a)
+		if not p then return out end
+		pos, status = p, st
+	end
+	-- a hand-in (or any target) placed at the observed pack's recorder position keeps that provenance in the quest view even when the contract calls it "assumed giver"
+	if kind ~= "player_position" and a.quest and ns.Registry then
+		local v = ns.Registry.Quest(a.quest)
+		local l = v and v.loc
+		if l and l.kind == "player_position" and l.map == pos.map and math.abs(l.x - pos.x) < 1e-6 and math.abs(l.y - pos.y) < 1e-6 then kind = "player_position" end
+	end
+	local d = playerDistanceTo(ctx, pos)
+	out.distance = d
+	if d == nil then out.reason = "UNMEASURED" out.text = REASON_TEXT.UNMEASURED return out end
+	if kind == "player_position" then
+		if d > N.MAX_PLAYER_POS_YD then out.reason = "PLAYER_POSITION_FAR" out.text = REASON_TEXT.PLAYER_POSITION_FAR return out end
+	elseif status ~= "known" then
+		if d > N.MAX_APPROX_YD then out.reason = "APPROX_FAR" out.text = REASON_TEXT.APPROX_FAR return out end
+	elseif d > N.MAX_EXACT_YD then
+		out.reason = "UNMEASURED" out.text = REASON_TEXT.UNMEASURED                      -- farther than a straight line means anything
+		return out
+	end
+	if d > N.TRAVEL_NEAR_YD and N.TravelWord(a) then out.reason = "SPECIAL_TRAVEL" out.text = REASON_TEXT.SPECIAL_TRAVEL return out end
+	out.pin = true
+	if d > N.STRAIGHT_NOTE_YD then out.straight = true out.text = "Straight line only: Codex does not know the path, so the arrow ignores cliffs, water and portals." end
+	return out
+end
+
+--- The point Codex would navigate to for this plan's NOW, or nil (also nil when the destination is not safe to point at; see N.Assess).
+local function desired(plan, ctx)
+	local a = plan and plan.now
+	N.noPin = nil
+	if not a then return nil end
+	local pos = Pl.Locate(a)
+	if not pos then return nil end
+	local as = N.Assess(a, ctx)
+	if not as.pin then
+		N.noPin = { action = a.id, reason = as.reason, distance = as.distance }
+		return nil
+	end
+	return { action = a.id, map = pos.map, x = pos.x, y = pos.y }
 end
 
 local function checkArrival(ctx)
@@ -156,7 +239,7 @@ function N.Target()
 end
 
 function N.OnPlan(plan, ctx)
-	lastWant = desired(plan)
+	lastWant = desired(plan, ctx)
 	if arrivedFor and (not lastWant or lastWant.action ~= arrivedFor) then arrivedFor = nil end
 	if not N.api.available() then
 		N.state = (arrivedFor and lastWant and arrivedFor == lastWant.action) and { status = "arrived", action = arrivedFor } or { status = "unavailable", action = lastWant and lastWant.action }
@@ -258,6 +341,8 @@ end
 
 function N.Owned() return owned and { action = owned.action, map = owned.map, x = owned.x, y = owned.y } or nil end
 function N.Status() return N.state.status end
+--- When NOW has a place but Codex chose not to point at it: { action, reason, distance } (reasons: see N.REASON_TEXT), else nil. For the report.
+function N.NoPin() return N.noPin end
 
 --- Test/diagnostic reset of the in-memory state only.
 function N._Reset() owned, arrivedFor, dismissedFor, quietUntil, sinceCheck, lastWant = nil, nil, nil, 0, 0, nil; N.state = { status = "idle" } end

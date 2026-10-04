@@ -186,6 +186,11 @@ local function describe(a, plan, ctx, icon)
 	else
 		it.title = name
 	end
+	-- when Codex will not point at the destination (or only as a straight line), say why in the player's words; the arrow and the waypoint follow the same assessment
+	if ns.Navigation and ns.Navigation.Assess and a.type ~= "FLIGHT" then
+		local as = ns.Navigation.Assess(a, ctx)
+		if Pl.Locate(a) and (as.reason or as.straight) then it.navNote, it.navReason = as.text, as.reason end
+	end
 	local why = ns.PlanAdapter.Sentences(plan, a)
 	it.why = why[1]
 	if why[1] == "Best available option" then it.why = nil end

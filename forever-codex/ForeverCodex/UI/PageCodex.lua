@@ -62,6 +62,7 @@ local function build(page)
 	for i = 1, MAX_ROWS do c.nowRows[i] = W.ProgressRow(c.nowBox) end
 	c.nowMore = W.Line(c.nowBox, 11, W.DIM, "LEFT")
 	c.nowInfo = W.Line(c.nowBox, 11, W.SOFT_GREEN, "LEFT")
+	c.nowNav = W.Line(c.nowBox, 11, W.DIM, "LEFT", true)             -- "no arrow: ..." / "straight line only" (Navigation safety)
 	c.nowDivider = W.Divider(c.nowBox)
 	c.thenFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")
 	c.thenWhereFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")      -- "496 yd - Nazgrel" under the THEN line
@@ -194,6 +195,8 @@ local function drawNow(c, card)
 	c.nowMore:SetText(left > 0 and string.format("+ %d more", left) or "")
 	st:Add(c.nowMore, 2)
 	st:Add(c.nowInfo, 3)
+	c.nowNav:SetText(n and n.navNote or "")
+	st:Add(c.nowNav, 3)
 	if W.TextOf(c.thenFS) ~= "" then
 		c.nowDivider:ClearAllPoints()
 		c.nowDivider:SetPoint("TOPLEFT", box, "TOPLEFT", box.insetX, -(st.y + 1))
