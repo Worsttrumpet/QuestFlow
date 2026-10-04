@@ -153,7 +153,14 @@ function S.Record(read, ctx)
 		local key = keyOf(s.id, s.name, s.rank, s.levelReq)
 		local e = st.entries[key]
 		if s.category == "used" then
-			if e then e.learned = true end       -- the trainer itself says this is already known
+			-- the trainer itself says this is already known. OBSERVED on Forever: a spell shown as already known reports level requirement 0, so its key (which contains the level) does not
+			-- match the entry stored while it was still to learn; the same name with the same cost (or the same spell id) is the same service.
+			if not e then
+				for _, e2 in pairs(st.entries) do
+					if e2.name == s.name and not e2.learned and ((s.id and e2.id == s.id) or (s.cost and e2.cost == s.cost)) then e = e2 break end
+				end
+			end
+			if e then e.learned = true end
 		elseif s.category == "available" or s.category == "unavailable" then
 			if not e then e = {}; st.entries[key] = e end
 			e.id, e.name, e.rank, e.rankNum = s.id, s.name, s.rank, rankNumber(s.rank)

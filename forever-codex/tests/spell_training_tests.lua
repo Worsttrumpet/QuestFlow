@@ -302,3 +302,36 @@ do
 	check(titles(ns2) ~= "", "the Classic order still works")
 	resetClient()
 end
+
+section("spell training: a spell the trainer later shows as already known (level requirement 0, as on Forever) is matched by name and cost and leaves the list")
+do
+	resetClient()
+	_G.GetTrainerServiceInfo = function(i) local s = T.services[i]; if s then return s.name, s.cat or "available", 132000 + i end end
+	T.services = { { name = "Arcane Shot", cat = "available", cost = 600, req = 8 }, { name = "Arcane Shot", cat = "unavailable", cost = 2100, req = 24 } }
+	T.noIds = true
+	local ns = rogue()
+	H.world().char.level = 25
+	visit(ns)
+	check((titles(ns)):find("Arcane Shot|6s", 1, true) ~= nil, "(setup) the lowest rank is listed")
+	T.services = { { name = "Arcane Shot", cat = "used", cost = 600, req = 0 }, { name = "Arcane Shot", cat = "available", cost = 2100, req = 24 } }
+	visit(ns, "TRAINER_UPDATE")
+	check((titles(ns)):find("Arcane Shot|21s", 1, true) ~= nil and not (titles(ns)):find("|6s", 1, true), "shown as used with level 0: the learned rank leaves and the next one is listed  [" .. titles(ns) .. "]")
+	local n = 0
+	for _ in pairs(ns.Prefs.Char().spellTraining.entries) do n = n + 1 end
+	check(n == 2, "no stray entry was created for the used row")
+	resetClient()
+end
+
+section("slash: /codex spells, professions and feedback status open the copyable window (no screenshot needed)")
+do
+	resetClient(); BASE()
+	local ns = rogue()
+	visit(ns)
+	H.slash("spells")
+	check(ns.UI.report and ns.UI.report.box.__text:find("SPELL TRAINING", 1, true) and ns.UI.report.box.__text:find("returns [", 1, true), "/codex spells puts the text, with the raw trainer rows, in the copyable window")
+	H.slash("professions")
+	check(ns.UI.report.box.__text:find("PROFESSIONS", 1, true) ~= nil, "/codex professions does too")
+	H.slash("feedback status")
+	check(ns.UI.report.box.__text:find("FEEDBACK", 1, true) ~= nil and #ns.errors == 0, "and /codex feedback status")
+	resetClient()
+end

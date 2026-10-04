@@ -44,3 +44,6 @@ A profession-trainer check relies on `IsTradeskillTrainer`; when it is absent th
 and `GetTrainerServiceItemLink` is nil for every service. 0.7.3 therefore reads each return after the name by what it is (a known category string in any case = category, another non-empty string = rank, a number = icon),
 keys a spell without an id as `N:<name>|<rank>|L<level requirement>` and orders the ranks of one spell by level requirement (only the lowest unlearned one is listed). **Limitation:** with no spell id and no spellbook API,
 Codex learns that a spell was trained only from the trainer window itself (`TRAINER_UPDATE` after the purchase, or the next visit shows it as used); it cannot notice a spell learned some other way while no trainer window is open.
+
+0.7.4: a spell the trainer shows as already known reports level requirement 0 on Forever (and the trainer window shows its rank text, e.g. "Aspect of the Hawk (Rank 2) - Already known"), so a stored entry is matched to a "used" row by name and cost (or spell id), not by key.
+`/codex spells`, `/codex professions` and `/codex feedback status|list` now open the copyable report window (Ctrl+C) instead of printing to chat.

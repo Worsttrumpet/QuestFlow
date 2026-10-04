@@ -32,6 +32,16 @@ local function helpLines()
 	say("  /codex where | reset | help")
 end
 
+--- Shows lines in the copyable window (the same one /codex report uses: the text is selected, press Ctrl+C, paste it anywhere); in chat when the window cannot be built.
+local function showLines(lines)
+	local text = table.concat(lines, "\n")
+	if ns.UI and ns.UI.ShowReport then
+		local ok = pcall(ns.UI.ShowReport, text)
+		if ok then say("Opened a window with the text selected: press Ctrl+C, then paste it.") return end
+	end
+	for _, l in ipairs(lines) do say(l) end
+end
+
 local function printNext()
 	local plan = ns.State.Recompute()
 	local a = plan and plan.next
@@ -210,16 +220,18 @@ local function handle(msg)
 		if restLower == "restore" then
 			say(string.format("Brought back %d spell(s) marked Don't Want to Learn.", ns.SpellTraining.RestoreAll()))
 		else
-			for _, l in ipairs(ns.SpellTraining.ReportLines(ns.State.ctx)) do say(l) end
-			say("/codex spells restore brings back spells you marked Don't Want to Learn.")
+			local lines = ns.SpellTraining.ReportLines(ns.State.ctx)
+			lines[#lines + 1] = "/codex spells restore brings back spells you marked Don't Want to Learn."
+			showLines(lines)
 		end
 	elseif cmd == "feedback" then
 		if restLower == "status" then
-			for _, l in ipairs(ns.Feedback.ReportLines()) do say(l) end
+			showLines(ns.Feedback.ReportLines())
 		elseif restLower == "list" then
 			local list = ns.Feedback.Stored()
-			say(#list == 0 and "No feedback reports are stored." or (#list .. " feedback report(s) stored locally:"))
-			for _, r in ipairs(list) do say("  " .. r.id .. " | " .. tostring(r.category) .. " | not sent (Codex cannot send reports)") end
+			local lines = { #list == 0 and "No feedback reports are stored." or (#list .. " feedback report(s) stored locally:") }
+			for _, r in ipairs(list) do lines[#lines + 1] = "  " .. r.id .. " | " .. tostring(r.category) .. " | not sent (Codex cannot send reports)" end
+			showLines(lines)
 		else
 			ns.UI.OpenFeedback({ from = "WINDOW" })
 		end
@@ -230,8 +242,9 @@ local function handle(msg)
 		elseif a == "restore" then
 			say(string.format("Brought back %d hidden profession reminder(s).", ns.Professions.RestoreAll()))
 		else
-			for _, l in ipairs(ns.Professions.ReportLines(ns.State.ctx)) do say(l) end
-			say("/codex professions hide fishing|cooking|firstaid  or  restore")
+			local lines = ns.Professions.ReportLines(ns.State.ctx)
+			lines[#lines + 1] = "/codex professions hide fishing|cooking|firstaid  or  restore"
+			showLines(lines)
 		end
 	elseif cmd == "help" or cmd == "?" then
 		helpLines()
