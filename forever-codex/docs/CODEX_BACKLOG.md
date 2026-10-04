@@ -15,7 +15,7 @@ searched for in code. No feature was implemented while writing this.
 
 ### Counts (as of this audit)
 
-75 status-tagged items: BUILT 19, PARTIAL 22, UNBUILT 23, DEFERRED 4, NEEDS VERIFICATION 6, REJECTED / SUPERSEDED 1, IN PROGRESS 0. Plus 8 integration rows (H-02), 5 business / product ideas (L-01 to L-05, all
+75 status-tagged items: BUILT 19, PARTIAL 23, UNBUILT 22, DEFERRED 4, NEEDS VERIFICATION 6, REJECTED / SUPERSEDED 1, IN PROGRESS 0. Plus 8 integration rows (H-02), 5 business / product ideas (L-01 to L-05, all
 undecided) and 10 rejected / superseded entries (O-01 to O-10): 98 recorded entries in total. (C-12 was added after the 0.6.9 playtests; the audit itself dates from 0.6.5.) "BUILT" does not mean real-client validated; each item says what was and was not validated.
 
 ## Status legend
@@ -366,7 +366,7 @@ and real-client validation of the recommendations.
 ## E. Spell, training, profession and gathering intelligence
 
 ### E-01 Trainer / spell / "new ability" intelligence
-**Status:** UNBUILT (no probe exists)
+**Status:** PARTIAL (0.7.1: SPELL TRAINING section built on the trainer window the player opens, plus a PROFESSIONS status card; see `CODEX_SPELL_TRAINING.md` and `CODEX_PROFESSIONS.md`. Real-client behaviour of the trainer, spell and profession APIs is NOT yet proven; trainer locations and "what is new at this level" without a trainer visit are still unbuilt. The text below is the pre-0.7.1 audit.)
 * **Discussed:** use information (including what What's Training? shows) to produce contextual decisions: new abilities available, training cost, trainer location, "you're already passing a
   trainer", linkage to NEW FOR YOU, without duplicating What's Training?.
 * **What exists:** an inert `trainers` / `classProgression` system and TRAINER / CLASS_PROGRESSION action types (greyed, cannot be switched on); `Knowledge.lua` says "Codex cannot yet see

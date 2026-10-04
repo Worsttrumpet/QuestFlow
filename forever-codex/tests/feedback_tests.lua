@@ -202,5 +202,5 @@ do
 	local src = H.readFile(H.addonDir .. "/Planner.lua") .. H.readFile(H.addonDir .. "/PlanAdapter.lua") .. H.readFile(H.addonDir .. "/Engine.lua")
 	check(not src:find("Feedback", 1, true), "the planner, adapter and engine do not reference Feedback")
 	local fb = H.readFile(H.addonDir .. "/Feedback.lua"):gsub("%-%-[^\n]*", "")
-	check(not fb:find("SendChatMessage", 1, true) and not fb:find("SendAddonMessage", 1, true) and not fb:find("%f[%w_]io%.") and not fb:find("%f[%w_]os%.execute") and not fb:find("HttpRequest", 1, true), "Feedback.lua calls no chat, addon-message, file or network function")
+	check(not fb:find("SendChatMessage", 1, true) and not fb:find("SendAddonMessage", 1, true) and not fb:find("%f[%w_]io%.") and not fb:find("%f[%w_]os%.execute"), "Feedback.lua calls no chat, addon-message or file function (it only LOOKS for network functions, by name)")
 end

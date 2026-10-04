@@ -18,30 +18,22 @@ Scenario:  A0 Scorpid / Vile / Cactus, REAL DATA AS IT IS   [REVIEW]
            Level 4 in the scorpid area; Cactus Apples done, Scorpid tails 3/10, Vile Familiars 0/12. ATT has NO objective coordinates for these quests.
 Character: Level 4 Orc Warrior (Horde) | strategy efficient | route zone auto | position map 1411 (46.5, 58.4)
 
-NOW       Accept: The Great Outdoors   [ACCEPT, 364 yd from you, approx]
-ALSO DO   Accept: The Adventurer   [ACCEPT, 365 yd from you, approx]
-THEN      Accept: Vanquish the Betrayers   [ACCEPT, 462 yd from you, known]
+NOW       Continue: Sting of the Scorpid   [OBJECTIVE, distance unknown from you]
+ALSO DO   (none)
+THEN      (none)
 Reminders (no usable location, never routed): Continue: Sting of the Scorpid; Continue: Vile Familiars
+No NOW: LOCAL_WORK
 
 Selected stops:
-  1. Accept: The Great Outdoors + Accept: The Adventurer   (364 yd)
-  2. Accept: Vanquish the Betrayers + Accept: This Fruit Could Bite Back   (112 yd)
-  3. Accept: Carry Your Weight   (114 yd)
 
 Planner diagnostics:
-  Candidates: 95 located (+6 optional hints, 2 without a location)
-  Stops: 41   Considered: 8   Sequences scored: 400   Selected stops: 3
-  Estimated sequence time: 159s (about 84s walking + 75s doing; walking = yards / 7, an estimate)
-  Sequence value (net policy points, not XP): 67.3   ALSO DO interruption: 0s   Unknown legs: 0
+  Candidates: 17 located (+84 optional hints, 2 without a location)
+  Stops: 13   Considered: 7   Sequences scored: 259   Selected stops: 0
+  Estimated sequence time: 0s (about 0s walking + 0s doing; walking = yards / 7, an estimate)
+  Sequence value (net policy points, not XP): 0.0   ALSO DO interruption: -   Unknown legs: 0
 
 Reason summary:
-  - 2 actions share the first stop, so they cost one trip
-  - ALSO DO shares the first stop (no extra walking)
-  - a turn-in is ready but waits: starting with a turn-in would score 66.5 (this plan 67.3) and take 238s
-  - the first stop is on the way to the second (2s detour)
-
-Runners-up as the first step: Turn in: Galgar's Cactus Apple Surprise (0.8 lower); Accept: Carry Your Weight (6.6 lower); Accept: Sarkoth (7.9 lower)
-Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 541s]; Accept: A Peon's Burden [TOO_FAR 79s]; Accept: Break Sharptusk! [TOO_FAR 565s]; Turn in: Galgar's Cactus Apple Surprise [TOO_FAR 80s]; Accept: Your Place In The World [TOO_FAR 86s]; Accept: Lazy Peons [TOO_FAR 83s]
+  - nothing cleared the ALSO DO bar (silence is the default)
 
 (constants in force: timeValue 0.30/s, detour limit 30s, ALSO DO floor 5, stop radius 60 yd, chain share 0.25; none changed by this harness)
 ------------------------------------------------------------------------------
@@ -52,27 +44,27 @@ Scenario:  A1 Scorpid / Vile / Cactus, with the playtest-observed objective posi
 Character: Level 4 Orc Warrior (Horde) | strategy efficient | route zone auto | position map 1411 (46.5, 58.4)
 
 NOW       Continue: Sting of the Scorpid   [OBJECTIVE, 0 yd from you, approx]
-ALSO DO   Accept: Carry Your Weight   [ACCEPT, 517 yd from you, known]
-THEN      Accept: The Great Outdoors   [ACCEPT, 364 yd from you, approx]
+ALSO DO   Accept: Sarkoth   [ACCEPT, 238 yd from you, known]
+THEN      Turn in: Galgar's Cactus Apple Surprise   [TURN_IN, 282 yd from you, approx, assumed]
 
 Selected stops:
   1. Continue: Sting of the Scorpid   (0 yd)
-  2. Accept: The Great Outdoors + Accept: The Adventurer   (364 yd)
-  3. Accept: Vanquish the Betrayers + Accept: This Fruit Could Bite Back   (112 yd)
+  2. Turn in: Galgar's Cactus Apple Surprise + Accept: Your Place In The World   (282 yd)
+  3. Accept: Lazy Peons   (80 yd)
 
 Planner diagnostics:
-  Candidates: 97 located (+6 optional hints, 0 without a location)
-  Stops: 43   Considered: 8   Sequences scored: 400   Selected stops: 3
-  Estimated sequence time: 248s (about 68s walking + 180s doing; walking = yards / 7, an estimate)
-  Sequence value (net policy points, not XP): 63.9   ALSO DO interruption: 16.3s   Unknown legs: 0
+  Candidates: 19 located (+84 optional hints, 0 without a location)
+  Stops: 15   Considered: 8   Sequences scored: 400   Selected stops: 3
+  Estimated sequence time: 217s (about 52s walking + 165s doing; walking = yards / 7, an estimate)
+  Sequence value (net policy points, not XP): 55.5   ALSO DO interruption: 14.6s   Unknown legs: 0
 
 Reason summary:
-  - ALSO DO costs a 16s detour
-  - a turn-in is ready but waits: starting with a turn-in would score 66.5 (this plan 63.9) and take 238s
+  - ALSO DO costs a 15s detour
+  - a turn-in is ready but waits: starting with a turn-in would score 54.4 (this plan 55.5) and take 143s
   - the first stop is on the way to the second (0s detour)
 
-Runners-up as the first step: Turn in: Galgar's Cactus Apple Surprise (-2.6 lower); Continue: Vile Familiars (2.2 lower); Accept: Sarkoth (4.6 lower)
-Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 527s]; Accept: A Peon's Burden [TOO_FAR 79s]; Accept: Break Sharptusk! [TOO_FAR 552s]; Turn in: Galgar's Cactus Apple Surprise [TOO_FAR 80s]; Accept: Your Place In The World [TOO_FAR 86s]; Accept: Lazy Peons [TOO_FAR 83s]
+Runners-up as the first step: Accept: Sarkoth (-3.9 lower); Accept: Lazy Peons (-1.5 lower); Turn in: Galgar's Cactus Apple Surprise (1.1 lower)
+Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 544s]; Accept: A Peon's Burden [TOO_FAR 37s]; Accept: Break Sharptusk! [TOO_FAR 573s]; Accept: Sharing the Land [TOO_FAR 587s]; Accept: The Hunt Begins [TOO_FAR 574s]; Accept: A Humble Task (1/2) [TOO_FAR 570s]
 
 (constants in force: timeValue 0.30/s, detour limit 30s, ALSO DO floor 5, stop radius 60 yd, chain share 0.25; none changed by this harness)
 ------------------------------------------------------------------------------
@@ -83,27 +75,27 @@ Scenario:  A2 Scorpid / Vile / Cactus, standing at the camp turn-ins   [REVIEW]
 Character: Level 4 Orc Warrior (Horde) | strategy efficient | route zone auto | position map 1411 (42.6, 67.2)
 
 NOW       Turn in: Galgar's Cactus Apple Surprise   [TURN_IN, 0 yd from you, approx, assumed]
-ALSO DO   Accept: Lazy Peons   [ACCEPT, 80 yd from you, known]
-THEN      Accept: The Great Outdoors   [ACCEPT, 645 yd from you, approx]
+ALSO DO   Accept: Wayward Weapons   [ACCEPT, 76 yd from you, approx]
+THEN      Accept: Lazy Peons   [ACCEPT, 80 yd from you, known]
 
 Selected stops:
   1. Turn in: Galgar's Cactus Apple Surprise + Accept: Your Place In The World   (0 yd)
-  2. Accept: The Great Outdoors + Accept: The Adventurer   (645 yd)
-  3. Accept: Vanquish the Betrayers + Accept: This Fruit Could Bite Back   (112 yd)
+  2. Accept: Lazy Peons   (80 yd)
+  3. Accept: Sarkoth   (219 yd)
 
 Planner diagnostics:
-  Candidates: 97 located (+6 optional hints, 0 without a location)
-  Stops: 43   Considered: 8   Sequences scored: 400   Selected stops: 3
-  Estimated sequence time: 198s (about 108s walking + 90s doing; walking = yards / 7, an estimate)
-  Sequence value (net policy points, not XP): 78.6   ALSO DO interruption: 11.9s   Unknown legs: 0
+  Candidates: 20 located (+83 optional hints, 0 without a location)
+  Stops: 16   Considered: 8   Sequences scored: 400   Selected stops: 3
+  Estimated sequence time: 103s (about 43s walking + 60s doing; walking = yards / 7, an estimate)
+  Sequence value (net policy points, not XP): 66.4   ALSO DO interruption: 10.9s   Unknown legs: 0
 
 Reason summary:
   - 2 actions share the first stop, so they cost one trip
-  - ALSO DO costs a 12s detour
+  - ALSO DO costs a 11s detour
   - the first stop is on the way to the second (0s detour)
 
-Runners-up as the first step: Accept: Lazy Peons (12.5 lower); Accept: Wayward Weapons (12.8 lower); Accept: Sarkoth (15.4 lower)
-Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 527s]; Accept: A Peon's Burden [TOO_FAR 38s]; Accept: Break Sharptusk! [TOO_FAR 552s]; Accept: Sharing the Land [TOO_FAR 553s]; Accept: The Hunt Begins [TOO_FAR 553s]; Accept: A Humble Task (1/2) [TOO_FAR 548s]
+Runners-up as the first step: Accept: Lazy Peons (0.3 lower); Accept: Wayward Weapons (0.7 lower); Accept: Sarkoth (3.2 lower)
+Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 567s]; Accept: A Peon's Burden [TOO_FAR 61s]; Accept: Break Sharptusk! [TOO_FAR 595s]; Accept: Sharing the Land [TOO_FAR 606s]; Accept: The Hunt Begins [TOO_FAR 596s]; Accept: A Humble Task (1/2) [TOO_FAR 592s]
 
 (constants in force: timeValue 0.30/s, detour limit 30s, ALSO DO floor 5, stop radius 60 yd, chain share 0.25; none changed by this harness)
 ------------------------------------------------------------------------------
@@ -114,27 +106,27 @@ Scenario:  D1 Lazy Peons density (camp), real data + illustrative objective plac
 Character: Level 4 Orc Warrior (Horde) | strategy efficient | route zone auto | position map 1411 (44.6, 68.6)
 
 NOW       Continue: Lazy Peons   [OBJECTIVE, 17 yd from you, approx]
-ALSO DO   Accept: Sarkoth   [ACCEPT, 218 yd from you, known]
-THEN      Accept: The Great Outdoors   [ACCEPT, 649 yd from you, approx]
+ALSO DO   Accept: Your Place In The World   [ACCEPT, 48 yd from you, known]
+THEN      Accept: Wayward Weapons   [ACCEPT, 142 yd from you, approx]
 
 Selected stops:
   1. Accept: Your Place In The World + Continue: Lazy Peons   (48 yd)
-  2. Accept: The Great Outdoors + Accept: The Adventurer   (664 yd)
-  3. Accept: Vanquish the Betrayers + Accept: This Fruit Could Bite Back   (112 yd)
+  2. Accept: Wayward Weapons   (94 yd)
+  3. Accept: Sarkoth   (151 yd)
 
 Planner diagnostics:
-  Candidates: 97 located (+6 optional hints, 0 without a location)
-  Stops: 43   Considered: 8   Sequences scored: 400   Selected stops: 3
-  Estimated sequence time: 313s (about 118s walking + 195s doing; walking = yards / 7, an estimate)
-  Sequence value (net policy points, not XP): 60.2   ALSO DO interruption: 15.1s   Unknown legs: 0
+  Candidates: 20 located (+83 optional hints, 0 without a location)
+  Stops: 16   Considered: 8   Sequences scored: 400   Selected stops: 3
+  Estimated sequence time: 207s (about 42s walking + 165s doing; walking = yards / 7, an estimate)
+  Sequence value (net policy points, not XP): 47.6   ALSO DO interruption: 0s   Unknown legs: 0
 
 Reason summary:
   - 2 actions share the first stop, so they cost one trip
-  - ALSO DO costs a 15s detour
-  - the first stop is on the way to the second (9s detour)
+  - ALSO DO shares the first stop (no extra walking)
+  - the first stop is on the way to the second (0s detour)
 
-Runners-up as the first step: Accept: Sarkoth (6.9 lower); Accept: A Peon's Burden (8.6 lower); Continue: Sting of the Scorpid (8.9 lower)
-Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 527s]; Accept: A Peon's Burden [TOO_FAR 32s]; Accept: Break Sharptusk! [TOO_FAR 552s]; Accept: Sharing the Land [TOO_FAR 553s]; Accept: The Hunt Begins [TOO_FAR 553s]; Accept: A Humble Task (1/2) [TOO_FAR 548s]
+Runners-up as the first step: Accept: Wayward Weapons (5.5 lower); Accept: Sarkoth (7.3 lower); Continue: Galgar's Cactus Apple Surprise (8.7 lower)
+Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 567s]; Accept: A Peon's Burden [TOO_FAR 61s]; Accept: Break Sharptusk! [TOO_FAR 595s]; Accept: Sharing the Land [TOO_FAR 606s]; Accept: The Hunt Begins [TOO_FAR 596s]; Accept: A Humble Task (1/2) [TOO_FAR 592s]
 
 (constants in force: timeValue 0.30/s, detour limit 30s, ALSO DO floor 5, stop radius 60 yd, chain share 0.25; none changed by this harness)
 ------------------------------------------------------------------------------
@@ -146,27 +138,28 @@ Character: Level 4 Orc Warrior (Horde) | strategy efficient | route zone auto | 
 
 NOW       Turn in: Lazy Peons   [TURN_IN, 306 yd from you, approx, assumed]
 ALSO DO   Turn in: Cutting Teeth   [TURN_IN, 366 yd from you, approx, assumed]
-THEN      Accept: The Great Outdoors   [ACCEPT, 360 yd from you, approx]
+THEN      Accept: Sarkoth   [ACCEPT, 337 yd from you, known]
 
 Selected stops:
   1. Accept: Your Place In The World + Turn in: Lazy Peons + Turn in: Cutting Teeth + Accept: Vile Familiars   (335 yd)
-  2. Accept: The Great Outdoors + Accept: The Adventurer   (664 yd)
-  3. Accept: Vanquish the Betrayers + Accept: This Fruit Could Bite Back   (112 yd)
+  2. Accept: Sarkoth   (186 yd)
+  3. Accept: A Peon's Burden   (429 yd)
 
 Planner diagnostics:
-  Candidates: 96 located (+6 optional hints, 0 without a location)
-  Stops: 40   Considered: 8   Sequences scored: 400   Selected stops: 3
-  Estimated sequence time: 279s (about 159s walking + 120s doing; walking = yards / 7, an estimate)
-  Sequence value (net policy points, not XP): 159.2   ALSO DO interruption: 0s   Unknown legs: 0
+  Candidates: 18 located (+84 optional hints, 0 without a location)
+  Stops: 12   Considered: 6   Sequences scored: 156   Selected stops: 3
+  Estimated sequence time: 226s (about 136s walking + 90s doing; walking = yards / 7, an estimate)
+  Sequence value (net policy points, not XP): 134.3   ALSO DO interruption: 0s   Unknown legs: 0
 
 Reason summary:
   - 4 actions share the first stop, so they cost one trip
   - ALSO DO shares the first stop (no extra walking)
   - NOW includes chain credit: turning it in makes a follow-up quest available (from ATT prerequisites, unverified)
   - chain credit 30.0 applied to Turn in: Cutting Teeth (unlocks a follow-up; ATT prerequisite data, unverified)
+  - the first stop is on the way to the second (26s detour)
 
-Runners-up as the first step: Accept: The Great Outdoors (5.4 lower); Accept: Vanquish the Betrayers (5.8 lower); Accept: Sarkoth (12.7 lower)
-Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 527s]; Accept: A Peon's Burden [TOO_FAR 30s]; Accept: Break Sharptusk! [TOO_FAR 552s]; Accept: Sharing the Land [TOO_FAR 553s]; Accept: The Hunt Begins [TOO_FAR 553s]; Accept: A Humble Task (1/2) [TOO_FAR 548s]
+Runners-up as the first step: Accept: A Peon's Burden (-9.2 lower); Accept: Sarkoth (-5.1 lower); Accept: Vanquish the Betrayers (16.6 lower)
+Rejected as ALSO DO: Accept: A Task Unfinished [TOO_FAR 507s]; Accept: Break Sharptusk! [TOO_FAR 536s]; Accept: Sharing the Land [TOO_FAR 550s]; Accept: The Hunt Begins [TOO_FAR 537s]; Accept: A Humble Task (1/2) [TOO_FAR 533s]; Accept: Swoop Hunting [TOO_FAR 556s]
 
 (constants in force: timeValue 0.30/s, detour limit 30s, ALSO DO floor 5, stop radius 60 yd, chain share 0.25; none changed by this harness)
 ------------------------------------------------------------------------------
@@ -186,8 +179,8 @@ Selected stops:
   3. Accept: Sarkoth   (151 yd)
 
 Planner diagnostics:
-  Candidates: 90 located (+6 optional hints, 0 without a location)
-  Stops: 38   Considered: 6   Sequences scored: 156   Selected stops: 3
+  Candidates: 13 located (+83 optional hints, 0 without a location)
+  Stops: 10   Considered: 4   Sequences scored: 40   Selected stops: 3
   Estimated sequence time: 102s (about 42s walking + 60s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 56.7   ALSO DO interruption: 0s   Unknown legs: 0
 
@@ -679,5 +672,5 @@ SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objective
   bridge equivalence: 22 scenarios layered, 9 as the only source (13 need ATT-only data the bridge does not read: objective areas, race lists)
 == planner evaluation: the Phase 2.5 baseline is unchanged ==
 
-3712 passed, 0 failed
+4024 passed, 0 failed
 ```
