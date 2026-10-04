@@ -234,20 +234,21 @@ end
 -- evidence about the progression it was read at: when the stamp changes (a level, a turn-in, a finished quest) a NEGATIVE observation is STALE (it may no longer be true,
 -- e.g. a quest that opens after its prerequisite is done) and is treated as unknown until the NPC is asked again. A positive observation is not undone by progress.
 -- Cached per context (one computation per recompute).
-local stampFor, stampValue, activeCtx
+local stampFor, stampValue, stampTurned, activeCtx
 
 --- The planner tells the probe which context it is planning FOR (State.ctx is still the previous one while a recompute runs), so the stamp is never one recompute late.
 function O.SetContext(ctx) activeCtx = ctx end
 
 function O.Stamp()
 	local ctx = activeCtx or (ns.State and ns.State.ctx)
-	if ctx and ctx == stampFor then return stampValue end
+	-- the turned-in count can move between two recomputes (a turn-in, then a dialog before the next recompute): the cache is valid for one context AND one count
+	local turned = ns.Journey and ns.Journey.TurnedInCount and ns.Journey.TurnedInCount() or 0
+	if ctx and ctx == stampFor and turned == stampTurned then return stampValue end
 	local level = ctx and ctx.char and ctx.char.level or "?"
 	local ready = 0
 	for _, e in pairs(ctx and ctx.log or {}) do if e.complete then ready = ready + 1 end end
-	local turned = ns.Journey and ns.Journey.TurnedInCount and ns.Journey.TurnedInCount() or 0
 	local v = tostring(level) .. ":" .. turned .. ":" .. ready
-	stampFor, stampValue = ctx, v
+	stampFor, stampValue, stampTurned = ctx, v, turned
 	return v
 end
 
@@ -332,6 +333,31 @@ end
 function O.QuestEvidence(qid)
 	local s = store()
 	return s and type(qid) == "number" and s.quests[qid] or nil
+end
+
+--- Quests the client is offering NOW, by what OfferProbe recorded: positive evidence (QUEST_DETAIL or a listed available quest that carried its id) that was read at the
+-- character's CURRENT progression (the stamp has not moved since: no level, turn-in or newly finished quest) and that no newer complete listing from the same NPC
+-- contradicts. Returns { { quest, title, npcName, npcId, via, last } } sorted by id. Read-only: the quest log and completed quests are filtered by the caller. Never invents a
+-- location (the record has none) and never names a quest the client did not give a title for.
+function O.FreshOffers(ctx)
+	local s = store()
+	local out = {}
+	if not s then return out end
+	if ctx then activeCtx = ctx end
+	local stamp = O.Stamp()
+	local ids = {}
+	for qid in pairs(s.quests) do ids[#ids + 1] = qid end
+	table.sort(ids)
+	for _, qid in ipairs(ids) do
+		local r = s.quests[qid]
+		if type(r.title) == "string" and r.title ~= "" and r.prog == stamp then
+			local ev = O.OfferEvidence(qid, r.npcId, r.npcName)
+			if ev and ev.kind == "OBSERVED" and not ev.contradicted then
+				out[#out + 1] = { quest = qid, title = r.title, npcName = r.npcName, npcId = r.npcId, via = r.via, last = r.last }
+			end
+		end
+	end
+	return out
 end
 
 --- The latest listing recorded for an NPC (by creature id, else by exact name), or nil.

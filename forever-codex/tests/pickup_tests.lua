@@ -120,3 +120,128 @@ do
 	check(not ids["Q:10:ACCEPT"] and not ids["Q:11:ACCEPT"] and not ids["Q:12:ACCEPT"] and not ids["Q:13:ACCEPT"] and not ids["Q:14:ACCEPT"], "a Warrior-only, Alliance-only, Orc-only, too-high-level and prerequisite-locked quest are still filtered for this Horde Rogue")
 	check(ids["Q:15:ACCEPT"] ~= nil, "and the Rogue quest is offered")
 end
+
+-- ================================================================ Fix 3: fresh offers are a candidate source
+
+local function detail(ns, qid, title, npc, npcId)
+	stubNpc(npc, npcId)
+	_G.GetQuestID = function() return qid end
+	_G.GetTitleText = function() return title end
+	ns.OfferProbe.OnEvent("QUEST_DETAIL")
+	_G.GetQuestID, _G.GetTitleText = nil, nil
+end
+local function listing(ns, entries, npc, npcId)
+	stubNpc(npc, npcId)
+	_G.C_GossipInfo = { GetAvailableQuests = function() return entries end, GetActiveQuests = function() return {} end, GetOptions = function() return {} end }
+	ns.OfferProbe.OnEvent("GOSSIP_SHOW")
+end
+local function offeredIn(ns, qid)
+	local n, found = 0, nil
+	for _, a in ipairs(ns.State.plan.reminders) do if a.quest == qid and a.offered then n = n + 1; found = a end end
+	return n, found
+end
+
+section("offers: a quest the client offers through QUEST_DETAIL becomes an 'offered here' action even though no pack knows it, with no location")
+do
+	local ns = world({ NEAR }, nil)
+	check(select(1, offeredIn(ns, 94001)) == 0, "(setup) nothing offered yet")
+	detail(ns, 94001, "What Comes Next", "Valennia Stormfist", 8001)
+	ns.State.Recompute()
+	local n, a = offeredIn(ns, 94001)
+	check(n == 1 and a.kind == "ACCEPT" and a.name == "What Comes Next" and a.giver == "Valennia Stormfist", "an ACCEPT action named by the client's title and the NPC who offered it")
+	check(a.target == nil and a.noLocation == true and ns.Planner.Locate(a) == nil, "it has NO target: no coordinate was invented (the offer record carries none)")
+	check(a.state == "AVAILABLE" and a.stateWhy == "CLIENT_OFFER", "its availability is the client's own offer")
+	local c = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	local row
+	for _, r in ipairs(c.also) do if r.quest == 94001 then row = r end end
+	check(row and row.title == "Accept What Comes Next" and row.npc == "Valennia Stormfist" and row.offered and row.why == "Offered to you by Valennia Stormfist.", "ALSO PICK UP shows it with the NPC and no place")
+	check(nowId(ns) == "Q:1:ACCEPT", "NOW is unchanged: the offer is an extra, not a re-ranking")
+	check(#ns.errors == 0, "no errors")
+	clearApis()
+end
+
+section("offers: with nothing else to route, an offered quest is the NOW card (guidance: the NPC, no place, no arrow)")
+do
+	local ns = world({}, nil)
+	detail(ns, 94002, "The Earthen Ring", "Valennia Stormfist", 8001)
+	ns.State.Recompute()
+	local c = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	check(ns.State.plan.now == nil and c.guidance == true and c.now.title == "Accept The Earthen Ring" and c.now.kind == "ACCEPT", "the card names the offered quest instead of 'Nothing to recommend'")
+	check(c.now.who == "Valennia Stormfist" and c.now.detail:find("no arrow", 1, true) ~= nil, "with the NPC and an honest 'no arrow'")
+	check(ns.Navigation.Target() == nil and H.world().waypointCalls == 0, "no waypoint or arrow")
+	clearApis()
+end
+
+section("offers: a complete available list from an NPC works the same, and repeated events never duplicate it")
+do
+	local ns = world({ NEAR }, nil)
+	for _ = 1, 4 do listing(ns, { { questID = 94003, title = "Return to Valanaar" } }, "Hawk-Eye", 8002) end
+	for _ = 1, 3 do detail(ns, 94003, "Return to Valanaar", "Hawk-Eye", 8002) end
+	ns.State.Recompute(); ns.State.Recompute()
+	check(select(1, offeredIn(ns, 94003)) == 1, "seven events and two recomputes: exactly ONE candidate for the quest")
+	local count = 0
+	for _, l in ipairs({ ns.State.plan.reminders, ns.State.plan.inProgress }) do for _, a in ipairs(l) do if a.quest == 94003 then count = count + 1 end end end
+	check(count >= 1 and select(1, offeredIn(ns, 94003)) == 1, "(and the plan lists it once as a reminder)")
+	local rows = 0
+	for _, r in ipairs(ns.Presenter.Card(ns.State.plan, ns.State.ctx).also) do if r.quest == 94003 then rows = rows + 1 end end
+	check(rows == 1, "one ALSO PICK UP row")
+	clearApis()
+end
+
+section("offers: accepting the quest moves it into the normal active pipeline; a turn-in then a new offer works; a quest a pack knows is not duplicated")
+do
+	local ns = world({ NEAR }, nil)
+	detail(ns, 94004, "What Comes Next", "Valennia Stormfist", 8001)
+	ns.State.Recompute()
+	check(select(1, offeredIn(ns, 94004)) == 1, "(setup) offered")
+	-- the player accepts it: it is in the quest log now
+	local W = H.world()
+	W.log[#W.log + 1] = { questID = 94004, title = "What Comes Next", complete = false }
+	W.objectives = { [94004] = { { text = "Speak with Halaan Hawk-Eye", type = "event", finished = false, numFulfilled = 0, numRequired = 1 } } }
+	ns.State.Recompute()
+	check(select(1, offeredIn(ns, 94004)) == 0, "once accepted it is no longer an offer")
+	local active
+	for _, l in ipairs({ ns.State.plan.reminders, ns.State.plan.inProgress, ns.State.plan.objectives }) do for _, a in ipairs(l) do if a.quest == 94004 and a.kind == "OBJECTIVE" then active = a end end end
+	check(active and active.objectiveState and active.objectiveState.list[1].text == "Speak with Halaan Hawk-Eye", "it is an ACTIVE objective now, with the quest log's own words (the normal pipeline)")
+	-- it is completed and handed in: the progression moves on, and the next quest the NPC offers appears
+	W.log = {}
+	W.completed[94004] = true
+	ns.Journey.OnQuestTurnedIn(94004, 100)
+	ns.State.Recompute()
+	check(select(1, offeredIn(ns, 94004)) == 0, "the handed-in quest is not offered again")
+	detail(ns, 94005, "The Anchors of Zephras", "Halaan Hawk-Eye", 8003)
+	ns.State.Recompute()
+	check(select(1, offeredIn(ns, 94005)) == 1, "the follow-up the next NPC offers enters the pipeline")
+	-- a quest a pack knows already has its normal ACCEPT action: the offer source adds nothing
+	local ns2 = world({ rec(300, "Known Quest", 0.6, 0.5, { giverNpc = 8100, giverName = "Known Giver" }) }, nil)
+	detail(ns2, 300, "Known Quest", "Known Giver", 8100)
+	ns2.State.Recompute()
+	local copies = 0
+	for _, l in ipairs({ ns2.State.plan.reminders, ns2.State.plan.sequence }) do for _, a in ipairs(l) do if a.quest == 300 and a.kind == "ACCEPT" then copies = copies + 1 end end end
+	check(select(1, offeredIn(ns2, 300)) == 0 and copies == 1, "a quest the data knows is not duplicated by its offer")
+	clearApis()
+end
+
+section("offers: an offer is only current at the progression it was seen at, and a newer complete listing that omits it withdraws it")
+do
+	local ns = world({ NEAR }, nil)
+	detail(ns, 94006, "Stale Soon", "Valennia Stormfist", 8001)
+	ns.State.Recompute()
+	check(select(1, offeredIn(ns, 94006)) == 1, "(setup) offered")
+	H.world().char.level = 11                              -- the character moved on
+	ns.State.Recompute()
+	check(select(1, offeredIn(ns, 94006)) == 0, "a level later the old offer is no longer treated as current")
+	H.world().char.level = 10
+	ns.State.Recompute()
+	local ns2 = world({ NEAR }, nil)
+	detail(ns2, 94007, "Withdrawn", "Valennia Stormfist", 8001)
+	listing(ns2, {}, "Valennia Stormfist", 8001)         -- the same NPC, asked again at the same progression, lists nothing
+	ns2.State.Recompute()
+	check(select(1, offeredIn(ns2, 94007)) == 0, "the same NPC now listing nothing withdraws the offer")
+	local ns3 = world({ NEAR }, nil)
+	detail(ns3, 94008, "Already Done", "Valennia Stormfist", 8001)
+	H.world().completed[94008] = true
+	ns3.State.Recompute()
+	check(select(1, offeredIn(ns3, 94008)) == 0, "a quest already completed is never offered")
+	clearApis()
+end

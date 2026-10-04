@@ -318,6 +318,19 @@ local function addedUnknown(id, ctx)
 	}), id, nil, ctx, nil)
 end
 
+--- A quest the client is OFFERING that no pack knows (it exists only as OfferProbe evidence): an "offered here" pickup with NO location. The client gave an id, a title and
+-- the NPC who offered it, nothing else, so there is no coordinate, no level, no requirement and no objective text; none is guessed.
+local function offeredAction(o, ctx)
+	local a = attach(R.NewAction({
+		id = "Q:" .. o.quest .. ":ACCEPT", type = "QUEST", kind = "ACCEPT", quest = o.quest, skipKey = "Q:" .. o.quest, name = o.title, title = "Accept: " .. o.title,
+		giver = o.npcName, offered = true, offerVia = o.via, noLocation = true, src = "client", verified = false,
+		lines = { "The game is offering this quest" .. (o.npcName and (" (" .. o.npcName .. ")") or "") .. ". It is not in Codex data, so there is no location to show." },
+	}), o.quest, nil, ctx, nil)
+	-- the client's own offer is the availability evidence (a quest no pack knows would otherwise be state UNKNOWN / NO_DATA and not plannable)
+	a.state, a.stateWhy = "AVAILABLE", "CLIENT_OFFER"
+	return a
+end
+
 function Q.Generate(ctx, env)
 	local out = {}
 	local stats = env.stats
@@ -370,6 +383,15 @@ function Q.Generate(ctx, env)
 	for id in pairs(added) do
 		if not R.Quest(id) and not ctx.log[id] and skipped["Q:" .. id] ~= true then
 			out[#out + 1] = addedUnknown(id, ctx)
+		end
+	end
+	-- Quests the client is offering right now that no pack knows (one action per quest id, however many times the dialog fired).
+	if ns.OfferProbe and ns.OfferProbe.FreshOffers then
+		for _, o in ipairs(ns.OfferProbe.FreshOffers(ctx)) do
+			local id = o.quest
+			if not R.Quest(id) and not ctx.log[id] and not added[id] and skipped["Q:" .. id] ~= true then
+				if ctx.isCompleted(id) then bump(stats, "completed") else out[#out + 1] = offeredAction(o, ctx) bump(stats, "offered") end
+			end
 		end
 	end
 	return out

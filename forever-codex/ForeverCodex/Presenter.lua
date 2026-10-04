@@ -246,18 +246,39 @@ function Pr.Guidance(plan, ctx)
 	return it
 end
 
+--- OFFERED HERE: quests the game is offering (OfferProbe evidence, no pack knows them) that have no location. As ALSO PICK UP rows: the NPC who offered them, never a place.
+function Pr.Offers(plan)
+	local out = {}
+	for _, a in ipairs(plan and plan.reminders or {}) do
+		if a.offered and a.quest then
+			out[#out + 1] = { kind = "action", title = "Accept " .. questName(a), npc = a.giver, verb = "ACCEPT", quest = a.quest, offered = true,
+				why = a.giver and ("Offered to you by " .. a.giver .. ".") or "Offered to you by the game." }
+		end
+	end
+	return out
+end
+
 function Pr.Card(plan, ctx)
 	local card = { reminders = {} }
 	card.questItems = Pr.QuestItems(plan)
 	for _, a in ipairs(plan and plan.reminders or {}) do
-		if #card.reminders < 3 then card.reminders[#card.reminders + 1] = questName(a) end
+		if not a.offered and #card.reminders < 3 then card.reminders[#card.reminders + 1] = questName(a) end
 	end
+	local offers = Pr.Offers(plan)
 	if not (plan and plan.now) then
 		local g = Pr.Guidance(plan, ctx)
+		if not g and offers[1] then
+			-- nothing to route, but the game is offering a quest: say so, with the NPC, and no place
+			local o = offers[1]
+			g = { guidance = true, kind = "ACCEPT", quest = o.quest, title = o.title, who = o.npc, detail = o.why .. " Codex has no location for it, so there is no arrow.", icon = "star" }
+			local rest = {}
+			for i = 2, #offers do rest[#rest + 1] = offers[i] end
+			offers = rest
+		end
 		if g then
 			-- the player has a quest to work on: say what it is, in the game's own words, instead of "nothing"; the READY list does not repeat it
 			card.now, card.guidance = g, true
-			card.also = {}
+			card.also = offers
 			card.ready = {}
 			for _, r in ipairs(ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}) do
 				if r.quest ~= g.quest or g.kind ~= "TURN_IN" then card.ready[#card.ready + 1] = r end
@@ -288,6 +309,7 @@ function Pr.Card(plan, ctx)
 	card.now = describe(plan.now, plan, ctx, "star")
 	-- ALSO COMPLETE THIS: other unfinished objectives that fit with NOW (ns.Overlap), plus the planner's own ALSO DO
 	card.also = ns.Overlap and ns.Overlap.List(plan, ctx) or {}
+	for _, o in ipairs(offers) do card.also[#card.also + 1] = o end          -- the game's own offers with no location: the NPC, never a place
 	-- READY TO TURN IN: finished quests waiting for the right moment (never promoted to NOW just because they are finished)
 	card.ready = ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
 	card.slots = Pr.Slots(ctx)

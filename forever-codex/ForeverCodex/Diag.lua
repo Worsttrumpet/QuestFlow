@@ -632,6 +632,9 @@ function D.PlaytestLines(snap, lines)
 			add("old nearby list (not shown in the window): nothing")
 		end
 		if #card.reminders > 0 then add("In your log, not placed on the map: " .. table.concat(card.reminders, ", ")) end
+		for _, a in ipairs(plan.reminders or {}) do
+			if a.offered then add(string.format("OFFERED HERE (the game showed this offer at your current progression; no pack knows it; NO location): Q%s %s | by %s via %s", tostring(a.quest), tostring(a.name), tostring(a.giver or "an NPC with no name"), tostring(a.offerVia))) end
+		end
 	end
 	local nfy = ns.NewForYou and ns.NewForYou.Active()
 	add("NEW FOR YOU: " .. (nfy and (#nfy.items .. " item(s) at level " .. tostring(nfy.level)) or "hidden"))
