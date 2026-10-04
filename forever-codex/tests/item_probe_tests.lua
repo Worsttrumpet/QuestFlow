@@ -1574,3 +1574,106 @@ do
 	for _, n in ipairs(NAMES) do _G[n] = nil end
 	reset()
 end
+
+-- ---------------------------------------------------------------- report: availability and location evidence for the plan's pickups (diagnostics only)
+section("report: a pickup's availability evidence is explained (fresh / stale, matched by id or by name, recorder position), and nothing about the plan changes")
+do
+	local NAMES = { "C_GossipInfo", "UnitName", "UnitGUID", "GetQuestID", "GetTitleText" }
+	local ns = boot({ char = { level = 13 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	for _, n in ipairs(NAMES) do _G[n] = nil end
+	local O, Pl, D = ns.OfferProbe, ns.Planner, ns.Diag
+	local function reset() ForeverCodexDB.offers = nil; ForeverCodexDB.items = nil end
+	local function stubNpc(name, id)
+		_G.UnitName = function(u) return u == "npc" and name or nil end
+		_G.UnitGUID = function(u) return u == "npc" and id and ("Creature-0-1-2-3-" .. id .. "-ABCDEF") or nil end
+	end
+	local function gossip(avail)
+		_G.C_GossipInfo = { GetAvailableQuests = function() return avail end, GetActiveQuests = function() return {} end, GetOptions = function() return {} end }
+		O.OnEvent("GOSSIP_SHOW")
+	end
+	local function e(id, title) return { questID = id, title = title, questLevel = 11 } end
+	-- records shaped like the observed pack: a player POSITION at a recorder checkpoint (no giver coordinate), a giver id and name, no prerequisite field
+	ForeverCodex.RegisterPack("quests", "observed:diag", { meta = { src = "observed", verified = true, priority = 100, label = "diag fixture" }, zones = {}, quests = {
+		[93065] = { id = 93065, name = "Prepare for Battle", level = 12, objectives = { "0/1 Find Valennia on the Road" }, giverNpc = 253844, giverName = "Valennia Stormfist", pos = { map = 9001, x = 0.51, y = 0.5 } },
+		[92646] = { id = 92646, name = "Confront Lorthuna", level = 12, objectives = { "1/1 Confront Lorthuna" }, giverNpc = 251968, giverName = "Ayessa Dawnsinger", pos = { map = 9001, x = 0.52, y = 0.5 } },
+		[94013] = { id = 94013, name = "Taming the Beast", level = 10, objectives = { "Tame a Vuldren" }, giverNpc = 252389, giverName = "Quel'ana Quickgale", pos = { map = 9001, x = 0.53, y = 0.5 } },
+	} })
+	local W = H.world()
+	W.log, W.objectives, W.completed = {}, {}, {}
+	ns.Prefs.FinishSetup()
+	reset()
+	ns.State.Recompute()
+	local function pickup(id, name, giver) return { kind = "ACCEPT", quest = id, id = "Q:" .. id .. ":ACCEPT", title = "Accept: " .. name, giver = giver } end
+	local function text(a, role) return table.concat(D.PickupEvidenceLines(a, role or "NOW"), "\n") end
+	local function has(s, needle) return s:find(needle, 1, true) ~= nil end
+	local stampBefore = O.Stamp()
+
+	-- UNKNOWN: never asked anyone. The report says UNKNOWN and does not imply availability is proven.
+	local t0 = text(pickup(93065, "Prepare for Battle", "Valennia Stormfist"))
+	check(has(t0, "actionability: UNKNOWN") and has(t0, "planner offer state: UNKNOWN") and has(t0, "availability is not proven either way"), "1: a pickup with no client evidence is reported UNKNOWN, 'not proven either way'")
+	check(has(t0, "positive client offer: none") and has(t0, "negative client evidence: none") and has(t0, "no dialog recorded for this giver"), "1: no positive offer, no negative evidence, no dialog for the giver")
+	check(has(t0, "why it can be recommended: availability is UNKNOWN and the planner allows unknown pickups"), "1: it says why an UNKNOWN pickup is allowed (existing policy)")
+
+	-- the recorder position is a player position, never an NPC coordinate; the pack's 'verified' is explained, not relabelled
+	check(has(t0, "PLAYER's position at a recorder checkpoint") and has(t0, "NOT an NPC coordinate") and has(t0, "approximate"), "5: the location is reported as the recorder's PLAYER position, not an NPC coordinate")
+	check(not has(t0, "giver coordinate from observed"), "5: and is never described as a giver coordinate")
+	check(has(t0, "observed-pack record: it carries no progression stamp and no timestamp"), "B: the observed-pack record's missing stamp / timestamp is stated")
+	check(has(t0, "observed:diag (src=observed, verified=yes)") and has(t0, "does NOT mean the position is an NPC's position"), "D: the layer is named and 'verified=yes' is explained as 'recorded on Forever', not 'position verified'")
+	check(has(t0, "prerequisites in the data: none known") and has(t0, "not evidence that there is none"), "the missing prerequisite data is stated, without claiming there is none")
+	check(has(t0, "quest giver in quest data: 'Valennia Stormfist' (creature 253844)"), "the giver id the data names is shown")
+
+	-- a fresh EMPTY dialog with the OTHER Valennia (a different creature id, the same name): used by name, and the report says so
+	stubNpc("Valennia Stormfist", 252383)
+	gossip({})
+	local t1 = text(pickup(93065, "Prepare for Battle", "Valennia Stormfist"))
+	check(has(t1, "negative client evidence: EMPTY_AT_NPC at Valennia Stormfist") and has(t1, "FRESH: read at the current progression " .. stampBefore), "2: a fresh empty listing is reported as FRESH negative evidence at the current stamp")
+	check(has(t1, "matched BY NAME ONLY") and has(t1, "DIFFERENT creature ids") and has(t1, "(creature 252383)") and has(t1, "(creature 253844)"), "4: the by-name match and the two different creature ids are both visible")
+	check(has(t1, "current " .. stampBefore .. " | that NPC dialog was read at " .. stampBefore .. " | they MATCH: fresh"), "B: the current stamp, the dialog's stamp and the match are shown")
+	check(has(t1, "planner offer state: NOT_OFFERED"), "(consistent with the planner: a fresh negative holds it)")
+
+	-- progression changes: the same empty listing is now STALE, not fresh negative evidence
+	ns.Journey.OnQuestTurnedIn(990, 100)
+	ns.State.Recompute()
+	local stampAfter = O.Stamp()
+	check(stampAfter ~= stampBefore, "(setup) a turn-in changed the progression stamp")
+	local t2 = text(pickup(93065, "Prepare for Battle", "Valennia Stormfist"))
+	check(has(t2, "STALE: read at progression " .. stampBefore .. ", now " .. stampAfter) and not has(t2, "FRESH: read at"), "3: after progress the same empty listing is reported STALE, not fresh")
+	check(has(t2, "they DIFFER: stale") and has(t2, "planner offer state: UNKNOWN") and has(t2, "why it can be recommended"), "3: and the planner state is UNKNOWN again, with the reason UNKNOWN is allowed")
+
+	-- the same lookups for the known cases: an id match, fresh, for Q92646 (not listed) and Q94013 (empty); positive for Q92881
+	stubNpc("Ayessa Dawnsinger", 251968)
+	gossip({ e(93740, "Blood for Blood") })
+	local t3 = text(pickup(92646, "Confront Lorthuna", "Ayessa Dawnsinger"))
+	check(has(t3, "NOT_LISTED_AT_NPC at Ayessa Dawnsinger") and has(t3, "matched by creature id") and has(t3, "FRESH") and has(t3, "planner offer state: NOT_OFFERED"), "Q92646-shaped: a fresh complete list that omits it: NOT_LISTED_AT_NPC, matched by creature id, FRESH")
+	stubNpc("Quel'ana Quickgale", 252389)
+	gossip({})
+	local t4 = text(pickup(94013, "Taming the Beast", "Quel'ana Quickgale"))
+	check(has(t4, "EMPTY_AT_NPC at Quel'ana Quickgale") and has(t4, "matched by creature id") and has(t4, "FRESH"), "Q94013-shaped: a fresh empty listing, matched by creature id")
+	stubNpc("Valennia Stormfist", 252383)
+	_G.GetQuestID = function() return 92881 end
+	_G.GetTitleText = function() return "The High Elder's Request" end
+	O.OnEvent("QUEST_DETAIL")
+	_G.GetQuestID, _G.GetTitleText = nil, nil
+	local t5 = text(pickup(92881, "The High Elder's Request", "Valennia Stormfist"))
+	check(has(t5, "actionability: OBSERVED") and has(t5, "positive client offer: yes | QUEST_DETAIL") and has(t5, "creature 252383"), "Q92881-shaped: positive client offer evidence from the dialog, with the NPC")
+	check(has(t5, "location: unknown") and has(t5, "data layers that know this quest: none"), "a quest no data layer knows says so (no invented location or giver)")
+
+	-- the report sections: NOW / ALSO DO / THEN and the HELD BACK lines carry the new facts
+	local sect = table.concat(D.AvailabilityLines(), "\n")
+	check(has(sect, "NOW CANDIDATE EVIDENCE") and has(sect, "current progression stamp: " .. stampAfter), "the report has the NOW CANDIDATE EVIDENCE section with the current stamp")
+	ns.State.Recompute()
+	local opp = table.concat(D.OpportunityLines(), "\n")
+	check(has(opp, "HELD BACK") and has(opp, "matched by creature id") and has(opp, "FRESH: read at the current progression " .. stampAfter), "HELD BACK lines say how the giver's dialog was matched and that it is fresh")
+	local snap = D.Snapshot()
+	local full = table.concat(D.PlaytestLines(snap, D.Lines(snap)), "\n")
+	check(has(full, "NOW CANDIDATE EVIDENCE"), "the playtest report includes the new section")
+
+	-- nothing was changed by explaining: the stamp, the stores and the plan are as they were
+	check(O.Stamp() == stampAfter, "explaining does not change the progression stamp")
+	local before = #ForeverCodexDB.offers.obs
+	text(pickup(93065, "Prepare for Battle", "Valennia Stormfist")); D.AvailabilityLines()
+	check(#ForeverCodexDB.offers.obs == before, "explaining records no dialog and writes nothing")
+	check(#ns.errors == 0, "no errors")
+	for _, n in ipairs(NAMES) do _G[n] = nil end
+	reset()
+end

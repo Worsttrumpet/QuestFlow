@@ -377,6 +377,33 @@ function O.OfferEvidence(qid, giverNpcId, giverName)
 	return nil
 end
 
+--- DIAGNOSTICS ONLY (the playtest report; the planner never calls this and nothing here is written): the facts behind O.OfferEvidence for one pickup, so a report
+-- can say WHICH NPC listing was used, HOW it was matched to the quest's giver, and whether it was read at the current progression.
+--   giverNpcId / giverName   the giver as the QUEST DATA names it (not necessarily the NPC the client talked to)
+-- Returns { stamp, listing = { name, id, how, state, complete, at, prog, noStamp, fresh } | nil, positive = { via, npcName, npcId, last, n, prog, by } | nil, evidence = O.OfferEvidence(...) }.
+-- how: "ID" the listing's creature id equals the giver's | "NAME_IDS_DIFFER" matched by name only and BOTH creature ids are known and differ |
+--      "NAME_QUEST_HAS_NO_ID" the quest data has no creature id | "NAME_LISTING_HAS_NO_ID" the listing was recorded without a creature id.
+function O.Explain(qid, giverNpcId, giverName)
+	local s = store()
+	if not s then return nil end
+	local stamp = O.Stamp()
+	local out = { stamp = stamp, giverNpcId = giverNpcId, giverName = giverName, evidence = O.OfferEvidence(qid, giverNpcId, giverName) }
+	local ctx = O.NpcContext(giverNpcId, giverName)
+	if ctx then
+		local how
+		if ctx.id and giverNpcId and ctx.id == giverNpcId then how = "ID"
+		elseif ctx.id and giverNpcId then how = "NAME_IDS_DIFFER"
+		elseif not giverNpcId then how = "NAME_QUEST_HAS_NO_ID"
+		else how = "NAME_LISTING_HAS_NO_ID" end
+		local av = ctx.avail or {}
+		out.listing = { name = ctx.name, id = ctx.id, how = how, state = av.state, complete = av.complete, at = av.at or ctx.last, prog = av.prog,
+			noStamp = av.prog == nil, fresh = av.prog == nil or av.prog == stamp }
+	end
+	local q = O.QuestEvidence(qid)
+	if q then out.positive = { via = q.via, npcName = q.npcName, npcId = q.npcId, last = q.last, n = q.n, prog = q.prog, by = q.by } end
+	return out
+end
+
 --- Records one dialog. A dialog the client refreshes unchanged (gossip pages do) raises the repeat counter of the previous observation.
 function O.Observe(via, answers)
 	local s = store()
@@ -453,7 +480,7 @@ local function ago(t, now) return string.format("%ds ago", math.max(0, now - (t 
 function O.ReportLines()
 	local L = {}
 	local s = store()
-	L[#L + 1] = "ACTIONABILITY / OFFER EVIDENCE (read-only: what the client listed when an NPC dialog opened; not used by the planner; a quest NOT listed means only 'not listed in that dialog at that moment')"
+	L[#L + 1] = "ACTIONABILITY / OFFER EVIDENCE (what the client listed when an NPC dialog opened. The planner reads it for one thing only: a pickup whose giver was asked at your CURRENT progression and did not offer it is held back; everything else here is for the report. A quest NOT listed means only 'not listed in that dialog at that moment')"
 	if not s then L[#L + 1] = "  no saved-variables store"; return L end
 	local ev = {}
 	for _, e in ipairs(O.EVENTS) do

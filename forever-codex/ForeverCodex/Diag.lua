@@ -250,10 +250,176 @@ end
 -- Reads plan.diag.opps; nothing here feeds back into the planner.
 D.OPP_SHOW = 24            -- candidate lines printed (of the Planner.OPP_CAP kept, cheapest extra time first); the counts cover all of them
 
+-- ---------------------------------------------------------------- availability and location evidence for a pickup (report only)
+-- Everything below READS: it never feeds the planner, changes no state and uses no new client function.
+
+local function nowSecs() return type(time) == "function" and time() or 0 end
+local function ageOf(t) return t and string.format("%ds ago", math.max(0, nowSecs() - t)) or "age unknown" end
+
+local HOW_TEXT = {
+	ID = "matched by creature id",
+	NAME_IDS_DIFFER = "matched BY NAME ONLY (both creature ids are known and they differ)",
+	NAME_QUEST_HAS_NO_ID = "matched by name (the quest data has no creature id)",
+	NAME_LISTING_HAS_NO_ID = "matched by name (the dialog was recorded without a creature id)",
+}
+
+--- The giver as quest data names it, plus the OfferProbe facts for that giver: { view, ex, gnpc, gname }.
+local function giverFacts(qid)
+	local view = qid and ns.Registry.Quest(qid) or nil
+	local gnpc, gname = view and view.giverNpc, view and view.giverName
+	local ex = ns.OfferProbe and ns.OfferProbe.Explain and ns.OfferProbe.Explain(qid, gnpc, gname) or nil
+	return { view = view, ex = ex, gnpc = gnpc, gname = gname }
+end
+
+--- "creature 252383 'Valennia Stormfist'" (either part may be missing).
+local function npcText(id, name)
+	return string.format("%s%s", name and ("'" .. tostring(name) .. "'") or "name unknown", id and (" (creature " .. tostring(id) .. ")") or " (no creature id)")
+end
+
+--- How the giver's dialog was matched, and whether it was read at the CURRENT progression stamp. One short phrase for list lines.
+local function matchBrief(ex)
+	local l = ex and ex.listing
+	if not l then return "no dialog recorded for this giver" end
+	local how = HOW_TEXT[l.how] or tostring(l.how)
+	local fresh = l.noStamp and "no progression stamp stored on that dialog" or
+		(l.fresh and ("FRESH: read at the current progression " .. tostring(ex.stamp)) or ("STALE: read at progression " .. tostring(l.prog) .. ", now " .. tostring(ex.stamp) .. "; ignored by the planner until the NPC is asked again"))
+	return how .. "; dialog with " .. npcText(l.id, l.name) .. " | " .. fresh
+end
+
+local SRC_TEXT = {
+	observed = "observed pack (recorded on the Forever client by ForeverRecorder)",
+	att = "ATT static data (unverified on Forever)",
+	questiedb = "QuestieDB static baseline (unverified on Forever)",
+}
+
+--- Where the merged location of a quest comes from, in plain words. Never calls a recorder position an NPC coordinate.
+local function locationText(view)
+	local loc = view and view.loc
+	if not loc then return "unknown (no data layer has a coordinate for this quest)" end
+	local where = string.format("map %s at %.1f, %.1f", tostring(loc.map), (loc.x or 0) * 100, (loc.y or 0) * 100)
+	local text
+	if loc.kind == "player_position" then
+		text = where .. " | source: the PLAYER's position at a recorder checkpoint when a quest dialog was seen (src=" .. tostring(loc.src) .. "); this is NOT an NPC coordinate; approximate"
+	else
+		text = where .. " | source: giver coordinate from " .. (SRC_TEXT[loc.src] or tostring(loc.src)) .. (loc.verified and "" or "; unverified on Forever as the NPC's position")
+	end
+	if view.locConflict then
+		text = text .. string.format(" | a %s coordinate for a different giver (creature %s) was ignored", tostring(view.locConflict.ignored), tostring(view.locConflict.ignoredGiverNpc))
+	end
+	return text
+end
+
+--- The report lines for ONE pickup the plan currently shows (NOW / ALSO DO / THEN): what Codex can and cannot say about whether it is offered, and where its data comes from.
+function D.PickupEvidenceLines(a, role)
+	local L = {}
+	local Pl = ns.Planner
+	L[#L + 1] = string.format("  %s %s %s", role, tostring(a.id), tostring(a.title or a.name or "?"))
+	if a.kind ~= "ACCEPT" or not a.quest then
+		L[#L + 1] = "    " .. tostring(a.kind) .. ": a quest you already have; offer evidence does not apply to it"
+		return L
+	end
+	local f = giverFacts(a.quest)
+	local view, ex = f.view, f.ex
+	local state = Pl.OfferState(a)
+	local act = Pl.Actionability(a)
+	local meaning = state == "OBSERVED" and "the client has offered it to this character"
+		or state == "NOT_OFFERED" and "held back: the giver was asked at the current progression and did not offer it"
+		or "availability is not proven either way"
+	L[#L + 1] = string.format("    actionability: %s | planner offer state: %s (%s)", tostring(act), tostring(state), meaning)
+	-- positive client evidence
+	local pos = ex and ex.positive
+	if pos then
+		L[#L + 1] = string.format("    positive client offer: yes | %s | seen at %s | %d time(s), last %s | progression when seen: %s", tostring(pos.via), npcText(pos.npcId, pos.npcName), pos.n or 1, ageOf(pos.last), tostring(pos.prog or "not stored"))
+	else
+		L[#L + 1] = "    positive client offer: none (no quest dialog or available list for this quest has been recorded)"
+	end
+	-- negative client evidence
+	local ev = ex and ex.evidence
+	if ev and (ev.kind == "EMPTY_AT_NPC" or ev.kind == "NOT_LISTED_AT_NPC") then
+		L[#L + 1] = string.format("    negative client evidence: %s at %s, %s | %s", ev.kind, tostring(ev.npc), ageOf(ev.last), matchBrief(ex))
+	elseif ev and ev.newer then
+		L[#L + 1] = string.format("    negative client evidence: a NEWER dialog at %s shows %s%s", tostring(ev.npc), ev.newer, ev.contradicted and " (read at the current progression, so it contradicts the earlier offer)" or " (read at a different progression: the earlier offer stands)")
+	elseif ex and ex.listing then
+		L[#L + 1] = string.format("    negative client evidence: none | the giver's latest dialog gives no verdict on this quest (state %s%s) | %s", tostring(ex.listing.state), ex.listing.complete == false and ", incomplete list" or "", matchBrief(ex))
+	else
+		L[#L + 1] = "    negative client evidence: none | " .. matchBrief(ex)
+	end
+	-- who the data says gives it, against who the client talked to
+	local gprov = view and view.prov and (view.prov.giverNpc or view.prov.giverName)
+	L[#L + 1] = string.format("    quest giver in quest data: %s | from %s", npcText(f.gnpc, f.gname or a.giver), tostring(gprov or "no data layer"))
+	local l = ex and ex.listing
+	if l then
+		L[#L + 1] = string.format("    NPC dialog used for the hold check: %s | %s (this is the dialog the planner would use; %s)", npcText(l.id, l.name), HOW_TEXT[l.how] or tostring(l.how),
+			l.how == "NAME_IDS_DIFFER" and "the quest data's giver and the NPC you talked to have DIFFERENT creature ids" or "ids agree or one side has none")
+	else
+		L[#L + 1] = "    NPC dialog used for the hold check: none (no dialog recorded for the quest's giver by creature id or by name)"
+	end
+	-- progression stamps
+	if ex then
+		local stampLine = string.format("    progression stamp (level : turn-ins Codex saw : quests ready to hand in): current %s", tostring(ex.stamp))
+		if l then
+			stampLine = stampLine .. string.format(" | that NPC dialog was read at %s | %s", l.noStamp and "no stamp stored" or tostring(l.prog),
+				l.noStamp and "no comparison possible" or (l.fresh and "they MATCH: fresh" or "they DIFFER: stale"))
+		else
+			stampLine = stampLine .. " | no NPC dialog to compare"
+		end
+		L[#L + 1] = stampLine
+	end
+	if view and view.hasObserved then
+		L[#L + 1] = "    observed-pack record: it carries no progression stamp and no timestamp, so Codex cannot tell at which progression or when it was seen"
+	end
+	-- location, layers, prerequisites
+	L[#L + 1] = "    location: " .. locationText(view)
+	if view then
+		local layers = {}
+		for _, ly in ipairs(view.layers or {}) do layers[#layers + 1] = string.format("%s (src=%s, verified=%s)", tostring(ly.pack), tostring(ly.src), ly.verified and "yes" or "no") end
+		L[#L + 1] = "    data layers that know this quest: " .. (#layers > 0 and table.concat(layers, "; ") or "none")
+		if view.hasObserved then
+			L[#L + 1] = "    'verified=yes' on the observed pack means its title, level, objectives and giver were recorded on the Forever client. It does NOT mean the position is an NPC's position"
+		end
+		local pre = {}
+		for _, p in ipairs(view.prereq or {}) do pre[#pre + 1] = tostring(p) end
+		local preAll = {}
+		for _, p in ipairs(view.prereqAll or {}) do preAll[#preAll + 1] = tostring(p) end
+		if #pre > 0 or #preAll > 0 then
+			L[#L + 1] = "    prerequisites in the data: " .. (#pre > 0 and ("any of quest " .. table.concat(pre, ", ")) or "") .. (#preAll > 0 and (" all of quest " .. table.concat(preAll, ", ")) or "") .. " (from " .. tostring(view.prov.prereq or view.prov.prereqAll) .. ")"
+		else
+			L[#L + 1] = "    prerequisites in the data: none known (no layer lists one; that is not evidence that there is none)"
+		end
+		L[#L + 1] = string.format("    requirements in the data: level %s | quest level %s", tostring(view.req or "none"), tostring(view.level or "unknown"))
+	else
+		L[#L + 1] = "    data layers that know this quest: none (no pack has a record: no giver, location or prerequisite data)"
+	end
+	if state == "UNKNOWN" then
+		L[#L + 1] = "    why it can be recommended: availability is UNKNOWN and the planner allows unknown pickups (existing policy, with its small discounts). Only a FRESH not-offered observation at the giver's dialog holds a pickup back"
+	end
+	return L
+end
+
+--- The report section for the plan's own pickups: NOW, ALSO DO and THEN.
+function D.AvailabilityLines()
+	local L = {}
+	L[#L + 1] = "NOW CANDIDATE EVIDENCE (read-only: how the pickups the window shows got their availability and location. Nothing here changes the plan)"
+	local plan = ns.State and ns.State.plan
+	if not plan then L[#L + 1] = "  no plan yet"; return L end
+	local stamp = ns.OfferProbe and ns.OfferProbe.Stamp and ns.OfferProbe.Stamp() or "?"
+	L[#L + 1] = "  current progression stamp: " .. tostring(stamp) .. " (level : quests turned in that Codex saw : quests ready to hand in). An NPC dialog read at a different stamp is STALE."
+	local any = false
+	for _, e in ipairs({ { "NOW", plan.now }, { "ALSO DO", plan.alsoDo }, { "THEN", plan.thenAction } }) do
+		if e[2] then
+			any = true
+			for _, line in ipairs(D.PickupEvidenceLines(e[2], e[1])) do L[#L + 1] = line end
+		end
+	end
+	if not any then L[#L + 1] = "  the plan has no NOW, ALSO DO or THEN action" end
+	return L
+end
+
 local function oppProvenance(o)
 	local parts = { "evidence=" .. tostring(o.evidence or "?"), "location=" .. tostring(o.status or "?") .. (o.assumed and " (assumed)" or "") }
 	local view = o.qid and ns.Registry.Quest(o.qid) or nil
 	if view then
+		if view.loc and view.loc.kind == "player_position" then parts[#parts + 1] = "location source: recorder PLAYER position (not an NPC coordinate)" end
 		local src = view.layers and view.layers[1]
 		parts[#parts + 1] = "known from " .. (src and (tostring(src.src) .. (src.verified and ", verified=yes" or ", verified=no")) or "?")
 		if o.kind == "ACCEPT" then
@@ -271,8 +437,9 @@ local function oppProvenance(o)
 		elseif act == "IN_LOG" then
 			parts[#parts + 1] = "actionability IN_LOG (the quest is in your log)"
 		elseif ev and (ev.kind == "EMPTY_AT_NPC" or ev.kind == "NOT_LISTED_AT_NPC") then
-			parts[#parts + 1] = string.format("actionability UNKNOWN | offer evidence: %s at %s (%ds ago): %s; this does not prove the quest is unavailable", ev.kind, tostring(ev.npc),
-				math.max(0, (type(time) == "function" and time() or 0) - (ev.last or 0)), ev.kind == "EMPTY_AT_NPC" and "no available quests were listed in that dialog" or "that dialog's complete list did not include this quest")
+			parts[#parts + 1] = string.format("actionability UNKNOWN | offer evidence: %s at %s (%ds ago): %s; this does not prove the quest is unavailable | %s", ev.kind, tostring(ev.npc),
+				math.max(0, (type(time) == "function" and time() or 0) - (ev.last or 0)), ev.kind == "EMPTY_AT_NPC" and "no available quests were listed in that dialog" or "that dialog's complete list did not include this quest",
+				matchBrief(giverFacts(o.qid).ex))
 		else
 			parts[#parts + 1] = "actionability UNKNOWN (never seen offered; database presence is not client evidence)"
 		end
@@ -291,8 +458,9 @@ function D.OpportunityLines()
 		-- pickups the planner did not route because their giver, asked at this same progression, did not offer them (still known; they return when that goes stale)
 		L[#L + 1] = string.format("  HELD BACK (%d pickup(s) not routed: the giver was asked at your current progression and did not offer them; still known, they return after your next level / turn-in / finished quest, or once the client offers them):", d.held.n)
 		for _, h in ipairs(d.held.list or {}) do
-			L[#L + 1] = string.format("    %s %s | %s at %s (%ds ago)%s", tostring(h.id), tostring(h.title), tostring(h.kind or "?"), tostring(h.npc or "?"),
-				math.max(0, (type(time) == "function" and time() or 0) - (h.last or 0)), h.contradicted and " | was observed before; a newer dialog no longer lists it" or "")
+			L[#L + 1] = string.format("    %s %s | %s at %s (%ds ago)%s | %s", tostring(h.id), tostring(h.title), tostring(h.kind or "?"), tostring(h.npc or "?"),
+				math.max(0, (type(time) == "function" and time() or 0) - (h.last or 0)), h.contradicted and " | was observed before; a newer dialog no longer lists it" or "",
+				matchBrief(giverFacts(h.quest).ex))
 		end
 		if d.held.n > #(d.held.list or {}) then L[#L + 1] = string.format("    + %d more held back", d.held.n - #d.held.list) end
 	end
@@ -674,6 +842,10 @@ function D.PlaytestLines(snap, lines)
 	if ns.OfferProbe then
 		local okF, flines = pcall(ns.OfferProbe.ReportLines)
 		if okF then for _, l in ipairs(flines) do add(l) end else add("OFFERED QUESTS PROBE: error: " .. tostring(flines)) end
+	end
+	do
+		local okN, nlines = pcall(D.AvailabilityLines)
+		if okN then for _, l in ipairs(nlines) do add(l) end else add("NOW CANDIDATE EVIDENCE: error: " .. tostring(nlines)) end
 	end
 	do
 		local okO, olines = pcall(D.OpportunityLines)
