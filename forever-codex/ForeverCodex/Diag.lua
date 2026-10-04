@@ -455,9 +455,9 @@ function D.OpportunityLines()
 	if not d then L[#L + 1] = "  no plan yet"; return L end
 	L[#L + 1] = "  core route: " .. ((d.sequence and #d.sequence > 0) and table.concat(d.sequence, " > ") or "none") .. (plan.now and (" | NOW " .. tostring(plan.now.title)) or "")
 	if d.possible and d.possible.n > 0 then
-		L[#L + 1] = string.format("  POSSIBLE PICKUPS (%d not routed: the client has not confirmed them and nothing says they are for this character; kept as on-the-way extras only):", d.possible.n)
+		L[#L + 1] = string.format("  POSSIBLE PICKUPS (%d not routed: the client has not confirmed them and they are far away or nothing says they are for this character; kept as on-the-way extras only):", d.possible.n)
 		for _, h in ipairs(d.possible.list or {}) do
-			L[#L + 1] = string.format("    Q%s %s | %s | %s", tostring(h.quest), tostring(h.title), h.why == "RESTRICTION_UNKNOWN" and "no data layer covering it carries class / race restrictions" or tostring(h.why),
+			L[#L + 1] = string.format("    Q%s %s | %s | %s", tostring(h.quest), tostring(h.title), h.why == "RESTRICTION_UNKNOWN" and "no data layer covering it carries class / race restrictions" or (h.why == "UNKNOWN_AVAILABILITY" and "the client has not offered it (availability UNKNOWN)" or tostring(h.why)),
 				type(h.dist) == "number" and string.format("%d yd away", math.floor(h.dist + 0.5)) or "distance unknown")
 		end
 		if d.possible.n > #(d.possible.list or {}) then L[#L + 1] = string.format("    + %d more", d.possible.n - #d.possible.list) end

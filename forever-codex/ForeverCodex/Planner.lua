@@ -216,15 +216,21 @@ end
 -- a short walk. Beyond the limit it is kept as a POSSIBLE pickup (counted and listed in the report, usable only as an on-the-way extra), never as NOW.
 -- A fresh offer from the quest giver (OBSERVED), a quest the player added, and a route zone the player chose all lift the limit: those are evidence or intent.
 Pl.RESTRICTION_UNKNOWN_MAX_YD = 200
+-- UNKNOWN IS NOT AVAILABLE. A pickup with no positive client evidence (no offer seen, or only a negative that has aged out) is "not ruled out", not "go there": the data
+-- saying it exists, where it starts and that its prerequisites look met is not proof the client will offer it. Such a pickup is a POSSIBLE pickup beyond this distance.
+-- (A design value: the limit of "worth walking to on the data's word alone". Fresh evidence, a quest the player added, or a chosen route zone lifts it.)
+Pl.UNCONFIRMED_MAX_YD = 500
 
 --- Why this ACCEPT may only be a POSSIBLE pickup, or nil when it may be routed. `pos` is its location, `S` the planning state.
 function Pl.PossibleOnly(a, pos, S)
-	if a.kind ~= "ACCEPT" or a.pinned or not (S and S.player and pos) or Pl.RESTRICTION_UNKNOWN_MAX_YD == math.huge then return nil end      -- (math.huge = the rule is off: tests)
+	if a.kind ~= "ACCEPT" or a.pinned or not (S and S.player and pos) then return nil end
 	if S.env and S.env.routeMap and S.env.routeMap == pos.map then return nil end      -- the player chose to quest there
 	if Pl.OfferState(a) == "OBSERVED" then return nil end
 	local d = E.Distance(S.ctx, S.player, pos)
 	local far = d == nil or d >= E.DIFFERENT_CONTINENT
-	if a.restrictionUnknown and (far or d > Pl.RESTRICTION_UNKNOWN_MAX_YD) then return "RESTRICTION_UNKNOWN", d end
+	-- (a limit of math.huge switches that rule off: the test harness does)
+	if a.restrictionUnknown and Pl.RESTRICTION_UNKNOWN_MAX_YD < math.huge and (far or d > Pl.RESTRICTION_UNKNOWN_MAX_YD) then return "RESTRICTION_UNKNOWN", d end
+	if Pl.UNCONFIRMED_MAX_YD < math.huge and (far or d > Pl.UNCONFIRMED_MAX_YD) then return "UNKNOWN_AVAILABILITY", d end        -- (OBSERVED returned above, NOT_OFFERED was held back: what is left here is UNKNOWN)
 	return nil
 end
 

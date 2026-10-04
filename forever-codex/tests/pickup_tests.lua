@@ -22,7 +22,7 @@ end
 local function world(att, observed, char)
 	local c = { level = 10, class = "Rogue", classToken = "ROGUE" }
 	for k, v in pairs(char or {}) do c[k] = v end
-	local ns = boot({ char = c, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Fixture" } })
+	local ns = boot({ char = c, synthetic = true, production = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Fixture" } })
 	clearApis()
 	H.attPack(ns, att or {}, { { key = "zone-a", label = "Zone A", map = 9001, quests = #(att or {}) } })
 	if observed then
@@ -243,5 +243,83 @@ do
 	H.world().completed[94008] = true
 	ns3.State.Recompute()
 	check(select(1, offeredIn(ns3, 94008)) == 0, "a quest already completed is never offered")
+	clearApis()
+end
+
+-- ================================================================ Fix 5: UNKNOWN availability is not AVAILABLE
+
+local function far(id, name, extra) return rec(id, name, 0.95, 0.95, extra) end        -- about 636 yd from the middle of the fixture map
+
+section("unknown availability: a far pickup the client has not offered is possible, never NOW, even with a known location, a good value and met prerequisites")
+do
+	-- Q10 is far, has a known giver coordinate, no requirements and unlocks three follow-ups (a high value); Q1 is a plain pickup 100 yd away
+	local ns = world({ NEAR, far(10, "Far Chain Start", { giverNpc = 8010, giverName = "Far Giver" }), rec(11, "Follow One", 0.95, 0.9, { prereq = { 10 } }),
+		rec(12, "Follow Two", 0.9, 0.95, { prereq = { 10 } }), rec(13, "Follow Three", 0.9, 0.9, { prereq = { 10 } }) })
+	local poss = possibleIds(ns)
+	check(nowId(ns) == "Q:1:ACCEPT", "NOW is the near pickup, not the far chain start with its known location and unlocks  [" .. tostring(nowId(ns)) .. "]")
+	check(poss["Q:10:ACCEPT"] and poss["Q:10:ACCEPT"].why == "UNKNOWN_AVAILABILITY", "the far pickup is kept as possible, with the reason")
+	check(ns.Planner.OfferState({ kind = "ACCEPT", quest = 10 }) == "UNKNOWN", "its offer state is UNKNOWN: nothing was lifted or invented")
+	local inSeq = false
+	for _, a in ipairs(ns.State.plan.sequence) do if a.quest == 10 then inSeq = true end end
+	check(not inSeq, "it is not in the route")
+	-- alone, far, unknown: NOW is empty and the empty card says so
+	local ns2 = world({ far(10, "Far Only", { giverNpc = 8010, giverName = "Far Giver" }) })
+	local c = ns2.Presenter.Card(ns2.State.plan, ns2.State.ctx)
+	local said = false
+	for _, l in ipairs(c.empty and c.empty.lines or {}) do if l:find("1 pickup Codex knows of is far away and not confirmed by the game", 1, true) then said = true end end
+	check(nowId(ns2) == nil and said, "alone, NOW is empty and the card says one far pickup is not confirmed")
+	check(possibleIds(ns2)["Q:10:ACCEPT"] ~= nil, "UNKNOWN stays discoverable: it is listed in the diagnostics")
+	local lines = table.concat(ns2.Diag.PlaytestLines(ns2.Diag.Snapshot(), {}), "\n")
+	check(lines:find("POSSIBLE PICKUPS", 1, true) and lines:find("availability UNKNOWN", 1, true), "and the report names it as possible with the reason")
+end
+
+section("unknown availability: a short walk is fine, and the limit does not apply to what the player added or to a chosen route zone")
+do
+	local ns = world({ rec(1, "Near", 0.7, 0.5, { giverNpc = 8001, giverName = "Near Giver" }) })       -- 200 yd
+	check(nowId(ns) == "Q:1:ACCEPT", "an unknown pickup 200 yd away is still NOW (nothing else to do)")
+	local nsA = world({ NEAR, far(10, "Added", { giverNpc = 8010, giverName = "Far Giver" }) })
+	nsA.Prefs.Add(10); nsA.State.Recompute()
+	check(possibleIds(nsA)["Q:10:ACCEPT"] == nil, "a quest the player added is their call")
+	local nsZ = world({ NEAR, far(10, "In Zone", { giverNpc = 8010, giverName = "Far Giver" }) })
+	nsZ.Prefs.SetRouteZone("zone-a"); nsZ.State.Recompute()
+	check(possibleIds(nsZ)["Q:10:ACCEPT"] == nil, "a route zone the player chose lifts the limit inside it")
+end
+
+section("unknown availability: fresh positive evidence makes it actionable; a fresh negative holds it back; a stale negative is UNKNOWN again, not positive")
+do
+	-- positive
+	local ns = world({ NEAR, far(10, "Far Offered", { giverNpc = 8010, giverName = "Far Giver" }) })
+	check(possibleIds(ns)["Q:10:ACCEPT"] ~= nil, "(setup) possible while unknown")
+	detail(ns, 10, "Far Offered", "Far Giver", 8010)
+	ns.State.Recompute()
+	check(possibleIds(ns)["Q:10:ACCEPT"] == nil and candidateIds(ns)["Q:10:ACCEPT"], "a fresh offer from the client makes it a normal candidate")
+	clearApis()
+	-- negative: the giver, asked at this progression, lists nothing
+	local nsN = world({ NEAR, rec(20, "Near Giver Quest", 0.55, 0.5, { giverNpc = 8020, giverName = "Hub Giver" }), rec(21, "Far Giver Quest", 0.95, 0.95, { giverNpc = 8021, giverName = "Other Giver" }) })
+	listing(nsN, {}, "Hub Giver", 8020)
+	nsN.State.Recompute()
+	check(nsN.Planner.OfferState({ kind = "ACCEPT", quest = 20 }) == "NOT_OFFERED" and nsN.State.plan.diag.held and nsN.State.plan.diag.held.n >= 1, "a fresh empty list at the giver still holds the quest back (NOT_OFFERED)")
+	-- the negative goes stale (the character levels): UNKNOWN again, never positive
+	H.world().char.level = 11
+	nsN.State.Recompute()
+	check(nsN.Planner.OfferState({ kind = "ACCEPT", quest = 20 }) == "UNKNOWN", "a level later the negative is stale: UNKNOWN")
+	check(nsN.Planner.Actionability({ kind = "ACCEPT", quest = 20 }) == "UNKNOWN", "and the quest is not positively available")
+	check(possibleIds(nsN)["Q:21:ACCEPT"] ~= nil, "a far unknown pickup is still only possible after a stale negative elsewhere")
+	-- a stale negative on a FAR quest does not turn it into a destination
+	local nsF = world({ NEAR, far(30, "Far After Stale", { giverNpc = 8030, giverName = "Far Hub" }) })
+	listing(nsF, {}, "Far Hub", 8030)
+	H.world().char.level = 11
+	nsF.State.Recompute()
+	check(nsF.Planner.OfferState({ kind = "ACCEPT", quest = 30 }) == "UNKNOWN" and possibleIds(nsF)["Q:30:ACCEPT"] ~= nil and nowId(nsF) ~= "Q:30:ACCEPT", "a far quest whose negative went stale becomes UNKNOWN and still is not NOW")
+	clearApis()
+end
+
+section("unknown availability: existing positive client evidence keeps working")
+do
+	local ns = world({ NEAR, rec(40, "Observed Near", 0.6, 0.55, { giverNpc = 8040, giverName = "Nearby Giver" }) })
+	detail(ns, 40, "Observed Near", "Nearby Giver", 8040)
+	ns.State.Recompute()
+	check(ns.Planner.OfferState({ kind = "ACCEPT", quest = 40 }) == "OBSERVED" and possibleIds(ns)["Q:40:ACCEPT"] == nil, "an observed pickup is OBSERVED and routable")
+	check(#ns.errors == 0, "no errors")
 	clearApis()
 end

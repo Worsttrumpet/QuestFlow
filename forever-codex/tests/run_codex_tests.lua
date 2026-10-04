@@ -181,6 +181,9 @@ local function boot(opts)
 		assert(chunk, err)
 		chunk("ForeverCodex", ns)
 	end
+	-- (0.7.1) the "unknown availability is not available" distance limit (Planner.UNCONFIRMED_MAX_YD) is OFF in the generic harness: the long-route, travel and routing tests
+	-- use far pickups with no client evidence on purpose. pickup_tests.lua turns it on (opts.production) and tests it; the restriction-knowledge limit stays on everywhere.
+	if not opts.production then ns.Planner.UNCONFIRMED_MAX_YD = math.huge end
 	if opts.synthetic then ns.Registry.ClearPacks() else layoutMaps(ns) end
 	_G.ForeverCodexDB = opts.savedVars     -- SavedVariables are restored AFTER the files run, BEFORE ADDON_LOADED (M8.12)
 	ns._selftest.boot.onEvent(nil, "ADDON_LOADED", "ForeverCodex")
