@@ -323,7 +323,7 @@ function QB.Init()
 	st.state = "available"
 	st.message = "QuestieDB is in use as Codex's quest knowledge."
 	C.RegisterPack("quests", QB.PACK_NAME, {
-		meta = { src = QB.SRC, verified = false, priority = QB.PRIORITY, guardGiver = true,
+		meta = { src = QB.SRC, verified = false, priority = QB.PRIORITY, guardGiver = true, restrictions = true,
 			label = "QuestieDB (runtime; baseline knowledge, unverified on Forever)" },
 		zones = {},
 		get = QB.Record,

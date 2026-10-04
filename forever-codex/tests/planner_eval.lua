@@ -80,6 +80,9 @@ local function run(sc, over)
 	if sc.routeZone then ns.Prefs.SetRouteZone(sc.routeZone) end
 	for _, k in ipairs(sc.skipped or {}) do ns.Prefs.Skip(k) end
 	for _, id in ipairs(sc.added or {}) do ns.Prefs.Add(id) end
+	-- the bridge-equivalence comparison asks "does reading the same facts through QuestieDB change a decision?"; the restriction-knowledge limit (0.7.1) is
+	-- deliberately a function of WHICH layers cover a quest, so it is switched off there and tested on its own (guidance_tests.lua)
+	if sc.neutralRestrictions then ns.Planner.RESTRICTION_UNKNOWN_MAX_YD = math.huge end
 	local ctx = ns.Context.Build()
 	local c = ns.Engine.Candidates(ctx)
 	local plan = ns.Planner.Compute(ctx, c, { trace = true })
@@ -279,7 +282,12 @@ scenario({
 		for _, a in ipairs({ r.plan.now, r.plan.alsoDo, r.plan.thenAction }) do
 			if a and (a.id == "Q:789:OBJECTIVE" or a.id == "Q:792:OBJECTIVE") then routed = true end
 		end
-		ok("and are never NOW / ALSO DO / THEN", not routed)
+		-- (0.7.1) finishing in-progress work in this area with no map spot can be NOW (StayLocal, documented): it has no target, so nothing is routed or pointed at
+		local pointed = false
+		for _, a in ipairs({ r.plan.now, r.plan.alsoDo, r.plan.thenAction }) do
+			if a and (a.id == "Q:789:OBJECTIVE" or a.id == "Q:792:OBJECTIVE") and a.target then pointed = true end
+		end
+		ok("and are never routed to a place (as NOW they carry no target)", not pointed)
 		local invented = false
 		for _, a in ipairs(r.plan.reminders) do for _, t in ipairs(a.targets or {}) do if t.where.points then invented = true end end end
 		ok("no coordinates were invented for them", not invented)
@@ -689,14 +697,14 @@ do
 	local layered, only, skipped = 0, 0, 0
 	for _, sc in ipairs(scenarios) do
 		local tag = "[" .. sc.name:match("^(%S+)") .. "] "
-		local base = run(sc)
-		local lay = run(sc, { bridge = "layered" })
+		local base = run(sc, { neutralRestrictions = true })
+		local lay = run(sc, { bridge = "layered", neutralRestrictions = true })
 		local st = lay.ns.QuestieBridge.Status()
 		check(st.state == "available" and lay.ns.QuestieBridge.Stats().built > 0, tag .. "the bridge was in use and read records")
 		check(sig(lay) == sig(base), tag .. "QuestieDB layered over the existing data: the same plan" .. (sig(lay) ~= sig(base) and ("\n    base:    " .. sig(base) .. "\n    bridged: " .. sig(lay)) or ""))
 		check(#lay.ns.errors == 0, tag .. "no caught errors through the bridge")
 		layered = layered + 1
-		local o = run(sc, { bridge = "only" })
+		local o = run(sc, { bridge = "only", neutralRestrictions = true })
 		if o.needsAtt then
 			skipped = skipped + 1
 		else

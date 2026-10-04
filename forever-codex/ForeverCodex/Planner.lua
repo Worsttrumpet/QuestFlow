@@ -211,6 +211,23 @@ function Pl.Confidence(a, par)
 	return f
 end
 
+-- POSSIBLE PICKUPS. A pickup the client has not confirmed is only "not ruled out". When nothing says it is restricted AWAY from this character's class or
+-- race (no data layer that covers the quest carries restriction data) the planner does not send the player far for it: such a pickup is a candidate only for
+-- a short walk. Beyond the limit it is kept as a POSSIBLE pickup (counted and listed in the report, usable only as an on-the-way extra), never as NOW.
+-- A fresh offer from the quest giver (OBSERVED), a quest the player added, and a route zone the player chose all lift the limit: those are evidence or intent.
+Pl.RESTRICTION_UNKNOWN_MAX_YD = 200
+
+--- Why this ACCEPT may only be a POSSIBLE pickup, or nil when it may be routed. `pos` is its location, `S` the planning state.
+function Pl.PossibleOnly(a, pos, S)
+	if a.kind ~= "ACCEPT" or a.pinned or not (S and S.player and pos) or Pl.RESTRICTION_UNKNOWN_MAX_YD == math.huge then return nil end      -- (math.huge = the rule is off: tests)
+	if S.env and S.env.routeMap and S.env.routeMap == pos.map then return nil end      -- the player chose to quest there
+	if Pl.OfferState(a) == "OBSERVED" then return nil end
+	local d = E.Distance(S.ctx, S.player, pos)
+	local far = d == nil or d >= E.DIFFERENT_CONTINENT
+	if a.restrictionUnknown and (far or d > Pl.RESTRICTION_UNKNOWN_MAX_YD) then return "RESTRICTION_UNKNOWN", d end
+	return nil
+end
+
 --- Can the Planner sequence this action at all? Returns true, or false + a reason key (for diagnostics).
 local function usable(a)
 	if a.skip and a.skip.logical and not a.pinned then return false, "skipped" end
@@ -368,6 +385,7 @@ local function gather(S, c)
 			end
 			return
 		end
+		local possible, pd = Pl.PossibleOnly(a, pos, S)
 		local val, comps = valueOf(a, pos, ctx, env, par)
 		local conf = Pl.Confidence(a, par)
 		local it = { a = a, id = a.id, pos = pos, status = status, assumed = assumed, conf = conf, comps = comps,
@@ -378,7 +396,15 @@ local function gather(S, c)
 			for _, o in ipairs(a.objectiveState.list) do if o.finished then done = done + 1 end end
 			if n > 0 then it.dwell = it.dwell * math.max(0.25, 1 - done / n) end
 		end
-		if a.optional or a.hereOnly then extras[#extras + 1] = it else items[#items + 1] = it end
+		if possible then
+			it.possible = possible
+			diag.possible = diag.possible or { n = 0, list = {} }
+			diag.possible.n = diag.possible.n + 1
+			if #diag.possible.list < Pl.HELD_CAP then
+				diag.possible.list[#diag.possible.list + 1] = { id = a.id, quest = a.quest, title = a.title, why = possible, dist = pd, giver = a.giver }
+			end
+			extras[#extras + 1] = it
+		elseif a.optional or a.hereOnly then extras[#extras + 1] = it else items[#items + 1] = it end
 	end
 	for _, a in ipairs(c.candidates) do take(a) end
 	for _, a in ipairs(c.inProgress) do take(a) end

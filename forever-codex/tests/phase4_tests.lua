@@ -93,7 +93,7 @@ do
 	ns.Prefs.FinishSetup()
 	local plan = ns.State.Recompute()
 	local d = plan.diag
-	check(d.candidates > 50, "(setup) the real data offers many candidates, all of them elsewhere (" .. d.candidates .. ")")
+	check(d.candidates + (d.possible and d.possible.n or 0) > 50, "(setup) the real data offers many candidates, all of them elsewhere (" .. d.candidates .. " routable, " .. (d.possible and d.possible.n or 0) .. " possible)")
 	local local1421 = 0
 	for _, it in pairs(plan.diag.items or {}) do if it.map == 1421 then local1421 = local1421 + 1 end end
 	check(plan.now == nil and plan.next == nil, "nothing is recommended: no TRAVEL to Thork, no NOW across the continent")

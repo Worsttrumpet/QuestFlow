@@ -273,6 +273,8 @@ function Pr.Card(plan, ctx)
 		else
 			lines[1] = "Explore, or accept a quest, and Codex will pick it up from there."
 		end
+		local pn = plan and plan.diag and plan.diag.possible and plan.diag.possible.n or 0
+		if pn > 0 then lines[#lines + 1] = string.format("%d pickup%s Codex knows of %s far away and not confirmed by the game; /codex report lists %s.", pn, pn == 1 and "" or "s", pn == 1 and "is" or "are", pn == 1 and "it" or "them") end
 		for _, w in ipairs(plan and plan.warnings or {}) do
 			if #lines < 3 and not w:find("^Not available on this client") then lines[#lines + 1] = w end
 		end

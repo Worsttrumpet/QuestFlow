@@ -46,6 +46,19 @@ function C.RegisterPack(kind, name, pack)
 	end
 	pack.kind, pack.name = kind, name
 	pack.meta = type(pack.meta) == "table" and pack.meta or {}
+	-- RESTRICTION KNOWLEDGE: does this pack say anything about class / race restrictions? "No restriction listed" only means "unrestricted" when the
+	-- pack carries restriction data at all. A live source declares it (meta.restrictions); a table pack shows it by having at least one record with a
+	-- class or race restriction. The observed pack (no such fields) and a small pack with none are restriction-UNKNOWN: absence proves nothing.
+	if kind == "quests" then
+		local has = pack.meta.restrictions
+		if type(has) ~= "boolean" then
+			has = false
+			for _, rec in pairs(pack.quests or {}) do
+				if rec.classes or rec.races or rec.classMask or rec.raceMask then has = true break end
+			end
+		end
+		pack.restrictionData = has
+	end
 	packs[kind] = packs[kind] or {}
 	local list = packs[kind]
 	for i, p in ipairs(list) do
@@ -97,7 +110,7 @@ local function layersFor(id)
 		-- a pack is either a table of records (`quests`) or a live source: `get(id)` returns one record or nil (see QuestieBridge)
 		local rec = p.get and p.get(id) or (p.quests and p.quests[id])
 		if rec then
-			layers[#layers + 1] = { pack = p, rec = rec, src = p.meta.src or "unknown", verified = p.meta.verified == true }
+			layers[#layers + 1] = { pack = p, rec = rec, src = p.meta.src or "unknown", verified = p.meta.verified == true, restrictions = p.restrictionData == true }
 		end
 	end
 	return layers
@@ -122,7 +135,8 @@ end
 local function merge(id, layers)
 	local v = { id = id, prov = {}, layers = {}, hasObserved = false, hasAtt = false }
 	for _, l in ipairs(layers) do
-		v.layers[#v.layers + 1] = { pack = l.pack.name, src = l.src, verified = l.verified }
+		v.layers[#v.layers + 1] = { pack = l.pack.name, src = l.src, verified = l.verified, restrictions = l.restrictions }
+		if l.restrictions then v.restrictionKnown = true end
 		if l.src == "observed" then v.hasObserved = true end
 		if l.src == "att" then v.hasAtt = true end
 	end

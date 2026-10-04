@@ -231,6 +231,8 @@ local function acceptAction(view, pinned, ctx)
 		breadcrumb = view.breadcrumb, target = t, pinned = pinned or false, lines = lines,
 		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name,
 		giver = view.giverName,
+		-- no layer that covers this quest carries class / race restriction data: "none listed" is then NOT "unrestricted" (the planner will not send the player far for it)
+		restrictionUnknown = view.restrictionKnown ~= true or nil,
 	}), view.id, view, ctx, t)
 end
 
