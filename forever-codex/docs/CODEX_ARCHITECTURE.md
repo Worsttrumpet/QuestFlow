@@ -60,7 +60,9 @@ at read time by priority (observed 100 over ATT 10), field by field, recording w
 
 * ATT `lvl` is a **required level** (`req`), never a quest level. Quest level only comes from observed data.
 * ATT coordinates are never marked verified. The observed layer's `pos` is a **player position** at a recorder
-  checkpoint, used only as a labelled approximate fallback when ATT has no coordinate.
+  checkpoint, used only as a labelled approximate fallback when ATT has no coordinate. It is usually the TURN-IN side's
+  position, and the observed `giver` is usually the turn-in NPC: M6 displays the latest checkpoint's value. `verified=true`
+  there means "recorded on Forever", not "NPC position". See `CODEX_OBSERVED_PACK_PROVENANCE.md`.
 * Every action carries `src` / `verified`; the UI says "ATT - unverified on Forever" / "observed on Forever".
   No UI string calls ATT data confirmed (a test scans for it).
 * Prerequisites come from ATT `sourceQuest`; when several are listed they are treated as ANY-OF (the parser cannot

@@ -54,3 +54,4 @@ New in the report only (nothing the planner reads or decides changed; `Planner.l
 * Location wording: a position that came from the observed pack is reported as the recorder's PLAYER position at a checkpoint, never as an NPC coordinate; a giver coordinate is reported with its source layer.
 * HELD BACK lines and the per-opportunity lines now say how the giver's dialog was matched and whether it is fresh or stale; the old header line "not used by the planner" was corrected (the planner reads this evidence for the 0.6.8 hold).
 * Not changed: UNKNOWN policy, holds, scoring, candidate generation, NPC matching (including the by-name fallback), evidence weighting, the meaning of `verified`, the data packs, progression stamps.
+* The root cause of the Q93065 case, found afterwards, is in the data pipeline, not here: `CODEX_OBSERVED_PACK_PROVENANCE.md` (backlog C-12).

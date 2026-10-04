@@ -91,7 +91,7 @@ Attributed to the player's report. Numbered to match the playtest notes.
    Weapons* and *Cutting Teeth*; Kzan Thornslash turns in *Wayward Weapons*; Gornek gives *Simple Parchment* and *Sting
    of the Scorpid*; Frang (Warrior trainer) turns in *Simple Parchment*.
    *Code/data note:* the quest provider **assumes the turn-in is at the giver** and says so on the card
-   ("Turn-in location is assumed to be the giver's"). The observed pack's `giver` is also role-ambiguous (a known M4
+   ("Turn-in location is assumed to be the giver's"). The observed pack's `giver` is also role-ambiguous (and usually the TURN-IN NPC; see `CODEX_OBSERVED_PACK_PROVENANCE.md`) (a known M4
    limitation: `giver.npc` does not distinguish offering from turning in); e.g. observed *Wayward Weapons* (id 97279)
    lists Kzan Thornslash as `giver`, who the player reports is the turn-in NPC.
 3. **Same-name quest chain.** *Simple Parchment* appeared as consecutive separate quests of the same name. Identity

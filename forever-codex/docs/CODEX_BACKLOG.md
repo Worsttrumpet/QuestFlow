@@ -15,8 +15,8 @@ searched for in code. No feature was implemented while writing this.
 
 ### Counts (as of this audit)
 
-74 status-tagged items: BUILT 19, PARTIAL 21, UNBUILT 23, DEFERRED 4, NEEDS VERIFICATION 6, REJECTED / SUPERSEDED 1, IN PROGRESS 0. Plus 8 integration rows (H-02), 5 business / product ideas (L-01 to L-05, all
-undecided) and 10 rejected / superseded entries (O-01 to O-10): 97 recorded entries in total. "BUILT" does not mean real-client validated; each item says what was and was not validated.
+75 status-tagged items: BUILT 19, PARTIAL 21, UNBUILT 24, DEFERRED 4, NEEDS VERIFICATION 6, REJECTED / SUPERSEDED 1, IN PROGRESS 0. Plus 8 integration rows (H-02), 5 business / product ideas (L-01 to L-05, all
+undecided) and 10 rejected / superseded entries (O-01 to O-10): 98 recorded entries in total. (C-12 was added after the 0.6.9 playtests; the audit itself dates from 0.6.5.) "BUILT" does not mean real-client validated; each item says what was and was not validated.
 
 ## Status legend
 
@@ -240,6 +240,7 @@ inert systems (see E). Tier rules (route / stop / extra / context) are in the de
 * **Built:** bounded stores (observations 100, quests 300, NPCs 100; no raw GUIDs); OBSERVED via QUEST_DETAIL or the available list (both counted, QUEST_DETAIL stronger); the ACTIVE list kept
   separate and never treated as an offer; contextual EMPTY_AT_NPC / NOT_LISTED_AT_NPC (only from a complete, all-ids list from the proven API); positive evidence never erased (a newer contrary dialog is
   shown beside it); report section; opportunity diagnostics wording; `plan.onTheWay[i].offer`.
+* **Name-fallback risk (documented after the 0.6.9 playtests):** the NPC lookup falls back from creature id to NPC name, and Valennia Stormfist exists under several creature ids; see C-12 and `CODEX_OBSERVED_PACK_PROVENANCE.md`. Not changed.
 * **Remaining unproven:** QUEST_GREETING payloads (recorded, never used as evidence); how long an observation stays meaningful (no staleness policy); the real-client checks of the normalised report
   (A to D in `CODEX_OFFER_PROBE.md`).
 
@@ -264,10 +265,12 @@ inert systems (see E). Tier rules (route / stop / extra / context) are in the de
   The ForeverRecorder addon (`m5-production-recorder`) and forever-db harvest ingestion exist as SEPARATE tooling (real-client validated in M5).
 * **Missing:** an in-Codex path that turns what Codex observes (quest dialogs, giver NPC identity and position, objective locations) into observed records; the planning model's
   "evidence capture path" phase was never built as a Codex feature. Many pickups still show `location=approx` (a player position recorded near the NPC).
+* **Provenance caveat (found in the 0.6.9 playtests; see `CODEX_OBSERVED_PACK_PROVENANCE.md`):** the pack's `giver` and `pos` are the latest recorder checkpoint's values, usually the TURN-IN side, so they
+  do not describe the pickup for a quest whose offering and turn-in NPCs differ. `verified=true` means "recorded on Forever", not "NPC position verified". Fix is tracked as C-12.
 * **Priority:** MEDIUM to HIGH (feeds C-02, E, F).
 
 ### C-05 Location quality
-**Status:** PARTIAL: provenance labels exist (known / approx / assumed, observed player position vs NPC); ~all real-client pickups are `approx`, so price accuracy for pickups is limited. No NPC-position capture exists.
+**Status:** PARTIAL: provenance labels exist (known / approx / assumed, observed player position vs NPC); ~all real-client pickups are `approx`, so price accuracy for pickups is limited. No NPC-position capture exists. For observed-pack pickups the position is also usually the turn-in-side player position, not the pickup's (see C-12).
 
 ### C-06 Completed-quest knowledge (`IsQuestFlaggedCompleted`)
 **Status:** BUILT; code comments still say "UNVERIFIED" **[STALE caveat]**: real reports show "completed already 41", so the call answers on Forever. Update the comments/docs when touched.
@@ -288,6 +291,24 @@ pack are refreshed, and whether new Forever content (20-30+) is covered.
 
 ### C-11 Quest tags, elite labels and dungeon quest card
 **Status:** BUILT (0.4.1): game tags via `GetQuestTagInfo` (proven), "(Elite)" label, red DUNGEON QUESTS card grouped by dungeon.
+
+### C-12 Preserve checkpoint-labelled evidence in the generated observed pack
+**Status:** UNBUILT (documented finding, no implementation; `CODEX_OBSERVED_PACK_PROVENANCE.md`). Data pipeline task (M6 coverage -> guide dataset -> M8 generator -> `build_codex_data.py` -> `Pack_Observed.lua`).
+* **Problem:** M6's `coverage.py` displays the LATEST checkpoint's giver and position (turn-in first), and the later stages carry only that displayed value. The shipped pack therefore loses the offer-side
+  evidence and the checkpoint label, so Codex cannot tell pickup from turn-in. Example: Q93065 Prepare for Battle is routed to its turn-in spot; Q93836 The Fate of Zephras to Talaanis, who has never offered it.
+* **Task:** keep the checkpoint-labelled evidence in the generated observed pack so pickup and turn-in evidence stay distinct. Where available, preserve per quest and per checkpoint:
+  * quest id
+  * checkpoint / event type (quest_detail, quest_progress, quest_complete_immediate, quest_complete_delayed, GOSSIP_SHOW)
+  * NPC creature id and name
+  * player map id and x, y (always labelled as a PLAYER position)
+  * timestamp
+  * session and build, if useful
+* **Goal:** let Codex tell apart the observed PICKUP location, the observed TURN-IN location, player-position evidence, and NPC identity, without inventing an NPC coordinate.
+* **Constraints:** do not merge or overwrite on disk (layers stay separable, as today); keep `verified` meaning "recorded on Forever"; do not infer a pickup NPC from a role-ambiguous value; the
+  recorder cannot supply an NPC position or a progression stamp, so those stay unknown. Requires a design pass (pack format, Registry consumption, golden-baseline impact) before any change.
+* **Related, NOT part of this item:** Valennia Stormfist is observed under creature ids 252383, 253590 and 253844, so the by-name NPC fallback in `OfferProbe.NpcContext` is risky in this zone (0.6.9 now shows
+  "matched BY NAME ONLY ... ids differ" in the report). The matching logic was deliberately left unchanged; any change is a separate design decision (see C-01).
+* **Priority:** MEDIUM to HIGH (feeds C-02 and C-05). Not scheduled; no version is implied.
 
 ---
 
