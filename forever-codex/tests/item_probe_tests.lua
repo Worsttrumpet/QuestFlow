@@ -1475,3 +1475,84 @@ do
 	check(#plan.questItems == 0 and #ns.errors == 0, "without the client function (and QuestieDB) nothing is surfaced and nothing fails")
 	_G.GetContainerItemQuestInfo = nil
 end
+
+-- ---------------------------------------------------------------- 0.6.8: a quest its giver just declined to offer is held back, not routed
+section("held back: a pickup the giver did not offer at this progression is never the immediate ACCEPT; it stays known and returns when the evidence goes stale or the client offers it")
+do
+	local NAMES = { "C_GossipInfo", "UnitName", "UnitGUID" }
+	local ns = boot({ char = { level = 11 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5 } })
+	for _, n in ipairs(NAMES) do _G[n] = nil end
+	local O, Pl = ns.OfferProbe, ns.Planner
+	local function reset() ForeverCodexDB.offers = nil; ForeverCodexDB.items = nil end
+	local function stubNpc(name, id)
+		_G.UnitName = function(u) return u == "npc" and name or nil end
+		_G.UnitGUID = function(u) return u == "npc" and id and ("Creature-0-1-2-3-" .. id .. "-ABCDEF") or nil end
+	end
+	local function gossip(avail)
+		_G.C_GossipInfo = { GetAvailableQuests = function() return avail end, GetActiveQuests = function() return {} end, GetOptions = function() return {} end }
+		O.OnEvent("GOSSIP_SHOW")
+	end
+	local function e(id, title) return { questID = id, title = title, questLevel = 11 } end
+	-- two pickups of one giver standing right where the player is (no travel at all), and one elsewhere with a different giver
+	H.attPack(ns, {
+		{ id = 401, name = "Disrupting Like", map = 9001, x = 0.5, y = 0.5, req = 1, giverNpc = 9003, giverName = "Yorana" },
+		{ id = 402, name = "Breaking Like", map = 9001, x = 0.5, y = 0.5, req = 1, giverNpc = 9003, giverName = "Yorana" },
+		{ id = 403, name = "Elsewhere Quest", map = 9001, x = 0.6, y = 0.5, req = 1, giverNpc = 9004, giverName = "Other" },
+	}, nil)
+	local W = H.world()
+	W.log, W.objectives, W.completed = {}, {}, {}
+	ns.Prefs.FinishSetup()
+	reset()
+	local function plan() ns.State.Recompute(); return ns.State.plan end
+	local function isHeld(p, id) for _, h in ipairs(p.diag.held and p.diag.held.list or {}) do if h.id == id then return h end end end
+	local function inSequence(p, id) for _, k in ipairs(p.diag.sequence or {}) do if k == id then return true end end return false end
+
+	-- 1-2: eligible, giver known, never asked: the planner may use it (UNKNOWN is not a veto)
+	local p0 = plan()
+	check(p0.diag.nowId == "Q:401:ACCEPT" or p0.diag.nowId == "Q:402:ACCEPT", "1: with no client evidence a pickup standing here is recommended as before (" .. tostring(p0.diag.nowId) .. ")")
+	check(not p0.diag.held, "1: nothing is held back without evidence")
+
+	-- 3-5: the giver is asked and offers nothing
+	stubNpc("Yorana", 9003)
+	gossip({})
+	local p1 = plan()
+	check(p1.diag.nowId ~= "Q:401:ACCEPT" and p1.diag.nowId ~= "Q:402:ACCEPT", "5: right after an empty dialog the planner does not pick that giver's quests as the immediate action (NOW=" .. tostring(p1.diag.nowId) .. ")")
+	check(not inSequence(p1, "Q:401:ACCEPT") and not inSequence(p1, "Q:402:ACCEPT"), "5: nor anywhere in the sequence")
+	check(p1.now == nil or (p1.now.quest ~= 401 and p1.now.quest ~= 402), "5: the tracker's NOW is not that quest either")
+	for _, a in ipairs(p1.onTheWay or {}) do check(a.id ~= "Q:401:ACCEPT" and a.id ~= "Q:402:ACCEPT", "5: and it is not an ALSO DO") end
+	-- 6: still known
+	check(isHeld(p1, "Q:401:ACCEPT") and isHeld(p1, "Q:402:ACCEPT") and p1.diag.held.n == 2, "6: both stay in the candidate universe, reported as HELD BACK (" .. tostring(p1.diag.held and p1.diag.held.n) .. ")")
+	check(isHeld(p1, "Q:401:ACCEPT").kind == "EMPTY_AT_NPC", "6: with the evidence kind that held them")
+	check(p1.diag.nowId == "Q:403:ACCEPT", "the planner is not made useless: it routes the other giver's quest (" .. tostring(p1.diag.nowId) .. ")")
+	check(Pl.Actionability({ kind = "ACCEPT", quest = 401 }) == "UNKNOWN", "the evidence model still says UNKNOWN (nothing was proven about the quest itself)")
+	local text = table.concat(ns.Diag.OpportunityLines(), "\n")
+	check(text:find("HELD BACK (2 pickup(s)", 1, true) and text:find("Q:401:ACCEPT", 1, true) and text:find("EMPTY_AT_NPC at Yorana", 1, true), "6: the report lists them with the evidence")
+
+	-- 7: progression changes (a turn-in): the negative is stale, so the quests are candidates again
+	ns.Journey.OnQuestTurnedIn(990, 100)
+	local p2 = plan()
+	check(not p2.diag.held, "7: after a turn-in the old 'asked and not offered' is stale: nothing is held back")
+	check(p2.diag.nowId == "Q:401:ACCEPT" or p2.diag.nowId == "Q:402:ACCEPT", "8: and the quest can be recommended normally again (" .. tostring(p2.diag.nowId) .. ")")
+
+	-- 9: a real positive observation makes it strongly actionable
+	gossip({ e(401, "Disrupting Like") })
+	local p3 = plan()
+	check(p3.diag.nowId == "Q:401:ACCEPT" and Pl.OfferState({ kind = "ACCEPT", quest = 401 }) == "OBSERVED", "9: listed by the client: OBSERVED, and the planner takes it (" .. tostring(p3.diag.nowId) .. ")")
+	check(isHeld(p3, "Q:402:ACCEPT") and not isHeld(p3, "Q:401:ACCEPT"), "9: while the sibling the complete list omitted is held back again")
+
+	-- a QUEST_DETAIL observation of the held one wins over an older negative as well
+	reset()
+	stubNpc("Yorana", 9003)
+	gossip({})
+	check(plan().diag.held ~= nil, "(setup) held again after a fresh empty dialog")
+	_G.GetQuestID = function() return 402 end
+	_G.GetTitleText = function() return "Breaking Like" end
+	O.OnEvent("QUEST_DETAIL")
+	_G.GetQuestID, _G.GetTitleText = nil, nil
+	local p4 = plan()
+	check(not isHeld(p4, "Q:402:ACCEPT"), "9: a quest dialog for it (QUEST_DETAIL) lifts the hold")
+
+	check(#ns.errors == 0, "no errors")
+	for _, n in ipairs(NAMES) do _G[n] = nil end
+	reset()
+end

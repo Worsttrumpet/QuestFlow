@@ -13,7 +13,7 @@ local addonName, ns = ...
 
 ForeverCodex = ForeverCodex or {}
 local C = ForeverCodex
-C.VERSION = "0.6.7"       -- must equal ## Version in ForeverCodex.toc (the packager checks); bump both for every packaged change
+C.VERSION = "0.6.8"       -- must equal ## Version in ForeverCodex.toc (the packager checks); bump both for every packaged change
 C.EXPECTED_INTERFACE = 16001
 
 ns.errors = {}

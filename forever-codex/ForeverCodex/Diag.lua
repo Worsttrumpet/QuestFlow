@@ -207,6 +207,7 @@ function D.Lines(s)
 			L[#L + 1] = "  NOW none: " .. tostring(d.reason or "nothing eligible")
 		end
 		for _, w in ipairs(d.warnings or {}) do L[#L + 1] = "  planner warning: " .. w end
+		if d.held and d.held.n > 0 then L[#L + 1] = string.format("  held back (recently not offered by their giver, still known): %d pickup(s) | detail in OPPORTUNITIES", d.held.n) end
 	end
 	if s.plan then
 		local p = s.plan
@@ -286,6 +287,15 @@ function D.OpportunityLines()
 	L[#L + 1] = "OPPORTUNITIES (diagnostic only: what the planner priced against the CURRENT route; nothing here changes the plan; not saved)"
 	if not d then L[#L + 1] = "  no plan yet"; return L end
 	L[#L + 1] = "  core route: " .. ((d.sequence and #d.sequence > 0) and table.concat(d.sequence, " > ") or "none") .. (plan.now and (" | NOW " .. tostring(plan.now.title)) or "")
+	if d.held and d.held.n > 0 then
+		-- pickups the planner did not route because their giver, asked at this same progression, did not offer them (still known; they return when that goes stale)
+		L[#L + 1] = string.format("  HELD BACK (%d pickup(s) not routed: the giver was asked at your current progression and did not offer them; still known, they return after your next level / turn-in / finished quest, or once the client offers them):", d.held.n)
+		for _, h in ipairs(d.held.list or {}) do
+			L[#L + 1] = string.format("    %s %s | %s at %s (%ds ago)%s", tostring(h.id), tostring(h.title), tostring(h.kind or "?"), tostring(h.npc or "?"),
+				math.max(0, (type(time) == "function" and time() or 0) - (h.last or 0)), h.contradicted and " | was observed before; a newer dialog no longer lists it" or "")
+		end
+		if d.held.n > #(d.held.list or {}) then L[#L + 1] = string.format("    + %d more held back", d.held.n - #d.held.list) end
+	end
 	local o = d.opps
 	if not o then
 		L[#L + 1] = "  not priced this time: " .. tostring(d.reason or (d.deferredTurnIn and "a hand-in was deferred for local work" or (d.localWork and "LOCAL_WORK" or "no route was chosen")))

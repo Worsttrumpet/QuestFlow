@@ -354,6 +354,20 @@ local function gather(S, c)
 			return
 		end
 		if not ok then diag.filtered[why] = (diag.filtered[why] or 0) + 1 return end
+		-- HELD BACK: the quest's giver was asked at this very progression and did not offer it. That is not a price to discount (a pickup at the NPC you stand
+		-- at costs no travel and can still net positive at a discount) but a fact about what the player can do right now: sending them back to the same NPC
+		-- for the same quest is the exact failure being avoided. The quest stays a known candidate (counted, listed in the report) and re-enters the moment
+		-- the evidence goes stale (level / turn-in / finished quest changes the stamp) or the client offers it. A quest the player ADDED is their call.
+		if a.kind == "ACCEPT" and not a.pinned and Pl.OfferState(a) == "NOT_OFFERED" then
+			diag.held = diag.held or { n = 0, list = {} }
+			diag.held.n = diag.held.n + 1
+			if #diag.held.list < Pl.HELD_CAP then
+				local ev = Pl.OfferEvidence(a)
+				diag.held.list[#diag.held.list + 1] = { id = a.id, quest = a.quest, title = a.title, kind = ev and ev.kind or nil, npc = ev and ev.npc or nil, last = ev and ev.last or nil,
+					contradicted = ev and ev.contradicted or nil }
+			end
+			return
+		end
 		local val, comps = valueOf(a, pos, ctx, env, par)
 		local conf = Pl.Confidence(a, par)
 		local it = { a = a, id = a.id, pos = pos, status = status, assumed = assumed, conf = conf, comps = comps,
@@ -612,6 +626,8 @@ Pl.OPP_HUB_CAP = 5           -- off-route stops with 2+ actions priced as a whol
 --   AFTER_ROUTE         inserted after the last stop: no rejoining, the cost is the one-way trip
 --   UNKNOWN             a leg could not be measured
 -- (A "near route" label would need a distance threshold the planner does not have; the cost class carries that distinction.)
+Pl.HELD_CAP = 20             -- held-back pickups listed in diag.held.list (the rest are counted)
+
 --- Whether this character is known to be OFFERED the action. A database (QuestieDB / ATT) record says the quest exists somewhere; it is not client
 -- evidence. OBSERVED only when Codex recorded a quest dialog (QUEST_DETAIL) for the quest; UNKNOWN otherwise (absence proves nothing); quests already
 -- in the log are IN_LOG (the client itself holds them). Never derived from class / race / level rules.
