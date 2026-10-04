@@ -221,7 +221,7 @@ do
 	check(not has(A.Classify(worse, eq, { context = { replacement = { state = "KNOWN", quests = 1, certainty = "GUARANTEED" } } }), "TEMPORARY_UPGRADE"), "an item that is not an improvement is not made 'temporary' by context")
 end
 
-section("advisor: every classification has a reason, the layers are separate, and the default recommendation gives no opinion")
+section("advisor: every classification has a reason, the layers are separate, and the recommender is pluggable with a safe fallback")
 do
 	reset()
 	local eq = equipped({ [8] = facts({ id = 20, name = "Old", slot = "INVTYPE_FEET", stats = { RESISTANCE0_NAME = 16 } }) })
@@ -243,13 +243,14 @@ do
 		ev.items[#ev.items + 1] = { index = i, kind = "choice", classification = c }
 	end
 	local r = A.Recommend(ev)
-	check(r.state == "NO_OPINION" and #r.items == 4 and r.items[1].stance == nil and r.items[1].primary == "UPGRADE", "the default recommendation is NO_OPINION and only echoes the categories")
+	check(r.state == "TENTATIVE" and r.selected.index == 1 and r.basis == "STRICT_UPGRADE" and #r.items == 4 and r.caveats[1]:find("item data was not available", 1, true),
+		"the default recommendation is the conservative recommender: a proven-usable strict upgrade, but TENTATIVE because one choice has not loaded")
 	local seen
 	A.SetRecommender(function(e) seen = e; return { state = "CUSTOM", reason = "plugged in", items = {} } end)
 	local r2 = A.Recommend(ev)
 	check(r2.state == "CUSTOM" and seen == ev, "a later recommender receives the classifications and replaces the default without touching classification")
 	A.SetRecommender(function() error("boom") end)
-	check(A.Recommend(ev).state == "NO_OPINION", "a recommender that errors falls back to no opinion")
+	check(A.Recommend(ev).state == "TENTATIVE", "a recommender that errors falls back to the built-in conservative recommender")
 	reset()
 	check(A.Classify(items[1], eq).primary == "UPGRADE", "classification is unchanged by the recommender registry")
 end
@@ -288,7 +289,7 @@ do
 	check(closedEv.live == false and closedEv.available == false and closedEv.source:find("not currently offered", 1, true) and closedEv.q == 55, "the closed dialog: not live, not available, labelled as the last dialog seen")
 	check(#closedEv.items == 2 and closedEv.items[1].classification.primary == "NOT_USABLE", "its classifications are still produced from the last observation")
 	local text = table.concat(A.ReportLines({ character = { level = 9 } }), "\n")
-	check(text:find("REWARD ADVISOR", 1, true) and text:find("not currently offered", 1, true) and text:find("RECOMMENDATION: NO_OPINION", 1, true), "the report labels it and shows no recommendation")
+	check(text:find("REWARD ADVISOR", 1, true) and text:find("not currently offered", 1, true) and text:find("RECOMMENDATION: NO_CLEAR_RECOMMENDATION", 1, true) and text:find("Codex makes no pick", 1, true), "the report labels it as closed and shows that Codex makes no pick (nothing usable improves)")
 	check(text:find("[NOT USABLE]", 1, true) and text:find("usability evidence: IsUsableItem=false, reward dialog flag=false -> NOT_USABLE", 1, true), "the report shows the category, and both evidence sources")
 	open = true
 	local t2 = table.concat(A.ReportLines({ character = { level = 9 } }), "\n")
@@ -299,7 +300,228 @@ do
 	check(ns2.Advisor.Evaluate() == nil and ns2.Advisor.ReportLines()[1]:find("no reward dialog seen this session", 1, true), "with no dialog seen the advisor says so")
 end
 
-section("advisor: Stage 3 is independent, read-only, free of stat weights and instruction wording, and nothing else consumes it")
+-- ================================================================ R1: the conservative recommender
+-- Table-driven cases over synthetic facts. Every expectation is stated as "state / basis / pick / stances"; the recommender may only use what classification and
+-- eligibility already know (no weights, no scores).
+
+local function choiceEval(specs, eq, ch, kind)
+	local items = {}
+	for i, f in ipairs(specs) do
+		items[i] = { index = i, kind = kind or "choice", id = f.id, name = f.fields and f.fields.name and f.fields.name.value, facts = f, classification = A.Classify(f, eq, { character = ch or { level = 9 } }) }
+	end
+	return { items = items }
+end
+local function stances(rec) local s = {} for i, it in ipairs(rec.items) do s[i] = it.stance or "-" end return table.concat(s, ",") end
+
+local U = { usable = true, second = false, flag = true }               -- the client's two usability answers agree: usable
+local N = { usable = false, second = false, flag = false }             -- both say not usable
+local CF = { usable = false, second = false, flag = true }             -- they disagree
+local function boots(id, name, armor, flags, extra)
+	local o = { id = id, name = name, slot = "INVTYPE_FEET", stats = { RESISTANCE0_NAME = armor }, sell = 5 }
+	for k, v in pairs(flags or {}) do o[k] = v end
+	for k, v in pairs(extra or {}) do o[k] = v end
+	return facts(o)
+end
+local function worn() return equipped({ [8] = facts({ id = 20, name = "Old Boots", slot = "INVTYPE_FEET", stats = { RESISTANCE0_NAME = 16 } }) }) end
+
+section("recommender: table-driven cases (clear upgrade, inferior, unusable, empty slot, mixed, conflicting flags, future-only, equivalents, none usable, vendor tie-break, ambiguous)")
+do
+	reset()
+	local cases = {
+		{ name = "one clear upgrade, one that is no gain",
+		  items = function() return { boots(1, "Fine Boots", 61, U), boots(2, "Poor Boots", 5, U) } end,
+		  state = "RECOMMEND", basis = "STRICT_UPGRADE", pick = 1, stances = "PREFERRED,INFERIOR" },
+		{ name = "a proven-unusable reward beside a usable upgrade",
+		  items = function() return { boots(1, "Fine Boots", 61, U), boots(2, "Big Boots", 90, N) } end,
+		  state = "RECOMMEND", basis = "STRICT_UPGRADE", pick = 1, stances = "PREFERRED,INFERIOR" },
+		{ name = "a reward that fills an empty slot",
+		  eq = function() return equipped({}) end,
+		  items = function() return { boots(1, "Fine Boots", 61, U), boots(2, "Big Boots", 90, N) } end,
+		  state = "RECOMMEND", basis = "EMPTY_SLOT", pick = 1, stances = "PREFERRED,INFERIOR" },
+		{ name = "a dominating upgrade in the same slot beats a smaller one",
+		  items = function() return { boots(1, "Small Boots", 30, U), boots(2, "Big Boots", 61, U) } end,
+		  state = "RECOMMEND", basis = "STRICT_UPGRADE", pick = 2, stances = "INFERIOR,PREFERRED" },
+		{ name = "mixed stats only: no pick",
+		  items = function() return { boots(1, "Agile Boots", 10, U, { stats = { RESISTANCE0_NAME = 10, ITEM_MOD_AGILITY_SHORT = 3 } }), boots(2, "Flat Boots", 12, U) } end,
+		  state = "NO_CLEAR_RECOMMENDATION", basis = "MIXED_ONLY", pick = nil, stances = "UNCERTAIN,UNCERTAIN" },
+		{ name = "a strict upgrade beside a mixed choice is only TENTATIVE",
+		  items = function() return { boots(1, "Fine Boots", 61, U), boots(2, "Agile Boots", 10, U, { stats = { RESISTANCE0_NAME = 10, ITEM_MOD_AGILITY_SHORT = 3 } }) } end,
+		  state = "TENTATIVE", basis = "STRICT_UPGRADE", pick = 1, stances = "PREFERRED,UNCERTAIN", caveat = "Agile Boots" },
+		{ name = "conflicting usability flags: the only candidate is TENTATIVE, with the conflict stated",
+		  items = function() return { boots(1, "Fine Boots", 61, CF), boots(2, "Big Boots", 90, N) } end,
+		  state = "TENTATIVE", basis = "ONLY_CANDIDATE", pick = 1, stances = "PREFERRED,INFERIOR", caveat = "cannot confirm" },
+		{ name = "two equivalent upgrades: no pick",
+		  items = function() return { boots(1, "Boots A", 61, U), boots(2, "Boots B", 61, U) } end,
+		  state = "NO_CLEAR_RECOMMENDATION", basis = "AMBIGUOUS", pick = nil, stances = "UNCERTAIN,UNCERTAIN" },
+		{ name = "genuinely ambiguous: same slot, different stats improved",
+		  items = function() return { boots(1, "Agile Boots", 16, U, { stats = { RESISTANCE0_NAME = 16, ITEM_MOD_AGILITY_SHORT = 3 } }), boots(2, "Sturdy Boots", 16, U, { stats = { RESISTANCE0_NAME = 16, ITEM_MOD_STAMINA_SHORT = 3 } }) } end,
+		  state = "NO_CLEAR_RECOMMENDATION", basis = "AMBIGUOUS", pick = nil, stances = "UNCERTAIN,UNCERTAIN" },
+		{ name = "upgrades in different slots are not compared",
+		  items = function() return { boots(1, "Fine Boots", 61, U), facts({ id = 3, name = "Fine Gloves", slot = "INVTYPE_HAND", stats = { RESISTANCE0_NAME = 40 }, sell = 5, usable = true, second = false, flag = true }) } end,
+		  eq = function() return equipped({ [8] = facts({ id = 20, name = "Old Boots", slot = "INVTYPE_FEET", stats = { RESISTANCE0_NAME = 16 } }), [10] = facts({ id = 21, name = "Old Gloves", slot = "INVTYPE_HAND", stats = { RESISTANCE0_NAME = 10 } }) }) end,
+		  state = "NO_CLEAR_RECOMMENDATION", basis = "AMBIGUOUS", pick = nil, stances = "UNCERTAIN,UNCERTAIN" },
+		{ name = "no usable choices",
+		  items = function() return { boots(1, "Big Boots", 61, N), boots(2, "Huge Boots", 90, N) } end,
+		  state = "NO_CLEAR_RECOMMENDATION", basis = "NONE_USABLE", pick = nil, stances = "INFERIOR,INFERIOR" },
+		{ name = "no choice improves what is worn",
+		  items = function() return { boots(1, "Poor Boots", 5, U), boots(2, "Worse Boots", 3, U) } end,
+		  state = "NO_CLEAR_RECOMMENDATION", basis = "NO_IMPROVEMENT", pick = nil, stances = "UNCERTAIN,UNCERTAIN" },
+		{ name = "an unloaded item keeps a clear upgrade TENTATIVE",
+		  items = function() return { boots(1, "Fine Boots", 61, U), facts({ id = 9, name = "Loading", slot = "INVTYPE_FEET", waiting = true }) } end,
+		  state = "TENTATIVE", basis = "STRICT_UPGRADE", pick = 1, stances = "PREFERRED,UNCERTAIN", caveat = "item data was not available" },
+	}
+	for _, c in ipairs(cases) do
+		local eq = c.eq and c.eq() or worn()
+		local rec = A.Recommend(choiceEval(c.items(), eq))
+		check(rec.state == c.state and rec.basis == c.basis, c.name .. ": " .. tostring(rec.state) .. " / " .. tostring(rec.basis))
+		check((rec.selected and rec.selected.index) == c.pick, c.name .. ": pick " .. tostring(rec.selected and rec.selected.index))
+		check(stances(rec) == c.stances, c.name .. ": stances " .. stances(rec))
+		if c.caveat then check(table.concat(rec.caveats, " | "):find(c.caveat, 1, true) ~= nil, c.name .. ": caveat mentions " .. c.caveat) end
+		check(type(rec.reason) == "string" and #rec.reason > 10, c.name .. ": has a reason")
+	end
+end
+
+section("recommender: future-only upgrade, vendor tie-break among non-gear, not-a-choice, determinism")
+do
+	reset()
+	local E = ns.Eligibility
+	E.ClearEvidence()
+	E.AddEvidence({ class = "SHAMAN", itemClass = 4, subClass = 3, minLevel = 40, proven = true, src = "observed on Forever (test evidence)" })
+	local ch = { level = 39, classToken = "SHAMAN" }
+	local eqC = equipped({ [5] = facts({ id = 30, name = "Worn Vest", slot = "INVTYPE_CHEST", stats = { RESISTANCE0_NAME = 30 } }) })
+	local mail = facts({ id = 1, name = "Fine Mail", slot = "INVTYPE_CHEST", classID = 4, sub = 3, subType = "Mail", stats = { RESISTANCE0_NAME = 60 }, sell = 9 })
+	local junk = facts({ id = 2, name = "Poor Mail", slot = "INVTYPE_CHEST", classID = 4, sub = 3, subType = "Mail", stats = { RESISTANCE0_NAME = 20 }, sell = 4 })
+	local rec = A.Recommend(choiceEval({ mail, junk }, eqC, ch))
+	check(rec.state == "TENTATIVE" and rec.basis == "FUTURE_ONLY" and rec.selected.index == 1 and stances(rec) == "PREFERRED,INFERIOR", "future-only upgrade: TENTATIVE, FUTURE_ONLY, the unusable-and-no-gain one INFERIOR  [" .. rec.state .. "/" .. tostring(rec.basis) .. " " .. stances(rec) .. "]")
+	check(table.concat(rec.caveats, " | "):find("later improvement", 1, true) and table.concat(rec.reasons, " | "):find("level 40", 1, true), "its caveat says it is a later improvement and the unlock level is in the facts")
+	-- two future-only items cannot be separated
+	local mail2 = facts({ id = 3, name = "Other Mail", slot = "INVTYPE_CHEST", classID = 4, sub = 3, subType = "Mail", stats = { RESISTANCE0_NAME = 70 }, sell = 9 })
+	check(A.Recommend(choiceEval({ mail, mail2 }, eqC, ch)).state == "NO_CLEAR_RECOMMENDATION", "two future-only improvements: no pick")
+	E.ClearEvidence()
+
+	-- non-gear: a vendor-value tie-break is TENTATIVE and labelled; ties and missing values give no pick; a use effect is not 'no benefit'
+	local function item(id, name, sell, o)
+		local x = { id = id, name = name, slot = "", classID = 0, type = "Consumable", subType = "Potion", sell = sell, usable = true, second = false, flag = true, stats = {} }
+		for k, v in pairs(o or {}) do x[k] = v end
+		return facts(x)
+	end
+	local v = A.Recommend(choiceEval({ item(1, "Cheap Potion", 25), item(2, "Dear Potion", 150) }, worn()))
+	check(v.state == "TENTATIVE" and v.basis == "VENDOR_TIEBREAK" and v.selected.index == 2 and stances(v) == "UNCERTAIN,PREFERRED", "non-gear: the higher vendor value is a TENTATIVE VENDOR_TIEBREAK pick")
+	check(v.state ~= "RECOMMEND" and table.concat(v.caveats, " "):find("vendor-value tie-break only", 1, true) and v.reason:find("vendor value", 1, true), "it is labelled as a vendor-value tie-break and says it is not about usefulness")
+	check(A.Recommend(choiceEval({ item(1, "A", 50), item(2, "B", 50) }, worn())).state == "NO_CLEAR_RECOMMENDATION", "equal vendor values: no pick")
+	check(A.Recommend(choiceEval({ item(1, "A", nil), item(2, "B", 50) }, worn())).state == "NO_CLEAR_RECOMMENDATION", "a vendor value that was not read: no pick")
+	check(A.Recommend(choiceEval({ item(1, "A", 10, { spell = "Heal" }), item(2, "B", 50) }, worn())).state == "NO_CLEAR_RECOMMENDATION", "a choice with a use effect is not 'no benefit': no vendor tie-break")
+	local gearAndPotion = A.Recommend(choiceEval({ item(1, "A", 10), boots(2, "Poor Boots", 5, U) }, worn()))
+	check(gearAndPotion.basis ~= "VENDOR_TIEBREAK", "vendor value is never used when any choice is gear")
+	check(A.Recommend(choiceEval({ boots(1, "Poor Boots", 5, U, { sell = 100 }), boots(2, "Worse Boots", 3, U, { sell = 1 }) }, worn())).selected == nil, "gear that does not improve is never picked by vendor value")
+
+	-- nothing to choose
+	local g = A.Recommend(choiceEval({ boots(1, "Fine Boots", 61, U), boots(2, "Other", 40, U) }, worn(), nil, "reward"))
+	check(g.state == "NOT_A_CHOICE" and g.selected == nil and g.items[1].stance == nil and g.items[1].why:find("guaranteed", 1, true), "guaranteed rewards: NOT_A_CHOICE, no stance")
+	check(A.Recommend(choiceEval({ boots(1, "Only", 61, U) }, worn())).state == "NOT_A_CHOICE", "a single choice: NOT_A_CHOICE")
+
+	-- determinism: the order the choices are listed in never changes who is picked
+	local function names(order)
+		local pool = { boots(1, "Fine Boots", 61, U), boots(2, "Poor Boots", 5, U), boots(3, "Big Boots", 90, N) }
+		local list = {}
+		for _, k in ipairs(order) do list[#list + 1] = pool[k] end
+		local r = A.Recommend(choiceEval(list, worn()))
+		return r.state .. ":" .. (r.selected and r.selected.name or "-")
+	end
+	local base = names({ 1, 2, 3 })
+	check(base == "RECOMMEND:Fine Boots" and names({ 3, 2, 1 }) == base and names({ 2, 1, 3 }) == base and names({ 3, 1, 2 }) == base, "the same choices in any order give the same recommendation  [" .. base .. "]")
+	-- the recommender reads classifications only: it does not change them
+	local f1 = boots(1, "Fine Boots", 61, U)
+	local c1 = A.Classify(f1, worn(), { character = { level = 9 } })
+	local before = cats(c1) .. "|" .. tostring(c1.primary)
+	A.Recommend({ items = { { index = 1, kind = "choice", id = 1, facts = f1, classification = c1 }, { index = 2, kind = "choice", id = 2, facts = f1, classification = c1 } } })
+	check(cats(c1) .. "|" .. tostring(c1.primary) == before and c1.recommendation == nil and c1.score == nil, "recommending leaves the classification unchanged and adds no score")
+end
+
+section("recommender: the three real reward dialogs (Q92880, Q93320, Q93746 as reported by the Forever client, build 70205)")
+do
+	reset()
+	ns.Eligibility.ClearEvidence()
+	local E = ns.Eligibility
+	local ROGUE = { level = 13, classToken = "ROGUE" }
+	local function weapon(o)
+		local x = { type = "Weapon", classID = 2, ilvl = 13, req = 0, slot = "INVTYPE_WEAPON" }
+		for k, v in pairs(o) do x[k] = v end
+		return facts(x)
+	end
+	local DPS = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT"
+	-- Q92880 (Return to Valanaar, Rogue 13): Honed Greathammer false/false, Quickblade's Dagger IsUsableItem false but dialog flag true, Balanced Quarterstaff false/false
+	local eqW = equipped({
+		[16] = weapon({ id = 727, name = "Notched Shortsword of the Boar", subType = "One-Handed Swords", sub = 7, ilvl = 5, req = 5, stats = { ITEM_MOD_STRENGTH_SHORT = 1, ITEM_MOD_SPIRIT_SHORT = 1, [DPS] = 5.4761905670166 } }),
+		[17] = weapon({ id = 263313, name = "Trusty Wrench", subType = "One-Handed Maces", sub = 4, ilvl = 5, stats = { ITEM_MOD_AGILITY_SHORT = 1, [DPS] = 5.277777671814 } }),
+	})
+	local items = {
+		weapon({ id = 257345, name = "Honed Greathammer", subType = "Two-Handed Maces", sub = 5, slot = "INVTYPE_2HWEAPON", sell = 625, usable = false, second = false, flag = false, stats = { [DPS] = 9.0625, ITEM_MOD_SPIRIT_SHORT = 2, ITEM_MOD_STRENGTH_SHORT = 2 } }),
+		weapon({ id = 257346, name = "Quickblade's Dagger", subType = "Daggers", sub = 15, sell = 501, usable = false, second = false, flag = true, stats = { ITEM_MOD_AGILITY_SHORT = 1, [DPS] = 6.764705657959 } }),
+		weapon({ id = 257343, name = "Balanced Quarterstaff", subType = "Staves", sub = 10, slot = "INVTYPE_2HWEAPON", sell = 621, usable = false, second = false, flag = false, stats = { [DPS] = 8.8636360168457, ITEM_MOD_SPIRIT_SHORT = 2, ITEM_MOD_STAMINA_SHORT = 2 } }),
+	}
+	local ev = A.Evaluate({ dialog = { live = true, q = 92880, at = "QUEST_COMPLETE", choices = { { index = 1, kind = "choice", id = 257345, name = "Honed Greathammer", facts = items[1] }, { index = 2, kind = "choice", id = 257346, name = "Quickblade's Dagger", facts = items[2] }, { index = 3, kind = "choice", id = 257343, name = "Balanced Quarterstaff", facts = items[3] } }, rewards = {} }, equipped = eqW, character = ROGUE })
+	local r = ev.recommendation
+	check(r.state == "TENTATIVE" and r.basis == "ONLY_CANDIDATE" and r.selected.index == 2 and r.selected.name == "Quickblade's Dagger", "Q92880: the dagger is the only choice not proven unusable and it would improve the off-hand: TENTATIVE  [" .. tostring(r.state) .. "/" .. tostring(r.basis) .. "]")
+	check(stances(r) == "INFERIOR,PREFERRED,INFERIOR", "Q92880: the hammer and the staff are INFERIOR (both client answers say not usable)  [" .. stances(r) .. "]")
+	check(table.concat(r.caveats, " | "):find("cannot confirm", 1, true) and table.concat(r.caveats, " | "):find("IsUsableItem", 1, true), "Q92880: the caveat states the client's usability answers disagree (IsUsableItem false, dialog flag true)")
+	check(table.concat(r.reasons, " | "):find("weapon dps", 1, true) and table.concat(r.reasons, " | "):find("Trusty Wrench", 1, true), "Q92880: the fact is the dps gain over the equipped off-hand")
+
+	-- Q93320 (Tower Defense): Defender's Bracers (leather, IsUsableItem false / flag true), Windswept Slippers (cloth, false / true), Peacekeeper's Legguards (mail, false / false)
+	local function armor(o)
+		local x = { type = "Armor", classID = 4, ilvl = 13, req = 0 }
+		for k, v in pairs(o) do x[k] = v end
+		return facts(x)
+	end
+	local eqA = equipped({
+		[9] = armor({ id = 1504, name = "Warped Leather Bracers", subType = "Leather", sub = 2, slot = "INVTYPE_WRIST", ilvl = 6, req = 6, stats = { RESISTANCE0_NAME = 23 } }),
+		[8] = armor({ id = 263309, name = "Freedom Walkers", subType = "Leather", sub = 2, slot = "INVTYPE_FEET", stats = { RESISTANCE0_NAME = 40, ITEM_MOD_STRENGTH_SHORT = 1 } }),
+		[7] = armor({ id = 257334, name = "Well-Worn Pants", subType = "Leather", sub = 2, slot = "INVTYPE_LEGS", ilvl = 5, stats = { RESISTANCE0_NAME = 46 } }),
+	})
+	local a = {
+		armor({ id = 263338, name = "Defender's Bracers", subType = "Leather", sub = 2, slot = "INVTYPE_WRIST", sell = 122, usable = false, second = false, flag = true, stats = { ITEM_MOD_STAMINA_SHORT = 1, RESISTANCE0_NAME = 28 } }),
+		armor({ id = 263339, name = "Windswept Slippers", subType = "Cloth", sub = 1, slot = "INVTYPE_FEET", sell = 145, usable = false, second = false, flag = true, stats = { ITEM_MOD_SPIRIT_SHORT = 2, RESISTANCE0_NAME = 17 } }),
+		armor({ id = 263340, name = "Peacekeeper's Legguards", subType = "Mail", sub = 3, slot = "INVTYPE_LEGS", sell = 292, usable = false, second = false, flag = false, stats = { ITEM_MOD_AGILITY_SHORT = 3, RESISTANCE0_NAME = 113 } }),
+	}
+	local ev2 = A.Evaluate({ dialog = { live = true, q = 93320, at = "QUEST_COMPLETE", choices = { { index = 1, kind = "choice", id = 263338, name = "Defender's Bracers", facts = a[1] }, { index = 2, kind = "choice", id = 263339, name = "Windswept Slippers", facts = a[2] }, { index = 3, kind = "choice", id = 263340, name = "Peacekeeper's Legguards", facts = a[3] } }, rewards = {} }, equipped = eqA, character = ROGUE })
+	local r2 = ev2.recommendation
+	local c1 = ev2.items[1].classification
+	check(c1.primary == "UNKNOWN" and c1.eligibility.current.state == "UNKNOWN" and c1.eligibility.checks.proficiency.state == "YES", "Q93320: the classification is still UNKNOWN for the bracers although leather is already worn (the proficiency check says YES): the conflict is not hidden")
+	check(r2.state == "TENTATIVE" and r2.selected.index == 1 and r2.basis == "ONLY_CANDIDATE", "Q93320: Defender's Bracers is the TENTATIVE pick  [" .. tostring(r2.state) .. "/" .. tostring(r2.basis) .. " " .. tostring(r2.selected and r2.selected.name) .. "]")
+	check(stances(r2) == "PREFERRED,UNCERTAIN,INFERIOR", "Q93320: slippers UNCERTAIN (mixed, flags disagree), legguards INFERIOR (both flags false)  [" .. stances(r2) .. "]")
+	local cv = table.concat(r2.caveats, " | ")
+	check(cv:find("proficiency evidence says it can be worn", 1, true) and cv:find("do not agree with each other", 1, true), "Q93320: the caveat says proficiency evidence supports it but the client's flags disagree, and does not call it proven")
+	check(cv:find("Windswept Slippers", 1, true) and cv:find("does not weigh different stats", 1, true), "Q93320: the mixed slippers are named as unresolved")
+	check(r2.state ~= "RECOMMEND", "Q93320: never a confident RECOMMEND while the client's own answers conflict")
+
+	-- Q93746 (A Firm Response): two GUARANTEED rewards, no choice
+	local rw = {
+		armor({ id = 263305, name = "Windshaped Shield", subType = "Shields", sub = 6, slot = "INVTYPE_SHIELD", ilvl = 10, sell = 156, usable = false, second = false, flag = false, stats = { ITEM_MOD_STRENGTH_SHORT = 1, RESISTANCE0_NAME = 177 } }),
+		facts({ id = 250339, name = "Minor Mageblood Elixir", slot = "", classID = 0, type = "Consumable", subType = "Elixir", ilvl = 5, req = 5, sell = 25, usable = false, second = false, flag = true, stats = {}, spell = "Minor Mageblood Elixir" }),
+	}
+	local ev3 = A.Evaluate({ dialog = { live = false, q = 93746, at = "QUEST_COMPLETE", choices = {}, rewards = { { index = 1, kind = "reward", id = 263305, name = "Windshaped Shield", facts = rw[1] }, { index = 2, kind = "reward", id = 250339, name = "Minor Mageblood Elixir", facts = rw[2] } } }, equipped = eqA, character = ROGUE })
+	check(ev3.recommendation.state == "NOT_A_CHOICE" and ev3.recommendation.selected == nil, "Q93746: both are guaranteed: NOT_A_CHOICE, nothing picked")
+	-- the report shows each of these without errors, ASCII only
+	for _, d in ipairs({ ev, ev2, ev3 }) do
+		local lines = table.concat(A.ReportLines({ dialog = { live = d.live, q = d.q, at = d.at, choices = (function() local o = {} for _, it in ipairs(d.items) do if it.kind == "choice" then o[#o + 1] = it end end return o end)(), rewards = (function() local o = {} for _, it in ipairs(d.items) do if it.kind ~= "choice" then o[#o + 1] = it end end return o end)() }, equipped = d.q == 92880 and eqW or eqA, character = ROGUE }), "\n")
+		check(not lines:find("[\128-\255]") and lines:find("RECOMMENDATION:", 1, true), "Q" .. d.q .. ": the report section has a RECOMMENDATION line and is ASCII only")
+	end
+end
+
+section("recommender: the report shows the state, the pick, the facts and the caveats")
+do
+	reset()
+	local ev = A.Evaluate({ dialog = { live = true, q = 1, at = "QUEST_COMPLETE", choices = { { index = 1, kind = "choice", id = 1, name = "Fine Boots", facts = boots(1, "Fine Boots", 61, CF) }, { index = 2, kind = "choice", id = 2, name = "Big Boots", facts = boots(2, "Big Boots", 90, N) } }, rewards = {} }, equipped = worn(), character = { level = 9 } })
+	local lines = A.ReportLines({ dialog = { live = true, q = 1, at = "QUEST_COMPLETE", choices = { { index = 1, kind = "choice", id = 1, name = "Fine Boots", facts = boots(1, "Fine Boots", 61, CF) }, { index = 2, kind = "choice", id = 2, name = "Big Boots", facts = boots(2, "Big Boots", 90, N) } }, rewards = {} }, equipped = worn(), character = { level = 9 } })
+	local text = table.concat(lines, "\n")
+	check(text:find("RECOMMENDATION: TENTATIVE | pick: choice 1, Fine Boots | basis ONLY_CANDIDATE | TENTATIVE: the evidence is incomplete", 1, true), "TENTATIVE: the state, the pick and the incomplete-evidence warning are on one line")
+	check(text:find("    caveat: Codex cannot confirm this character can use it", 1, true) and text:find("    fact: choice 2, Big Boots: cannot be used by this character", 1, true), "a caveat line and a fact line follow")
+	check(text:find("    Choice 1. Fine Boots: PREFERRED", 1, true) and text:find("    Choice 2. Big Boots: INFERIOR", 1, true), "each choice shows its stance")
+	check(not text:lower():find("you should") and not text:lower():find("take this"), "no instruction wording")
+	check(ev.recommendation.selected.id == 1, "the structured result carries the pick")
+end
+
+section("advisor: Stage 3 is independent, read-only, free of stat weights and instruction wording; only the report consumes the recommender (the planner, presenter and providers do not, yet)")
 do
 	local function code(f) return (H.readFile(H.addonDir .. "/" .. f):gsub("%-%-[^\n]*", "")) end
 	local src = code("RewardAdvisor.lua")
@@ -316,5 +538,7 @@ do
 	for _, f in ipairs({ "Planner.lua", "Engine.lua", "Presenter.lua", "Overlap.lua", "PlanAdapter.lua", "Providers/Quest.lua", "State.lua", "Strategies.lua", "Navigation.lua" }) do
 		if code(f):find("ns%.Advisor") then readers[#readers + 1] = f end
 	end
-	check(#readers == 0, "the planner, presenter and providers do not read the advisor")
+	check(#readers == 0, "the planner, presenter and providers do not read the advisor (R1: reward recommendations do not influence any plan)")
+	check(code("Diag.lua"):find("Advisor.ReportLines", 1, true) ~= nil, "the report consumes the advisor through Advisor.ReportLines (and with it the recommender)")
+	check(not code("Planner.lua"):find("Recommend") and not code("PlanAdapter.lua"):find("Recommend") and not code("Presenter.lua"):find("Recommend"), "no planner, adapter or presenter code calls a recommender")
 end

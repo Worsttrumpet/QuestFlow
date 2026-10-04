@@ -15,7 +15,7 @@ searched for in code. No feature was implemented while writing this.
 
 ### Counts (as of this audit)
 
-75 status-tagged items: BUILT 19, PARTIAL 21, UNBUILT 24, DEFERRED 4, NEEDS VERIFICATION 6, REJECTED / SUPERSEDED 1, IN PROGRESS 0. Plus 8 integration rows (H-02), 5 business / product ideas (L-01 to L-05, all
+75 status-tagged items: BUILT 19, PARTIAL 22, UNBUILT 23, DEFERRED 4, NEEDS VERIFICATION 6, REJECTED / SUPERSEDED 1, IN PROGRESS 0. Plus 8 integration rows (H-02), 5 business / product ideas (L-01 to L-05, all
 undecided) and 10 rejected / superseded entries (O-01 to O-10): 98 recorded entries in total. (C-12 was added after the 0.6.9 playtests; the audit itself dates from 0.6.5.) "BUILT" does not mean real-client validated; each item says what was and was not validated.
 
 ## Status legend
@@ -326,11 +326,13 @@ reference table is hint-only (`proven=false`). **Limits:** skill-line APIs absen
 
 ### D-04 Reward Advisor: classification
 **Status:** BUILT (0.4.9; report-only). Categories NOT_USABLE / UPGRADE / TEMPORARY_UPGRADE / FUTURE_UPGRADE / SLIGHT_UPGRADE / MIXED / COMBAT_UTILITY / FUTURE_USE / VENDOR / UNKNOWN. No
-stat weights by design. Thresholds are PROPOSED and untuned. **Not marked complete:** see D-05 to D-10.
+stat weights by design. Thresholds are PROPOSED and untuned. The recommender is D-05. **Not marked complete:** see D-05 to D-10.
 
 ### D-05 Reward Advisor: recommendation (Stage 4)
-**Status:** UNBUILT. `Advisor.Recommend` is an interface returning NO_OPINION. Missing: replacement Horizon (a `context.replacement` input exists; nothing supplies it), the explainable
-recommendation rules, the vendor alternative, reward set look-ahead (future rewards from QuestieDB `questRewards` inverted = "possible reward"), and tuning of thresholds.
+**Status:** PARTIAL (R1, 0.7.0: report-only). `Advisor.Recommend` is now a conservative, deterministic recommender (RECOMMEND / TENTATIVE / NO_CLEAR_RECOMMENDATION / NOT_A_CHOICE; per item PREFERRED / INFERIOR /
+UNCERTAIN; vendor value only as a labelled tentative tie-break among non-gear). No stat weights, no scores. See `CODEX_REWARD_ADVISOR_DESIGN.md` section 19. Not built: replacement Horizon (a
+`context.replacement` input exists; nothing supplies it), reward set look-ahead (future rewards from QuestieDB `questRewards` inverted = "possible reward"), tracker display (D-06 / R2), planner use (R3),
+and real-client validation of the recommendations.
 
 ### D-06 Reward Advisor: player-facing advice
 **Status:** UNBUILT. Nothing in the tracker or options shows reward classifications; they appear only in `/codex report`. Design called for text tags plus own icons (decision approved, unbuilt).

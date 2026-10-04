@@ -110,10 +110,11 @@ do
 	local slight = goodMail({ stats = { RESISTANCE0_NAME = 32 } })    -- +2 over 30: a slight improvement
 	local s = A.Classify(slight, wornNoMail(), { character = SHAMAN(39) })
 	check(s.primary == "FUTURE_UPGRADE" and has(s, "FUTURE_UPGRADE").reason:find("a slight improvement", 1, true), "a small gain is described as slight, not as a big future upgrade  [" .. has(s, "FUTURE_UPGRADE").reason .. "]")
-	-- whatever the category, the default recommendation gives no opinion and no category is an instruction
+	-- whatever the category, a future unlock is never a confident recommendation and no category is an instruction
 	local ev = { items = { { index = 1, kind = "choice", classification = c }, { index = 2, kind = "choice", classification = s } } }
 	local rec = A.Recommend(ev)
-	check(rec.state == "NO_OPINION" and rec.items[1].stance == nil and rec.items[2].stance == nil, "the recommendation layer gives no opinion: a future unlock never becomes 'take this'")
+	check(rec.state == "TENTATIVE" and rec.basis == "FUTURE_ONLY" and rec.selected.index == 2 and rec.items[1].stance == "INFERIOR" and rec.items[2].stance == "PREFERRED" and #rec.caveats > 0,
+		"the recommendation layer: a future unlock is at most a TENTATIVE pick with a caveat, never a confident one, and the poor item is INFERIOR")
 	for _, x in ipairs(s.categories) do check(not x.reason:lower():find("take this") and not x.reason:lower():find("you should"), "no instruction wording in [" .. x.id .. "]") end
 	check(s.recommendation == nil and s.eligibility.future.state == "SOON", "the classification carries no recommendation")
 end
@@ -224,7 +225,7 @@ do
 	local ev = { live = true, available = true, q = 1, at = "QUEST_COMPLETE", source = "the reward dialog that is open now", items = { { index = 1, kind = "choice", classification = c } }, recommendation = A.Recommend({ items = {} }) }
 	local text = table.concat(A.ReportLines({ dialog = { live = true, q = 1, at = "QUEST_COMPLETE", choices = { { index = 1, kind = "choice", id = 1000, name = "Fine Mail Chest", facts = goodMail() } }, rewards = {} }, equipped = wornNoMail(), character = SHAMAN(39) }), "\n")
 	check(text:find("[FUTURE UPGRADE]", 1, true) and text:find("eligibility: now PROVEN_NO | future SOON (level 40, 1 level(s) away)", 1, true), "the report shows the category and both eligibility answers on their own line")
-	check(text:find("RECOMMENDATION: NO_OPINION", 1, true), "and the recommendation separately")
+	check(text:find("RECOMMENDATION: NOT_A_CHOICE", 1, true), "and the recommendation separately (one choice: nothing to choose between)")
 	local ee, rr = E.Evidence()
 	check(#rr == 4 and rr[1].proven == false and rr[1].src:find("not proven on Forever", 1, true), "the built-in Classic rules are a four-entry reference, all marked not proven")
 	check(#ee == 1 and ee[1].proven == true, "only the registered evidence is proven")

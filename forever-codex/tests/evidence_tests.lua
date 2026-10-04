@@ -308,7 +308,7 @@ do
 	for _, f in ipairs({ "Planner.lua", "Engine.lua", "Strategies.lua", "Presenter.lua", "Overlap.lua", "PlanAdapter.lua", "Providers/Quest.lua", "State.lua", "RewardAdvisor.lua", "Gear.lua" }) do
 		check(not code(f):find("EligibilityEvidence"), f .. " does not reference the evidence recorder")
 	end
-	check(A.Recommend({ items = {} }).state == "NO_OPINION", "the recommendation layer still gives no opinion")
+	check(A.Recommend({ items = {} }).state == "NOT_A_CHOICE" and A.Recommend({ items = {} }).basis == "NO_REWARDS", "the recommendation layer says NOT_A_CHOICE when there are no rewards")
 	-- 0.5.0 behaviour is intact: registered proven evidence still drives SOON
 	reset()
 	E.AddEvidence({ class = "SHAMAN", itemClass = 4, subClass = 3, minLevel = 40, proven = true, src = "registered test evidence" })

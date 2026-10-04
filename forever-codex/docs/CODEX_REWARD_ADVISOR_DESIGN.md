@@ -1,6 +1,6 @@
 # Forever Codex: Reward & Progression Advisor, design (inspection and staged plan)
 
-Status: design. Stage 0 (the read-only probe) is implemented in 0.4.4, Stage 0.1 (every choice inspected) in 0.4.5 Stage 1 (the normalized Item Facts reader) in 0.4.6 Stage 2 (equipped and bag item facts plus a facts-only comparison) in 0.4.7-0.4.8 and Stage 3 (the classification layer, no recommendation) in 0.4.9 the Eligibility layer (current versus future usability) in 0.5.0 and proficiency-evidence recording in 0.5.1 (see `CODEX_REALCLIENT_FIXES.md` sections 40-47); nothing else here is built. The five decisions in section 18 were approved: probe first, own icons plus text tags, coarse tiers first, no alt inventories, and the reward cache records every dialog seen. Written after inspecting the repository, the local QuestieDB checkout and the
+Status: design, with the R1 recommender built in 0.7.0 (section 19 records what was built and supersedes sections 8.1 and 13 where they differ). Stage 0 (the read-only probe) is implemented in 0.4.4, Stage 0.1 (every choice inspected) in 0.4.5 Stage 1 (the normalized Item Facts reader) in 0.4.6 Stage 2 (equipped and bag item facts plus a facts-only comparison) in 0.4.7-0.4.8 and Stage 3 (the classification layer, no recommendation) in 0.4.9 the Eligibility layer (current versus future usability) in 0.5.0 and proficiency-evidence recording in 0.5.1 (see `CODEX_REALCLIENT_FIXES.md` sections 40-47); nothing else here is built. The five decisions in section 18 were approved: probe first, own icons plus text tags, coarse tiers first, no alt inventories, and the reward cache records every dialog seen. Written after inspecting the repository, the local QuestieDB checkout and the
 project's own real-client research folders.
 
 Evidence labels used throughout:
@@ -236,3 +236,34 @@ Each stage is a normal release (new patch version, tests, packaged ZIP), and eac
 3. Valuation: are coarse tiers (no precise percentages shown, only the tier) acceptable for the first release? The percentages can stay internal until calibrated.
 4. Are alts' inventories (BagBrother) wanted at all? Recommendation: no, not now.
 5. Should the learned reward cache record rewards for every quest the player views, or only quests in the log? Recommendation: every quest dialog the player opens.
+
+
+## 19. R1 (0.7.0): the conservative recommender as built
+
+Supersedes the proposals in section 8 item 1 (a valuation policy / weight table) and section 13 (percent thresholds): neither was built and neither will be. The recommender uses
+only what classification, eligibility and the factual stat comparison already produce; there are no stat weights, no scores, no percentages, no class or spec preferences and no
+outside data. `Advisor.Recommend` runs the built-in `Advisor.RecommendDefault` unless `Advisor.SetRecommender` plugs in another; a plugged-in recommender that errors falls back to
+the built-in one. The planner, adapter, presenter and providers do not read it (R1 is report-only; R2 is the tracker card).
+
+**Per choice standing** (`standingOf`, from `classification.eligibility` and the new additive `classification.outcome`):
+CLEAR (proven usable now and improves, or fills an empty slot), UNPROVEN (usability not established, would improve), FUTURE (proven not usable yet, becomes usable SOON, would improve),
+BLOCKED (proven unusable and no near-term gain), MIXED, NO_GAIN, NON_GEAR (no equip slot), UNKNOWN_COMPARE, UNRESOLVED (item data not loaded or unreadable).
+
+**Two choices are compared only as a plain fact:** the same actual equipment slot, complete comparisons, and one at least as good on every compared stat and better on at least one
+("dominates"). Different slots, different stats improved, or equal gains are NOT compared.
+
+**Overall states and the rules, in order** (`#choices <= 1` or only guaranteed rewards: NOT_A_CHOICE first):
+1. CLEAR choices exist: one plain winner (a lone CLEAR, or one that dominates the others) -> RECOMMEND, basis STRICT_UPGRADE or EMPTY_SLOT. It is only TENTATIVE when any other choice is unresolved
+   (UNPROVEN, FUTURE, MIXED, UNKNOWN_COMPARE, UNRESOLVED) or the pick's comparison was partial. No plain winner -> NO_CLEAR_RECOMMENDATION (AMBIGUOUS).
+2. No CLEAR but UNPROVEN choices: a plain winner -> TENTATIVE, basis ONLY_CANDIDATE, with a caveat that states both client usability answers and any proficiency evidence. Never RECOMMEND
+   while the client's own answers conflict. No plain winner -> NO_CLEAR_RECOMMENDATION.
+3. Only FUTURE improvements: exactly one and nothing unresolved -> TENTATIVE, basis FUTURE_ONLY (a later improvement, not a current one); otherwise NO_CLEAR_RECOMMENDATION.
+4. Nothing improves: if EVERY choice is non-gear with a proven vendor value, the highest distinct value is a TENTATIVE pick, basis VENDOR_TIEBREAK, labelled "vendor-value tie-break only" (never
+   RECOMMEND, never used when any choice is gear, never used when a choice has a use effect, none with equal or unread values). Otherwise NO_CLEAR_RECOMMENDATION (NONE_USABLE, MIXED_ONLY,
+   NOT_ENOUGH_KNOWN or NO_IMPROVEMENT).
+
+**Per-item stance:** PREFERRED (the pick); INFERIOR (proven unusable, no gain while a CLEAR choice gains, or dominated by the pick); UNCERTAIN (everything else, including MIXED).
+Input order never changes the outcome. Guaranteed rewards carry no stance.
+
+Limits (intentional): no future-reward look-ahead (Horizon), no use-effect or profession value, no vendor-versus-gear comparison, no knowledge of what the player ends up choosing; MIXED stays
+uncertain; a conflicting `IsUsableItem` / dialog flag keeps a pick TENTATIVE even when class proficiency is proven (Q93320 Defender's Bracers).

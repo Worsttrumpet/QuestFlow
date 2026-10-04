@@ -6,7 +6,7 @@
 --   Eligibility         can the character use it now / will they soon             Eligibility.Evaluate                 (its own layer, 0.5.0)
 --   Gear comparison     the factual difference between two items                  Gear.Compare / CompareToEquipped     (Stage 2)
 --   Classification      what kind of value the reward appears to have, and why    Advisor.Classify                     (this file)
---   Recommendation      what Codex suggests doing                                  Advisor.Recommend                    (an interface only: no opinion yet)
+--   Recommendation      what Codex suggests doing                                  Advisor.Recommend                    (R1: conservative, deterministic, facts only)
 --
 -- NOT a Pawn clone: there are no stat weights and no scores. An item is judged only from known facts: it either improves some compared stats without lowering
 -- any (improvement), lowers some and raises others (MIXED: Codex does not weigh stats against each other), or does not improve. The size of an improvement is
@@ -15,8 +15,8 @@
 -- Uncertainty is kept, never collapsed: UNKNOWN is not ABSENT, EMPTY is not zero, UNPROVEN is not false. A comparison that cannot be made is UNKNOWN, an item
 -- that has not loaded is UNKNOWN, and conflicting usability evidence stays a conflict. Every category carries a reason that only states known facts.
 --
--- A classification describes the ITEM. "Upgrade" is never "take this". The default recommender gives no opinion; later layers (replacement horizon, route,
--- vendor value, future use) plug in through the context argument and the registries below.
+-- A classification describes the ITEM. "Upgrade" is never a pick by itself. The recommendation is a separate step (below) that reads classifications only; later layers
+-- (replacement horizon, route, future use) plug in through the context argument and the registries below.
 -- Read-only, independent of the planner, strategies, presenter and UI; the only consumer is /codex report (Advisor.ReportLines).
 
 local addonName, ns = ...
@@ -246,6 +246,7 @@ function A.Classify(facts, equipped, opts)
 	-- 3. the factual comparison with what is worn (made whatever the eligibility is; what it MEANS depends on the eligibility)
 	local o = compareOutcome(facts, equipped)
 	out.comparison = { state = o.comparison and o.comparison.state or (o.kind == "no_slot" and "NO_SLOT" or "UNKNOWN"), chosen = o.chosen, entries = o.comparison and o.comparison.entries, note = o.note }
+	out.outcome = { kind = o.kind, chosen = o.chosen, evidence = o.evidence, note = o.note, partial = o.partial }   -- the factual comparison result the recommender reads (no new judgement)
 	if o.partial then certainty = "PARTIAL"; out.caveats[#out.caveats + 1] = "some stats could not be compared: " .. o.partial end
 	local improves = o.kind == "upgrade" or o.kind == "slight" or o.kind == "empty_slot"
 	local useful, comparisonUnknown = false, (o.kind == "unknown")
@@ -339,22 +340,278 @@ function A.Classify(facts, equipped, opts)
 	return out
 end
 
--- ---------------------------------------------------------------- recommendation (an interface; no opinion yet)
+-- ---------------------------------------------------------------- recommendation (R1: conservative, deterministic, facts only)
+--
+-- Reads ONLY what the layers above already produced: each choice's classification (eligibility now / later, the factual comparison with what is worn, the vendor
+-- value). No stat weights, no scores, no percentages, no class or spec preferences, no outside data. Two choices are compared only when the comparison is a plain
+-- fact: both improve the SAME equipment slot and one is at least as good on every compared stat and better on at least one. Anything else is left uncertain.
+--
+-- Per item: PREFERRED (the pick), INFERIOR (proven unusable, no gain while another choice gains, or dominated by the pick), UNCERTAIN (everything else).
+-- Overall:  RECOMMEND               a proven-usable strict improvement (or an empty slot it fills), with nothing left unresolved
+--           TENTATIVE               the best-supported pick, but evidence is incomplete (usability not established, a choice that could not be judged, mixed stats, a
+--                                   future-only upgrade, or a vendor-value tie-break among non-gear)
+--           NO_CLEAR_RECOMMENDATION no pick is justified (nothing usable improves, equivalent choices, incomparable improvements, not enough known)
+--           NOT_A_CHOICE            nothing to choose between (every reward is guaranteed, or only one choice)
 
---- Turns an evaluation into a recommendation. The default gives NO OPINION: it only echoes what each classification offers, so a later layer can see exactly
--- what it will have to weigh. SetRecommender replaces it. The classification layer never calls this.
+local IMPROVES = { upgrade = true, slight = true, empty_slot = true }
+
+--- How one classified choice stands, from its eligibility and its factual comparison:
+--   CLEAR (proven usable, improves) | UNPROVEN (usability not established, improves) | FUTURE (not usable yet, would improve) | BLOCKED (proven unusable, no future gain)
+--   MIXED | NO_GAIN | NON_GEAR | UNKNOWN_COMPARE | UNRESOLVED (the item could not be read or has not loaded)
+local function standingOf(c)
+	local o, elig = c and c.outcome, c and c.eligibility
+	if not (o and elig) then return "UNRESOLVED" end
+	local cur = elig.current.state
+	local improves = IMPROVES[o.kind] == true
+	if cur == "PROVEN_NO" then
+		if elig.future.state == "SOON" and improves then return "FUTURE" end
+		return "BLOCKED"
+	end
+	if improves then return cur == "PROVEN_YES" and "CLEAR" or "UNPROVEN" end
+	if o.kind == "mixed" then return "MIXED" end
+	if o.kind == "none" then return "NO_GAIN" end
+	if o.kind == "no_slot" then return "NON_GEAR" end
+	return "UNKNOWN_COMPARE"
+end
+
+local function gainMap(o)
+	local m = {}
+	for _, g in ipairs(o.evidence and o.evidence.gains or {}) do m[g.stat] = g.diff end
+	return m
+end
+
+--- True only for a plain fact: same equipment slot, complete comparisons, at least as good on every compared stat and better on one.
+local function dominates(a, b)
+	local oa, ob = a.c.outcome, b.c.outcome
+	if not (oa and ob) or oa.kind == "empty_slot" or ob.kind == "empty_slot" then return false end
+	if oa.chosen == nil or oa.chosen ~= ob.chosen or oa.partial or ob.partial then return false end
+	local ga, gb, better = gainMap(oa), gainMap(ob), false
+	local seen = {}
+	for stat in pairs(ga) do seen[stat] = true end
+	for stat in pairs(gb) do seen[stat] = true end
+	for stat in pairs(seen) do
+		local x, y = ga[stat] or 0, gb[stat] or 0
+		if x < y then return false end
+		if x > y then better = true end
+	end
+	return better
+end
+
+local function labelOf(row) return string.format("%s %d, %s", row.kind == "choice" and "choice" or "reward", row.index or 0, row.name) end
+
+--- The first blocker or the plain reason an item cannot be used, in words.
+local function blockedWhy(c)
+	local b = c.eligibility and c.eligibility.current.blockers[1]
+	return b and b.detail or "the client reports it as not usable"
+end
+
+--- The usability caveat for an item whose usability is not established: both client answers, and the class evidence when it exists.
+local function usabilityCaveat(c)
+	local us, elig = c.usability, c.eligibility
+	local parts = {}
+	if us and us.reason then parts[#parts + 1] = us.reason end
+	local prof = elig and elig.checks and elig.checks.proficiency
+	if prof and prof.state == "YES" then parts[#parts + 1] = "proficiency evidence says it can be worn (" .. tostring(prof.detail) .. "), but the client's usability answers do not agree with each other" end
+	return #parts > 0 and table.concat(parts, "; ") or "no evidence about whether this character can use it"
+end
+
+--- The built-in recommender. evaluation = { items = { { index, kind, id, name, facts, classification } } } (the Advisor.Evaluate shape).
+-- Returns { schema = 2, state, selected = { index, kind, id, name } | nil, basis, reason, reasons = {...}, caveats = {...}, items = { { index, kind, name, categories, primary, standing, stance, why } } }.
+function A.RecommendDefault(evaluation)
+	local rows, choices, guaranteed = {}, {}, {}
+	for _, it in ipairs(evaluation.items or {}) do
+		local c = it.classification
+		local row = { index = it.index, kind = it.kind, id = it.id, name = (c and c.item and c.item.name) or it.name or "(unnamed item)", c = c, facts = it.facts }
+		row.standing = standingOf(c)
+		local ids = {}
+		for _, x in ipairs(c and c.categories or {}) do ids[#ids + 1] = x.id end
+		row.categories, row.primary = ids, c and c.primary or "UNKNOWN"
+		rows[#rows + 1] = row
+		if it.kind == "choice" then choices[#choices + 1] = row else guaranteed[#guaranteed + 1] = row end
+	end
+	local out = { schema = 2, reasons = {}, caveats = {}, items = {} }
+	local function reason(t) out.reasons[#out.reasons + 1] = t end
+	local function caveat(t) out.caveats[#out.caveats + 1] = t end
+	local function finish(state, why, basis, pick)
+		out.state, out.reason, out.basis = state, why, basis
+		if pick then out.selected = { index = pick.index, kind = pick.kind, id = pick.id, name = pick.name } end
+		for _, r in ipairs(rows) do
+			local stance, rwhy = nil, nil
+			if r.kind == "choice" and state ~= "NOT_A_CHOICE" then
+				stance = r.stance or "UNCERTAIN"
+				rwhy = r.why
+			elseif r.kind ~= "choice" then
+				rwhy = "guaranteed with the quest; not part of the choice"
+			end
+			out.items[#out.items + 1] = { index = r.index, kind = r.kind, name = r.name, categories = r.categories, primary = r.primary, standing = r.standing, stance = stance, why = rwhy }
+		end
+		return out
+	end
+	if #rows == 0 then return finish("NOT_A_CHOICE", "No reward items were read.", "NO_REWARDS") end
+	if #choices <= 1 then
+		return finish("NOT_A_CHOICE", #choices == 1 and "Only one reward can be chosen, so there is nothing to choose between." or "Every reward is guaranteed with the quest; there is nothing to choose between.", "NOTHING_TO_CHOOSE")
+	end
+
+	-- group the choices by how they stand (index order throughout: the result never depends on table iteration order)
+	local g = { CLEAR = {}, UNPROVEN = {}, FUTURE = {}, BLOCKED = {}, MIXED = {}, NO_GAIN = {}, NON_GEAR = {}, UNKNOWN_COMPARE = {}, UNRESOLVED = {} }
+	for _, r in ipairs(choices) do g[r.standing][#g[r.standing] + 1] = r end
+
+	-- what each choice is, as plain facts (also the reason shown when it is not the pick)
+	for _, r in ipairs(choices) do
+		local c, o = r.c, r.c and r.c.outcome
+		if r.standing == "BLOCKED" then r.stance, r.why = "INFERIOR", "cannot be used by this character: " .. blockedWhy(c)
+		elseif r.standing == "FUTURE" then r.why = string.format("not usable yet (%s); it would improve what you wear once it is usable", blockedWhy(c))
+		elseif r.standing == "MIXED" then r.why = "gains some stats and loses others compared with what you wear; Codex does not weigh different stats against each other"
+		elseif r.standing == "NO_GAIN" then r.why = "no improvement over what you wear" .. (o and o.note and (": " .. o.note) or "")
+		elseif r.standing == "NON_GEAR" then r.why = "not equipment (no equip slot), so there is no gear comparison"
+		elseif r.standing == "UNKNOWN_COMPARE" then r.why = "could not be compared with what you wear" .. (o and o.note and (": " .. o.note) or "")
+		elseif r.standing == "UNRESOLVED" then r.why = "its item data was not available, so nothing is known about it yet"
+		elseif r.standing == "UNPROVEN" then r.why = "would improve what you wear, but whether this character can use it is not established"
+		elseif r.standing == "CLEAR" then r.why = "improves what you wear and is proven usable" end
+	end
+	local function primaryText(r)
+		for _, x in ipairs(r.c.categories) do if x.id == r.c.primary then return x.reason end end
+		return r.why
+	end
+
+	-- choices that could still turn out better than the pick (anything that is not proven worse or plainly unrelated)
+	local function unresolvedAmong(list, pick)
+		local u = {}
+		for _, r in ipairs(list) do
+			if r ~= pick and (r.standing == "UNPROVEN" or r.standing == "FUTURE" or r.standing == "MIXED" or r.standing == "UNKNOWN_COMPARE" or r.standing == "UNRESOLVED") and r.stance ~= "INFERIOR" then u[#u + 1] = r end
+		end
+		return u
+	end
+	local function addUnresolvedCaveats(list, pick)
+		local u = unresolvedAmong(list, pick)
+		for _, r in ipairs(u) do caveat(string.format("%s: %s", labelOf(r), r.why)) end
+		return #u
+	end
+
+	-- pick the one plain winner of a list of improving choices, or explain why there is none
+	local function winnerOf(list)
+		if #list == 1 then return list[1] end
+		for _, a in ipairs(list) do
+			local all = true
+			for _, b in ipairs(list) do if a ~= b and not dominates(a, b) then all = false break end end
+			if all then return a end
+		end
+		return nil
+	end
+	local function markDominated(list, pick)
+		for _, r in ipairs(list) do
+			if r ~= pick and dominates(pick, r) then
+				r.stance, r.why = "INFERIOR", string.format("%s is at least as good on every compared stat and better on at least one, for the same slot", pick.name)
+			end
+		end
+	end
+	local function markNoGain(pick)
+		for _, r in ipairs(g.NO_GAIN) do r.stance = "INFERIOR"; r.why = r.why .. "; another choice does improve it" end
+		return pick
+	end
+
+	local pick, state, basis, why
+	if #g.CLEAR >= 1 then
+		pick = winnerOf(g.CLEAR)
+		if not pick then
+			reason("More than one choice improves what you wear and Codex cannot tell that one is better: they differ in slot or in which stats they improve, or they are equivalent.")
+			for _, r in ipairs(g.CLEAR) do reason(string.format("%s: %s", labelOf(r), primaryText(r))) end
+			for _, r in ipairs(g.BLOCKED) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+			return finish("NO_CLEAR_RECOMMENDATION", "Several choices improve what you wear and the known facts do not separate them; Codex makes no pick.", "AMBIGUOUS")
+		end
+		markDominated(g.CLEAR, pick)
+		markNoGain(pick)
+		pick.stance = "PREFERRED"
+		local o = pick.c.outcome
+		basis = o.kind == "empty_slot" and "EMPTY_SLOT" or "STRICT_UPGRADE"
+		why = o.kind == "empty_slot" and string.format("%s fills a slot that is empty now.", pick.name) or string.format("%s is a proven-usable improvement over what you wear.", pick.name)
+		reason(string.format("%s: %s", labelOf(pick), primaryText(pick)))
+		local n = addUnresolvedCaveats(choices, pick)
+		if pick.c.outcome.partial then n = n + 1; caveat("some of its stats could not be compared: " .. tostring(pick.c.outcome.partial)) end
+		for _, r in ipairs(g.BLOCKED) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+		for _, r in ipairs(g.NO_GAIN) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+		return finish(n == 0 and "RECOMMEND" or "TENTATIVE", why, basis, pick)
+	end
+
+	if #g.UNPROVEN >= 1 then
+		pick = winnerOf(g.UNPROVEN)
+		if not pick then
+			for _, r in ipairs(g.UNPROVEN) do reason(string.format("%s: %s", labelOf(r), primaryText(r))) end
+			return finish("NO_CLEAR_RECOMMENDATION", "Several choices would improve what you wear if they can be used, and the known facts do not separate them; Codex makes no pick.", "AMBIGUOUS")
+		end
+		markDominated(g.UNPROVEN, pick)
+		pick.stance = "PREFERRED"
+		reason(string.format("%s: %s", labelOf(pick), primaryText(pick)))
+		caveat("Codex cannot confirm this character can use it: " .. usabilityCaveat(pick.c))
+		addUnresolvedCaveats(choices, pick)
+		local others = #g.BLOCKED + #g.NO_GAIN
+		for _, r in ipairs(g.BLOCKED) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+		for _, r in ipairs(g.NO_GAIN) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+		why = (#g.UNPROVEN == 1 and #g.MIXED + #g.FUTURE + #g.UNKNOWN_COMPARE + #g.UNRESOLVED == 0 and others == #choices - 1)
+			and string.format("%s is the only choice that could improve what you wear; the others are proven unusable or give no improvement.", pick.name)
+			or string.format("%s is the best-supported choice: it would improve what you wear without losing any compared stat.", pick.name)
+		return finish("TENTATIVE", why, "ONLY_CANDIDATE", pick)
+	end
+
+	if #g.FUTURE >= 1 then
+		if #g.FUTURE == 1 and #g.MIXED + #g.UNKNOWN_COMPARE + #g.UNRESOLVED == 0 then
+			pick = g.FUTURE[1]
+			pick.stance = "PREFERRED"
+			reason(string.format("%s: %s", labelOf(pick), pick.why))
+			caveat("nothing offered can be used and improves your gear right now; this one is a later improvement, not a current one")
+			for _, r in ipairs(g.BLOCKED) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+			for _, r in ipairs(g.NO_GAIN) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+			return finish("TENTATIVE", string.format("%s is the only choice that would improve what you wear, once it can be used.", pick.name), "FUTURE_ONLY", pick)
+		end
+		for _, r in ipairs(g.FUTURE) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+		return finish("NO_CLEAR_RECOMMENDATION", "Nothing offered can be used now, and Codex cannot tell which later improvement is better.", "AMBIGUOUS")
+	end
+
+	-- no choice improves what is worn: only a plain vendor-value tie-break among NON-GEAR choices is possible, labelled as such
+	local allNonGear = #g.NON_GEAR == #choices
+	if allNonGear then
+		local best, tie, count = nil, false, 0
+		for _, r in ipairs(g.NON_GEAR) do
+			local vv = r.facts and r.facts.fields and r.facts.fields.vendorValue
+			local has = false
+			for _, x in ipairs(r.c.categories) do if x.id == "VENDOR" then has = true end end
+			if vv and vv.state == "PROVEN" and type(vv.value) == "number" and has then
+				count = count + 1
+				reason(string.format("%s: vendor value %s", labelOf(r), I.Money(vv.value)))
+				if not best or vv.value > best.value then best, tie = { row = r, value = vv.value }, false
+				elseif vv.value == best.value then tie = true end
+			end
+		end
+		if count == #g.NON_GEAR and best and not tie then
+			pick = best.row
+			pick.stance = "PREFERRED"
+			caveat("this is a vendor-value tie-break only: none of these rewards is equipment, and a higher sell value says nothing about how useful it is to you")
+			return finish("TENTATIVE", string.format("%s has the highest vendor value (%s); none of the choices is equipment.", pick.name, I.Money(best.value)), "VENDOR_TIEBREAK", pick)
+		end
+		for _, r in ipairs(g.NON_GEAR) do if not (r.facts and r.facts.fields and r.facts.fields.vendorValue and r.facts.fields.vendorValue.state == "PROVEN") then caveat(labelOf(r) .. ": vendor value not read") end end
+		return finish("NO_CLEAR_RECOMMENDATION", tie and "The choices are not equipment and the top vendor values are equal; Codex makes no pick." or "The choices are not equipment and their vendor values are not all known; Codex makes no pick.", "VENDOR_UNDECIDED")
+	end
+	if #g.BLOCKED == #choices then
+		for _, r in ipairs(g.BLOCKED) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+		return finish("NO_CLEAR_RECOMMENDATION", "No choice can be used by this character; Codex makes no pick.", "NONE_USABLE")
+	end
+	for _, r in ipairs(choices) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+	if #g.MIXED > 0 then
+		return finish("NO_CLEAR_RECOMMENDATION", "No choice improves what you wear without giving something up, and Codex does not weigh different stats against each other.", "MIXED_ONLY")
+	elseif #g.UNKNOWN_COMPARE + #g.UNRESOLVED > 0 then
+		return finish("NO_CLEAR_RECOMMENDATION", "Not enough is known about the choices to pick one (see the reasons).", "NOT_ENOUGH_KNOWN")
+	end
+	return finish("NO_CLEAR_RECOMMENDATION", "No choice improves what you wear; Codex makes no pick.", "NO_IMPROVEMENT")
+end
+
+--- Turns an evaluation into a recommendation. A plugged-in recommender (SetRecommender) replaces the built-in one; one that errors or returns nothing falls back to the
+-- built-in recommender. The classification layer never calls this.
 function A.Recommend(evaluation, opts)
 	if recommender then
 		local ok, r = pcall(recommender, evaluation, opts)
 		if ok and type(r) == "table" then return r end
 	end
-	local items = {}
-	for i, it in ipairs(evaluation.items or {}) do
-		local ids = {}
-		for _, c in ipairs(it.classification.categories) do ids[#ids + 1] = c.id end
-		items[i] = { index = it.index, kind = it.kind, name = it.classification.item.name, categories = ids, primary = it.classification.primary, stance = nil }
-	end
-	return { schema = 1, state = "NO_OPINION", reason = "Stage 3 classifies each reward; it does not choose between them yet.", items = items }
+	return A.RecommendDefault(evaluation)
 end
 
 -- ---------------------------------------------------------------- evaluating the reward dialog
@@ -399,7 +656,7 @@ function A.ReportLines(opts)
 		L[#L + 1] = "REWARD ADVISOR: no reward dialog seen this session (open a quest reward dialog, then run /codex report)"
 		return L
 	end
-	L[#L + 1] = string.format("REWARD ADVISOR (classification only: it describes each item and gives no recommendation) | %s | Q:%s", ev.source, tostring(ev.q))
+	L[#L + 1] = string.format("REWARD ADVISOR (it describes each reward; for a choice it also gives a conservative recommendation from known facts only: nothing is scored) | %s | Q:%s", ev.source, tostring(ev.q))
 	for i, it in ipairs(ev.items) do
 		local c = it.classification
 		local primary
@@ -417,6 +674,22 @@ function A.ReportLines(opts)
 			L[#L + 1] = "    usability evidence: " .. table.concat(s, ", ") .. " -> " .. u.verdict
 		end
 	end
-	L[#L + 1] = string.format("RECOMMENDATION: %s (%s)", ev.recommendation.state, ev.recommendation.reason or "")
+	local rec = ev.recommendation or {}
+	local sel = rec.selected
+	if rec.state == "RECOMMEND" or rec.state == "TENTATIVE" then
+		L[#L + 1] = string.format("RECOMMENDATION: %s | pick: choice %s, %s | basis %s%s", rec.state, tostring(sel and sel.index or "?"), tostring(sel and sel.name or "?"), tostring(rec.basis),
+			rec.state == "TENTATIVE" and " | TENTATIVE: the evidence is incomplete, see the caveats" or "")
+	else
+		L[#L + 1] = string.format("RECOMMENDATION: %s%s", tostring(rec.state), rec.state == "NO_CLEAR_RECOMMENDATION" and " | Codex makes no pick" or "")
+	end
+	if rec.reason then L[#L + 1] = "    " .. rec.reason end
+	for _, r in ipairs(rec.reasons or {}) do L[#L + 1] = "    fact: " .. r end
+	for _, cv in ipairs(rec.caveats or {}) do L[#L + 1] = "    caveat: " .. cv end
+	if rec.items then
+		for _, it in ipairs(rec.items) do
+			if it.stance then L[#L + 1] = string.format("    %s %d. %s: %s%s", it.kind == "choice" and "Choice" or "Reward", it.index or 0, it.name, it.stance, it.why and (" - " .. it.why) or "") end
+		end
+	end
+	if not ev.live and rec.state ~= "NOT_A_CHOICE" then L[#L + 1] = "    (this dialog is closed: the recommendation describes what was offered, it is not an open choice)" end
 	return L
 end
