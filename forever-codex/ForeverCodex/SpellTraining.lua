@@ -14,7 +14,8 @@
 --
 -- Persisted per character (Prefs.Char().spellTraining, never shared between characters):
 --   { class = "ROGUE", entries = { [key] = { id, name, rank, rankNum, cost, levelReq, cat, learned, seenLevel } }, dismissed = { [key] = { name, rank } } }
--- key = "S:<spell id>" when the trainer link carries one, else "N:<name>|<rank>" (flagged: the name is then the only identity).
+-- key = "S:<spell id>" when the trainer link carries one, else "N:<name>|<rank>|L<level requirement>" (flagged: the name is then the only identity; the level requirement
+-- tells two ranks of one spell apart when the client gives no rank text, as on Forever build 70205).
 -- A new rank is a different spell id, so it is a new training opportunity by itself; a dismissal never carries over to it.
 
 local _, ns = ...
@@ -29,6 +30,16 @@ local function call(fn, ...)
 	if not r[1] then return false end
 	table.remove(r, 1)
 	return true, r[1], r[2], r[3], r[4]
+end
+
+--- Like call, but keeps EVERY return value: { n = count, ... }. The client's GetTrainerServiceInfo order is not the Classic one (see ReadTrainer).
+local function callN(fn, ...)
+	if type(fn) ~= "function" then return false end
+	local r = { pcall(fn, ...) }
+	if not r[1] then return false end
+	local out = { n = #r - 1 }
+	for i = 2, #r do out[i - 1] = r[i] end
+	return true, out
 end
 
 local function wall() return type(_G.time) == "function" and _G.time() or 0 end
@@ -55,10 +66,12 @@ function S._classToken()
 	return ok and type(token) == "string" and token ~= "" and token or nil
 end
 
-local function keyOf(id, name, rank)
+local function keyOf(id, name, rank, level)
 	if type(id) == "number" then return "S:" .. id end
-	return "N:" .. tostring(name) .. "|" .. tostring(rank or "")
+	return "N:" .. tostring(name) .. "|" .. tostring(rank or "") .. "|L" .. tostring(level or "")
 end
+
+local KNOWN_CATEGORY = { available = true, unavailable = true, used = true }
 
 local function rankNumber(rank)
 	return type(rank) == "string" and tonumber(rank:match("(%d+)")) or nil
@@ -88,13 +101,24 @@ function S.ReadTrainer()
 	end
 	r.categories, r.sample, r.n = {}, {}, n
 	for i = 1, n do
-		local okI, name, rank, category = call(_G.GetTrainerServiceInfo, i)
+		local okI, rv = callN(_G.GetTrainerServiceInfo, i)
+		local name = okI and rv[1]
 		if okI and type(name) == "string" and name ~= "" then
-			-- the category the client gave, exactly (type and value): Codex only acts on "available" / "unavailable" / "used" (compared lower-case); anything else is tallied for the report
-			local ck = type(category) .. ":" .. tostring(category)
+			-- OBSERVED on Forever (build 70205): GetTrainerServiceInfo returns (name, "unavailable" | ..., <number>, ...): the category is the SECOND value and a number follows
+			-- (an icon file id, not a spell id); there is no rank text. The Classic order is (name, rank, category). So the returns after the name are read by what they ARE: a string that is
+			-- one of available / unavailable / used (any case) is the category; another non-empty string is the rank text; a number is kept as `icon`. Nothing else is assumed.
+			local category, rank, icon
+			for k = 2, math.min(rv.n, 6) do
+				local v = rv[k]
+				if type(v) == "string" then
+					local lv = v:lower()
+					if KNOWN_CATEGORY[lv] and not category then category = lv
+					elseif v ~= "" and not KNOWN_CATEGORY[lv] and not rank then rank = v end
+				elseif type(v) == "number" and not icon then icon = v end
+			end
+			local ck = category or "none"
 			r.categories[ck] = (r.categories[ck] or 0) + 1
-			if type(category) == "string" then category = category:lower() end
-			local s = { index = i, name = name, rank = (type(rank) == "string" and rank ~= "") and rank or nil, category = category, rawRank = rank }
+			local s = { index = i, name = name, rank = rank, category = category, icon = icon }
 			local okC, cost = call(_G.GetTrainerServiceCost, i)
 			if okC and type(cost) == "number" then s.cost = cost end
 			local okL, lvl = call(_G.GetTrainerServiceLevelReq, i)
@@ -102,8 +126,10 @@ function S.ReadTrainer()
 			local okK, link = call(_G.GetTrainerServiceItemLink, i)
 			if okK then s.id = S.IdFromLink(link) end
 			if #r.sample < 6 then
-				r.sample[#r.sample + 1] = string.format("#%d %s | rank %s | category %s | cost %s | level %s | link %s", i, name, type(rank) == "string" and ('"' .. rank .. '"') or type(rank),
-					type(category) .. ":" .. tostring(category), tostring(s.cost), tostring(s.levelReq), okK and (type(link) == "string" and ('"' .. link:gsub("|", "||"):sub(1, 70) .. '"') or type(link)) or "call failed")
+				local raw = {}
+				for k = 1, math.min(rv.n, 6) do raw[#raw + 1] = type(rv[k]) == "string" and ('"' .. rv[k] .. '"') or (type(rv[k]) .. ":" .. tostring(rv[k])) end
+				r.sample[#r.sample + 1] = string.format("#%d returns [%s] -> category %s, rank %s | cost %s | level %s | link %s", i, table.concat(raw, ", "), tostring(category), tostring(rank),
+					tostring(s.cost), tostring(s.levelReq), okK and (type(link) == "string" and ('"' .. link:gsub("|", "||"):sub(1, 70) .. '"') or type(link)) or "call failed")
 			end
 			r.services[#r.services + 1] = s
 		end
@@ -124,7 +150,7 @@ function S.Record(read, ctx)
 	local lvl = ctx and ctx.char and ctx.char.level
 	local touched = 0
 	for _, s in ipairs(read.services) do
-		local key = keyOf(s.id, s.name, s.rank)
+		local key = keyOf(s.id, s.name, s.rank, s.levelReq)
 		local e = st.entries[key]
 		if s.category == "used" then
 			if e then e.learned = true end       -- the trainer itself says this is already known
@@ -218,13 +244,14 @@ function S.List(ctx)
 	-- one rank of a spell at a time: the lowest one still to learn (the trainer sells the next rank after the previous)
 	local lowest = {}
 	for _, c in ipairs(cand) do
-		local n = c.e.rankNum
+		local n = c.e.rankNum or c.e.levelReq          -- (no rank text, as on Forever: the level requirement orders the ranks of one spell)
 		if n and (lowest[c.e.name] == nil or n < lowest[c.e.name]) then lowest[c.e.name] = n end
 	end
 	local rows, total, partial = {}, 0, false
 	for _, c in ipairs(cand) do
 		local e = c.e
-		if not (e.rankNum and lowest[e.name] ~= e.rankNum) then
+		local ord = e.rankNum or e.levelReq
+		if not (ord and lowest[e.name] ~= ord) then
 			rows[#rows + 1] = { key = c.key, id = e.id, name = e.name, rank = e.rank, title = displayName(e), cost = e.cost, levelReq = e.levelReq }
 		end
 	end

@@ -196,7 +196,7 @@ do
 	local ns = rogue()
 	visit(ns)
 	local _, sp = titles(ns)
-	check(sp and sp.rows[1].key == "N:Sinister Strike|Rank 3" and sp.rows[1].id == nil, "the key is name and rank, flagged as having no spell id")
+	check(sp and sp.rows[1].key == "N:Sinister Strike|Rank 3|L6" and sp.rows[1].id == nil, "the key is name, rank and level requirement, flagged as having no spell id")
 	T.book = { { "Evasion", "" } }
 	ns.State.Recompute()
 	check(not (titles(ns)):find("Evasion", 1, true), "a spell in the spellbook is known")
@@ -268,25 +268,37 @@ end
 
 clearClient()
 
-section("spell training: a trainer whose categories Codex does not recognise is reported exactly, and an empty later read does not hide the good one")
+section("spell training: Forever's GetTrainerServiceInfo order (name, category, icon number, ...) is read by what each value is; ranks of one spell without rank text are ordered by level")
 do
 	resetClient()
-	T.services = { svc(nil, "Aspect of the Hawk", "Rank 2", 1000, 10, 1), svc(nil, "Mend Pet", "Rank 1", 500, 12, 2), svc(nil, "Tame Beast", nil, 100, 10, "Header") }
+	-- the real Forever shape (build 70205): name, category string, an icon number; no rank text, no spell id in the link
+	_G.GetTrainerServiceInfo = function(i) local s = T.services[i]; if s then return s.name, s.cat or "available", 132000 + i, nil end end
+	T.services = {
+		{ name = "Raptor Strike", cat = "available", cost = 4000, req = 8 }, { name = "Raptor Strike", cat = "unavailable", cost = 7200, req = 24 }, { name = "Beast Lore", cat = "unavailable", cost = 7200, req = 24 },
+		{ name = "Mend Pet", cat = "Used", cost = 100, req = 2 }, { name = "Tame Beast", cat = "Header", cost = 0, req = 0 },
+	}
+	T.noIds = true
 	local ns = rogue()
+	H.world().char.level = 25
 	visit(ns)
-	check(titles(ns) == "", "an unrecognised category value stores nothing (no guessing)")
+	local s, sp = titles(ns)
+	check(s == "Raptor Strike|40s;Beast Lore|1g 72s" or s == "Raptor Strike|40s;Beast Lore|72s", "the lowest rank of Raptor Strike is listed, not both  [" .. s .. "]")
+	check(sp and #sp.rows == 2 and sp.rows[1].key == "N:Raptor Strike||L8", "the key tells ranks apart by level requirement  [" .. tostring(sp and sp.rows[1].key) .. "]")
 	local text = table.concat(ns.SpellTraining.ReportLines(ns.State.ctx), "\n")
-	check(text:find("categories the client gave: number:1 x1, number:2 x1, string:Header x1", 1, true) ~= nil, "the report tallies the categories exactly as given (type and value)")
-	check(text:find('#1 Aspect of the Hawk | rank "Rank 2" | category number:1 | cost 1000 | level 10 | link nil', 1, true) ~= nil, "and prints the first services raw, including the (absent) link")
+	check(text:find("categories the client gave: available x1, none x1, unavailable x2, used x1", 1, true) ~= nil, "the report tallies the categories it understood and the ones it did not")
+	check(text:find('#1 returns ["Raptor Strike", "available", number:132001, nil', 1, true) == nil and text:find('returns ["Raptor Strike", "available", number:132001', 1, true) ~= nil, "and prints the raw returns of the first services")
+	T.services[1].cat = "used"                            -- Raptor Strike rank 1 learned at the trainer: the next rank becomes the one to learn
+	visit(ns, "TRAINER_UPDATE")
+	check((titles(ns)):find("Raptor Strike|72s", 1, true) ~= nil and not (titles(ns)):find("Raptor Strike|40s", 1, true), "after the trainer shows it as used, the next rank is the opportunity")
+	-- an empty later read does not hide the good one
 	T.services = {}
-	visit(ns, "TRAINER_UPDATE")                      -- the window closed: an empty list
+	visit(ns, "TRAINER_UPDATE")
 	local after = table.concat(ns.SpellTraining.ReportLines(ns.State.ctx), "\n")
-	check(after:find("latest trainer read was empty", 1, true) and after:find("3 service(s)", 1, true), "the report keeps the latest read that listed services")
-	-- a capitalised standard category is still understood
+	check(after:find("latest trainer read was empty", 1, true) and after:find("5 service(s)", 1, true), "the report keeps the latest read that listed services")
+	-- the Classic order (name, rank, category) is still understood
 	resetClient(); BASE()
-	for _, s in ipairs(T.services) do if s.cat == nil then s.cat = "Available" end end
 	local ns2 = rogue()
 	visit(ns2)
-	check(titles(ns2) ~= "", "category strings are compared case-insensitively")
+	check(titles(ns2) ~= "", "the Classic order still works")
 	resetClient()
 end

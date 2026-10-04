@@ -38,3 +38,9 @@ A profession-trainer check relies on `IsTradeskillTrainer`; when it is absent th
   so the category values Forever returns are not the Classic strings `available` / `unavailable` / `used` (or are not strings). Without ids the known-spell check by `IsPlayerSpell` cannot run either.
 * A profession trainer window read once returned 0 services (probably an empty update as the window closed; `TRAINER_UPDATE` fires many times).
 * 0.7.2 adds diagnostics only (the exact categories, the first six raw services including the link, the latest non-empty read, and which other spell names exist). The next report decides how to read the list; nothing is guessed.
+
+## Observed on Forever, second report (0.7.2 diagnostics, level 23 Hunter)
+`GetTrainerServiceInfo(i)` returns **(name, category, <number>, ...)**: the SECOND value is the category string (`"unavailable"` ...) and the third is a number repeated across spells (an icon file id, not a spell id). There is no rank text
+and `GetTrainerServiceItemLink` is nil for every service. 0.7.3 therefore reads each return after the name by what it is (a known category string in any case = category, another non-empty string = rank, a number = icon),
+keys a spell without an id as `N:<name>|<rank>|L<level requirement>` and orders the ranks of one spell by level requirement (only the lowest unlearned one is listed). **Limitation:** with no spell id and no spellbook API,
+Codex learns that a spell was trained only from the trainer window itself (`TRAINER_UPDATE` after the purchase, or the next visit shows it as used); it cannot notice a spell learned some other way while no trainer window is open.
