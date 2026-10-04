@@ -1552,6 +1552,24 @@ do
 	local p4 = plan()
 	check(not isHeld(p4, "Q:402:ACCEPT"), "9: a quest dialog for it (QUEST_DETAIL) lifts the hold")
 
+	-- the Ayessa case (real 0.6.7): her COMPLETE list names two other quests, so the third quest she is "known" to give is held back, even right after a turn-in
+	reset()
+	H.attPack(ns, {
+		{ id = 410, name = "Confront Like", map = 9001, x = 0.5, y = 0.5, req = 1, giverNpc = 9005, giverName = "Ayessa" },
+		{ id = 411, name = "In Service Like", map = 9001, x = 0.5, y = 0.5, req = 1, giverNpc = 9005, giverName = "Ayessa" },
+		{ id = 412, name = "Blood Like", map = 9001, x = 0.5, y = 0.5, req = 1, giverNpc = 9005, giverName = "Ayessa" },
+		{ id = 413, name = "Elsewhere Quest", map = 9001, x = 0.6, y = 0.5, req = 1, giverNpc = 9004, giverName = "Other" },
+	}, nil)
+	ns.State.Recompute()
+	ns.Journey.OnQuestTurnedIn(980, 100)               -- the quest just handed in changed the progression BEFORE she is asked again
+	stubNpc("Ayessa", 9005)
+	gossip({ e(411, "In Service Like"), e(412, "Blood Like") })
+	local pa = plan()
+	check(isHeld(pa, "Q:410:ACCEPT") and isHeld(pa, "Q:410:ACCEPT").kind == "NOT_LISTED_AT_NPC", "Ayessa: the quest her complete list omitted is held back (NOT_LISTED_AT_NPC)")
+	check(pa.diag.nowId ~= "Q:410:ACCEPT" and not inSequence(pa, "Q:410:ACCEPT"), "Ayessa: and it is not NOW or in the sequence (NOW=" .. tostring(pa.diag.nowId) .. ")")
+	check(pa.diag.nowId == "Q:411:ACCEPT" or pa.diag.nowId == "Q:412:ACCEPT", "Ayessa: the quests she did list are what Codex sends you to accept (" .. tostring(pa.diag.nowId) .. ")")
+	-- a stale negative from another NPC (read before that turn-in) does not hold anything
+	check(not isHeld(pa, "Q:413:ACCEPT"), "an unrelated quest is untouched")
 	check(#ns.errors == 0, "no errors")
 	for _, n in ipairs(NAMES) do _G[n] = nil end
 	reset()
