@@ -205,7 +205,8 @@ local function questLog(ctx)
 		local e = ctx.log[id]
 		local obj
 		for _, o in ipairs(e.objectives or {}) do
-			if type(o) == "table" and not o.finished and type(o.have) == "number" and type(o.need) == "number" then obj = (obj and (obj .. " ") or "") .. o.have .. "/" .. o.need end
+			local have, need = type(o) == "table" and (o.numFulfilled or o.have), type(o) == "table" and (o.numRequired or o.need)
+			if type(o) == "table" and not o.finished and type(have) == "number" and type(need) == "number" then obj = (obj and (obj .. " ") or "") .. have .. "/" .. need end
 		end
 		out[#out + 1] = { id = id, title = F.Scrub(e.title, 40), done = e.complete or nil, obj = obj }
 	end

@@ -97,6 +97,7 @@ function S.RecomputeInner()
 		end
 	end
 	if ns.Prefs.NoteLevel then ns.Prefs.NoteLevel(ctx.char and ctx.char.level) end
+	observeCtx("areaevidence", ns.AreaEvidence, "Observe")
 	observeCtx("questtimers", ns.QuestTimers, "Observe")           -- BEFORE the planner: a timed quest's live remaining time is an input to its value
 	observeCtx("journey", ns.Journey, "OnContext")
 	observeCtx("party", ns.Party, "OnContext")

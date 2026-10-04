@@ -158,6 +158,7 @@ local REASON_TEXT = {
 	UNMEASURED = "Codex cannot measure the way there from here, so there is no arrow.",
 	APPROX_FAR = "Only an approximate area is known and it is far away, so there is no arrow.",
 	PLAYER_POSITION_FAR = "Only a spot where someone once stood is known for this, not the NPC's own position, so there is no arrow.",
+	IN_AREA = "You are in the objective area. Codex stops steering you toward its marker.",
 	SPECIAL_TRAVEL = "This quest's own text names special travel (a boat, portal or similar). Follow it: Codex has no route for that, so there is no arrow.",
 }
 N.REASON_TEXT = REASON_TEXT
@@ -183,6 +184,16 @@ function N.Assess(a, ctx)
 		local v = ns.Registry.Quest(a.quest)
 		local l = v and v.loc
 		if l and l.kind == "player_position" and l.map == pos.map and math.abs(l.x - pos.x) < 1e-6 and math.abs(l.y - pos.y) < 1e-6 then kind = "player_position" end
+	end
+	-- AN AREA is not a point: while the player is demonstrably inside the objective's area (progress made here, or arrived at its marker) the marker is NOT steered toward
+	if kind == "area" and a.kind == "OBJECTIVE" and a.quest and ns.AreaEvidence then
+		local inside, why = ns.AreaEvidence.Inside(a.quest, ctx, pos, pos.radius)
+		if inside then
+			out.reason, out.inArea, out.areaWhy = "IN_AREA", true, why
+			out.text = "You are in the objective area. Codex stops steering you toward its marker: the area has no known boundary, so just carry on here."
+			out.distance = playerDistanceTo(ctx, pos)
+			return out
+		end
 	end
 	local d = playerDistanceTo(ctx, pos)
 	out.distance = d

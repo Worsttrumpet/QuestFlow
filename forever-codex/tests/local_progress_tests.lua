@@ -662,7 +662,8 @@ do
 	local titles = {}
 	for _, it in ipairs(card.also) do titles[#titles + 1] = it.title end
 	check(table.concat(titles, ","):find("Proof of Demise", 1, true) or table.concat(titles, ","):find("At War", 1, true), "and the other quest next to it is offered under ALSO COMPLETE THIS  [" .. table.concat(titles, ",") .. "]")
-	check(ns.Navigation.Target() ~= nil and math.abs(ns.Navigation.Target().x - 0.22) < 0.01, "the arrow points at the objective area beside you")
+	-- (0.7.6) standing at the objective area's marker is being IN the area: the arrow no longer steers toward the marker (see AreaEvidence)
+	check(ns.Navigation.Target() == nil and card.now.dist == "In the objective area", "the player is at the objective area: no arrow toward its marker, and the card says so")
 	check(#ns.errors == 0, "no errors")
 end
 

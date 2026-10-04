@@ -39,6 +39,7 @@ Items.lua
 SpellTraining.lua
 Professions.lua
 QuestTimers.lua
+AreaEvidence.lua
 Feedback.lua
 ItemProbe.lua
 OfferProbe.lua

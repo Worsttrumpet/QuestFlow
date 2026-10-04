@@ -190,6 +190,7 @@ local function describe(a, plan, ctx, icon)
 	if ns.Navigation and ns.Navigation.Assess and a.type ~= "FLIGHT" then
 		local as = ns.Navigation.Assess(a, ctx)
 		if Pl.Locate(a) and (as.reason or as.straight) then it.navNote, it.navReason = as.text, as.reason end
+		if as.inArea then it.dist, it.whereShort = "In the objective area", "In the objective area" end
 	end
 	local why = ns.PlanAdapter.Sentences(plan, a)
 	it.why = why[1]
