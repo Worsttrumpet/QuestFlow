@@ -115,6 +115,22 @@ end
 --- How many follow-up quests turning this one in would open for THIS character, by the rules Codex already applies to every pickup (the same
 -- eligibility check, run as if the quest were done). Quests already done or in the log, repeatables and anything the rules exclude are not counted.
 -- nil when the data names none. (QuestieDB prerequisite lists: unverified, so this says "Codex knows of", never more.)
+--- The names (at most two) of the follow-up quests turning this one in would open for this character (the same rules as Pr.Unlocks), or an empty list.
+function Pr.UnlockNames(a, ctx)
+	local out = {}
+	if not (a and a.quest and ctx and Pl.Unlocks and ns.QuestProvider) then return out end
+	local after = setmetatable({ isCompleted = function(id) return id == a.quest or ctx.isCompleted(id) end }, { __index = ctx })
+	local strategy = R.Strategy(ctx.prefs and ctx.prefs.style)
+	for _, qid in ipairs(Pl.Unlocks(a.quest)) do
+		local v = R.Quest(qid)
+		if v and not ctx.log[qid] and not ctx.isCompleted(qid) and ns.QuestProvider.Eligibility(v, after, strategy) and v.name then
+			out[#out + 1] = v.name
+			if #out >= 2 then break end
+		end
+	end
+	return out
+end
+
 function Pr.Unlocks(a, ctx)
 	if not (a and a.quest and ctx and Pl.Unlocks and ns.QuestProvider) then return nil end
 	local after = setmetatable({ isCompleted = function(id) return id == a.quest or ctx.isCompleted(id) end }, { __index = ctx })
@@ -183,6 +199,9 @@ local function describe(a, plan, ctx, icon)
 		it.npc = a.turnInNpc and a.giver or nil           -- only a NAMED turn-in NPC; the quest giver's name is not assumed to be where it is handed in
 		it.who = it.npc
 		it.detail = a.giver and ("Hand it in near " .. a.giver .. ".") or "Your objectives are done."
+		-- READY -> TURN IN -> UNLOCK -> THEN: say what the hand-in opens, so the order makes sense (the THEN line names the next step)
+		local names = Pr.UnlockNames(a, ctx)
+		if #names > 0 then it.unlocks = names; it.detail = it.detail .. " It opens " .. table.concat(names, " and ") .. "." end
 	else
 		it.title = name
 	end

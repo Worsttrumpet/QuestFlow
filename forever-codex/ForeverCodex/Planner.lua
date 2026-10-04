@@ -84,6 +84,8 @@ Pl.STRATEGY_KEYS = { "completionist", "efficient", "fast", "questing_only" }
 --      NOW (without a map location), rather than sending the player somewhere else; a distant trip waits until that work is done or skipped.
 -- Never overrides a route zone the player chose or a quest they added. Pl.LOCAL_FIRST = false switches both off (tests).
 Pl.LOCAL_FIRST = true
+Pl.DEFER_PICKUPS = true              -- a distant new pickup waits while objective work of quests already in the log is waiting on the player's map (see Compute)
+Pl.PICKUP_DEFER_RANGE_YD = 900       -- ...and that work is within this many yards
 Pl.LOCAL_MIN_NET = 0
 
 -- QUEST-STATE PRIORITY. What the player has already earned comes before new work: (1) a FINISHED quest that can be handed in, (2) objectives of
@@ -1004,7 +1006,11 @@ function Pl.Compute(ctx, c, opts)
 	if slotPressure then diag.slotPressure = true end
 	if Pl.DEFER_TURN_INS and not slotPressure and not diag.pinnedFirst and S.player and S.player.map then
 		local first = S.stops[pick.stops[1]]
-		if hasHandIn(first) and not hasKind(first, "OBJECTIVE") then
+		-- a hand-in that OPENS a quest right there (the chain credit the planner already prices) changes the route: it is not left waiting behind work elsewhere
+		local opens = false
+		for _, it in ipairs(first.items) do if it.a.kind == "TURN_IN" and it.comps and it.comps.chain then opens = true end end
+		if opens then diag.handInOpens = true end
+		if hasHandIn(first) and not hasKind(first, "OBJECTIVE") and not opens then
 			local d = E.Distance(ctx, S.player, first.pos)
 			if d and d > Pl.DEFER_NEAR_YD then
 				local alt
@@ -1053,6 +1059,36 @@ function Pl.Compute(ctx, c, opts)
 					if started then
 						diag.deferredTurnIn = true
 						return Pl.StayLocal(S, plan, started)
+					end
+				end
+			end
+		end
+	end
+	-- AVAILABLE IS NOT THE SAME AS BEST RIGHT NOW. A new pickup that is not close, while objective work of the quests already in the log is waiting on this map, does not pull the player away
+	-- from that cluster: finish what is underway first (the pickup stays a candidate and can still be an ALSO DO). It does not wait when it costs next to nothing on the way to that work.
+	if Pl.DEFER_PICKUPS and not diag.pinnedFirst and S.player and S.player.map then
+		local first = S.stops[pick.stops[1]]
+		local onlyPickups = #first.items > 0
+		for _, it in ipairs(first.items) do if it.a.kind ~= "ACCEPT" or it.a.pinned then onlyPickups = false end end
+		local inZone = env.routeMap ~= nil and first.pos.map == env.routeMap
+		if onlyPickups and not inZone then
+			local d = E.Distance(ctx, S.player, first.pos)
+			if d == nil or d > Pl.DEFER_NEAR_YD or first.pos.map ~= S.player.map then
+				local alt
+				for f, seq in pairs(S.bestByFirst) do
+					local st = S.stops[f]
+					if hasKind(st, "OBJECTIVE") and not hasHandIn(st) and st.pos.map == S.player.map then
+						local dw = E.Distance(ctx, S.player, st.pos)
+						if dw and dw <= Pl.PICKUP_DEFER_RANGE_YD and better(seq, alt) then alt = seq end
+					end
+				end
+				if alt then
+					local w = S.stops[alt.stops[1]]
+					local direct, leg1, leg2 = E.Distance(ctx, S.player, w.pos), d, E.Distance(ctx, first.pos, w.pos)
+					local onRoute = direct ~= nil and leg1 ~= nil and leg2 ~= nil and leg1 + leg2 - direct <= Pl.ON_ROUTE_YD
+					if not onRoute then
+						pick = alt
+						diag.deferredPickup = true
 					end
 				end
 			end
