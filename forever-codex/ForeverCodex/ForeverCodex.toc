@@ -36,6 +36,7 @@ Nearby.lua
 Overlap.lua
 Dungeons.lua
 Items.lua
+SpellTraining.lua
 ItemProbe.lua
 OfferProbe.lua
 Gear.lua

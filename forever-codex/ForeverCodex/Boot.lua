@@ -76,6 +76,9 @@ local function onEvent(_, event, arg1, arg2, arg3, arg4)
 			ns.Journey.OnQuestTurnedIn(arg1, arg2)
 			ns.Party.OnTurnedIn(arg1, ns.State.ctx)
 			ns.State.MarkDirty(event)
+		elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
+			if ns.SpellTraining then ns.SpellTraining.OnTrainerEvent() end
+			ns.State.MarkDirty(event)
 		elseif event == "USER_WAYPOINT_UPDATED" then
 			ns.Navigation.OnWaypointEvent()
 			ns.State.MarkDirty(event)
@@ -91,6 +94,11 @@ end
 
 for _, ev in ipairs(EVENTS) do
 	ns.Safe(frame.RegisterEvent, frame, ev)
+end
+-- SPELL TRAINING: standard Classic trainer / spellbook events, NOT yet observed on Forever. A refused registration is ignored (no error recorded): the
+-- known-spell check also runs on every recompute, so a missed event only delays the section by one refresh.
+for _, ev in ipairs({ "TRAINER_SHOW", "TRAINER_UPDATE", "LEARNED_SPELL_IN_TAB", "SPELLS_CHANGED" }) do
+	pcall(frame.RegisterEvent, frame, ev)
 end
 frame:SetScript("OnEvent", onEvent)
 frame:SetScript("OnUpdate", function(_, elapsed)

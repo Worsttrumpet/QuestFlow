@@ -901,6 +901,14 @@ function D.PlaytestLines(snap, lines)
 			add("REWARD ADVISOR: error: " .. tostring(alines))
 		end
 	end
+	if ns.SpellTraining then
+		local okS, slines = pcall(ns.SpellTraining.ReportLines, ns.State and ns.State.ctx)
+		if okS then
+			for _, l in ipairs(slines) do add(l) end
+		else
+			add("SPELL TRAINING: error: " .. tostring(slines))
+		end
+	end
 
 	add("")
 	add("--- FULL DIAGNOSTICS ---")

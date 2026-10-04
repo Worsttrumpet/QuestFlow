@@ -4,6 +4,8 @@
 --                       (distance, who, and a short reason when the planner gave one); hidden when there is none
 --   READY TO TURN IN    finished quests waiting for the right moment (listed, never forced into NOW) with distance, the hand-in NPC when the data names one,
 --                       and how many follow-up quests it opens when the data supports it; hidden when there are none
+--   SPELL TRAINING      class spells the trainer offered that you can now learn, with cost and a total; "Don't Want to Learn" hides one for this
+--                       character; spells that are learned leave by themselves; hidden when there are none (SpellTraining.lua)
 --   NEW FOR YOU         a temporary card for a level you just reached (secondary, never in front of NOW)
 --   Party               what party members finished, only when there is something to say
 -- Before the first-time setup is finished this page shows the setup panel instead (UI/PageSetup.lua).
@@ -23,6 +25,7 @@ local TOP = 22                      -- below the character line
 local NOW_MIN = 56                  -- a card never gets smaller than this
 local READY_ROWS = 12              -- hand-ins listed in READY TO TURN IN (the window grows to fit; the rest are summarised in one line)
 local DG_GROUPS, DG_ROWS = 4, 12      -- DUNGEON QUESTS: dungeons and quest lines drawn (the rest are summarised in one line)
+local ST_ROWS = ns.SpellTraining and ns.SpellTraining.MAX_ROWS or 12   -- SPELL TRAINING rows drawn (the rest are summarised in one line)
 local MAX_ROWS = 8                  -- objective rows drawn in one card (the rest are summarised in one line)
 
 --- Places a card at a vertical offset below the page top and sizes it.
@@ -105,6 +108,21 @@ local function build(page)
 	for i = 1, DG_GROUPS do c.dgHeads[i] = W.Line(c.dgBox, 12, W.STYLE_DUNGEON.label, "LEFT") end
 	for i = 1, DG_ROWS do c.dgRows[i] = W.Line(c.dgBox, 12, W.TEXT, "LEFT") end
 	c.dgMore = W.Line(c.dgBox, 11, W.DIM, "LEFT")
+
+	-- SPELL TRAINING: class spells the trainer offered that the character can now learn; present only while there are some. Informational: no Learn button.
+	c.stBox = W.Card(page, FULL, 40, W.STYLE_NEAR)
+	c.stLabel = W.Label(c.stBox, "SPELL TRAINING", W.STYLE_NEAR.label)
+	c.stLabel:SetPoint("TOPLEFT", c.stBox, "TOPLEFT", c.stBox.insetX, -PAD + 2)
+	c.stRows = {}
+	for i = 1, ST_ROWS do
+		local row = { line = W.Line(c.stBox, 12, W.TEXT, "LEFT") }
+		row.btn = W.Button(c.stBox, 108, 16, "Don't Want to Learn", function()
+			if row.key then ns.SpellTraining.Dismiss(row.key) end
+		end)
+		c.stRows[i] = row
+	end
+	c.stMore = W.Line(c.stBox, 11, W.DIM, "LEFT")
+	c.stTotal = W.Line(c.stBox, 12, W.WARM_GOLD, "LEFT")
 
 	-- NEW FOR YOU: secondary, fits its content; present only while active
 	c.nfyBox = W.Card(page, FULL, 80, W.STYLE_NEW)
@@ -362,6 +380,40 @@ local function drawDungeons(c, groups)
 	return math.floor(st.y + PAD - 2 + 0.5)
 end
 
+--- SPELL TRAINING. Returns the card height, or nil when there is nothing to train (the card is then hidden entirely: no empty header).
+local function drawSpells(c, sp)
+	if not sp or #sp.rows == 0 then
+		for _, row in ipairs(c.stRows) do row.key = nil; row.btn:Hide() end
+		return nil
+	end
+	local box = c.stBox
+	local inner = FULL - box.insetX - PAD
+	local st = W.Stack(box, inner)
+	st:Skip(16)
+	local btnW = 108
+	for i, row in ipairs(c.stRows) do
+		local r = sp.rows[i]
+		row.key = r and r.key or nil
+		row.line:SetText(r and (r.title .. "  -  " .. (r.costText or "cost unknown")) or "")
+		if r then
+			local y0 = st.y
+			st:Add(row.line, 4, box.insetX, inner - btnW - 6)
+			row.btn:ClearAllPoints()
+			row.btn:SetPoint("TOPRIGHT", box, "TOPRIGHT", -PAD, -(y0 - 2))
+			row.btn:Show()
+		else
+			row.line:Hide()
+			row.btn:Hide()
+		end
+	end
+	local left = #sp.rows - #c.stRows
+	c.stMore:SetText(left > 0 and string.format("+ %d more (included in the total)", left) or "")
+	st:Add(c.stMore, 2)
+	c.stTotal:SetText(sp.totalText)
+	st:Add(c.stTotal, 0)
+	return math.floor(st.y + PAD - 2 + 0.5)
+end
+
 local function drawNewForYou(c, nfy)
 	local box = c.nfyBox
 	local inner = FULL - box.insetX - PAD
@@ -432,6 +484,15 @@ local function refresh()
 		bottom = bottom + GAP - 2 + dgH
 	else
 		c.dgBox:Hide()
+	end
+
+	local stH = drawSpells(c, card.spells)
+	if stH then
+		c.stBox:Show()
+		placeCard(c, c.stBox, bottom + GAP - 2, FULL, stH)
+		bottom = bottom + GAP - 2 + stH
+	else
+		c.stBox:Hide()
 	end
 
 	if nfy then

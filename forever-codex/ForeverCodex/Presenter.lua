@@ -225,6 +225,7 @@ function Pr.Card(plan, ctx)
 		card.also, card.ready = {}, ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
 		card.slots = Pr.Slots(ctx)
 		card.dungeons = ns.Dungeons and ns.Dungeons.List(ctx) or {}
+		card.spells = ns.SpellTraining and ns.SpellTraining.Card(ctx) or nil
 		return card
 	end
 	card.now = describe(plan.now, plan, ctx, "star")
@@ -234,6 +235,7 @@ function Pr.Card(plan, ctx)
 	card.ready = ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
 	card.slots = Pr.Slots(ctx)
 	card.dungeons = ns.Dungeons and ns.Dungeons.List(ctx) or {}
+	card.spells = ns.SpellTraining and ns.SpellTraining.Card(ctx) or nil     -- SPELL TRAINING: a persistent, informational section below DUNGEON QUESTS; never an input to the plan
 	if plan.alsoDo then
 		card.alsoDo = describe(plan.alsoDo, plan, ctx, plan.alsoDo.type == "FLIGHT" and "triangle" or "diamond")
 	end

@@ -26,6 +26,7 @@ local function helpLines()
 	say("  /codex planner [on|off]   the sequence planner (default on); off = the previous one-action-at-a-time engine")
 	say("  /codex questiedb [quest id] [npc id]   whether the QuestieDB addon is in use, and a check of what it knows")
 	say("  /codex minimap reset   put the (draggable) minimap button back at its default spot")
+	say("  /codex spells [restore]   SPELL TRAINING: what the client reported; restore = bring back spells you marked Don't Want to Learn")
 	say("  /codex where | reset | help")
 end
 
@@ -202,6 +203,13 @@ local function handle(msg)
 			say("Party news: " .. restLower .. ".")
 		else
 			say("usage: /codex party off|ui|log")
+		end
+	elseif cmd == "spells" then
+		if restLower == "restore" then
+			say(string.format("Brought back %d spell(s) marked Don't Want to Learn.", ns.SpellTraining.RestoreAll()))
+		else
+			for _, l in ipairs(ns.SpellTraining.ReportLines(ns.State.ctx)) do say(l) end
+			say("/codex spells restore brings back spells you marked Don't Want to Learn.")
 		end
 	elseif cmd == "help" or cmd == "?" then
 		helpLines()
