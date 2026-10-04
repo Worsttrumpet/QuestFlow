@@ -161,5 +161,7 @@ do
 	for _ in pairs(ForeverCodexDB.spellCatalog.classes.HUNTER.entries) do after = after + 1 end
 	check(before == after, "a profession trainer never enters the class catalog")
 	T.tradeskill = false
+	H.slash("spells catalog")
+	check(ns.UI.report and ns.UI.report.box.__text:find("SPELL CATALOG", 1, true) and ns.UI.report.box.__text:find("4 | Aspect of the Monkey", 1, true), "/codex spells catalog opens the observed catalog as copyable text")
 end
 unclient()

@@ -217,7 +217,9 @@ local function handle(msg)
 			say("usage: /codex party off|ui|log")
 		end
 	elseif cmd == "spells" then
-		if restLower == "restore" then
+		if restLower == "catalog" then
+			showLines(ns.SpellTraining.CatalogLines(ns.State.ctx))
+		elseif restLower == "restore" then
 			say(string.format("Brought back %d spell(s) marked Don't Want to Learn.", ns.SpellTraining.RestoreAll()))
 		else
 			local lines = ns.SpellTraining.ReportLines(ns.State.ctx)

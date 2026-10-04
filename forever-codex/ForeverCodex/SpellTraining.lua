@@ -384,6 +384,19 @@ function S.List(ctx)
 		totalText = "Total training: " .. ns.Items.Money(total) .. (partial and " (some costs unknown)" or "") }
 end
 
+--- The account's observed catalog for the character's class as text lines (for /codex spells catalog: a developer can paste it to turn observed windows into shipped data later).
+function S.CatalogLines(ctx)
+	local cat, class = catalogStore(), classOf(ctx)
+	local c = cat and class and cat.classes[class]
+	local L = { string.format("SPELL CATALOG (observed trainer windows only) class=%s build=%s", tostring(class), tostring(c and c.build)) }
+	local rows = {}
+	for _, e in pairs(c and c.entries or {}) do rows[#rows + 1] = e end
+	table.sort(rows, function(a, b) if a.levelReq ~= b.levelReq then return a.levelReq < b.levelReq end if a.name ~= b.name then return a.name < b.name end return (a.rank or "") < (b.rank or "") end)
+	for _, e in ipairs(rows) do L[#L + 1] = string.format("%d | %s | %s | %s", e.levelReq, e.name, e.rank or "-", tostring(e.cost)) end
+	if #rows == 0 then L[#L + 1] = "(empty: open this class's trainer once)" end
+	return L
+end
+
 --- What the Presenter hands the window: the list, or nil (then there is no section).
 function S.Card(ctx)
 	local ok, list = pcall(S.List, ctx)
@@ -447,6 +460,14 @@ function S.ReportLines(ctx)
 		L[#L + 1] = "  no trainer window has been read this session"
 	end
 	L[#L + 1] = string.format("  stored for this character: %d spell(s), %d marked Don't Want to Learn", nE, nD)
+	do
+		local cat, class = catalogStore(), classOf(ctx)
+		local c = cat and class and cat.classes[class]
+		local n = 0
+		for _ in pairs(c and c.entries or {}) do n = n + 1 end
+		L[#L + 1] = string.format("  observed catalog for %s: %d row(s) from this account's trainer windows (%s, build %s); GetTrainerServiceTypeFilter=%s",
+			tostring(class), n, c and c.src or "none yet", tostring(c and c.build), type(_G.GetTrainerServiceTypeFilter) == "function" and "yes" or "NO")
+	end
 	local list = S.List(ctx)
 	if not list then
 		L[#L + 1] = "  showing: nothing (the section is hidden)"

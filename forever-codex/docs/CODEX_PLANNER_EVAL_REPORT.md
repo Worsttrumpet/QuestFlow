@@ -645,7 +645,7 @@ SWEEP (REVIEW): C: how far off the path to a 300 yd destination a pickup lies
     40 yd off the path | pickup: NOW (on the way, +1s)              | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
     80 yd off the path | pickup: NOW (on the way, +6s)              | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
    120 yd off the path | pickup: NOW (on the way, +12s)             | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
-   200 yd off the path | pickup: NOW (on the way, +29s)             | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
+   200 yd off the path | pickup: THEN                               | NOW=Continue: Destination | ALSO DO=(none) | THEN=Accept: Pickup
    300 yd off the path | pickup: rejected as ALSO DO: TOO_FAR       | NOW=Continue: Destination | ALSO DO=(none) | THEN=(none)
 
 SWEEP (REVIEW): K: distance of a far-zone pickup (same continent) next to two local pickups
@@ -672,5 +672,5 @@ SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objective
   bridge equivalence: 22 scenarios layered, 9 as the only source (13 need ATT-only data the bridge does not read: objective areas, race lists)
 == planner evaluation: the Phase 2.5 baseline is unchanged ==
 
-4073 passed, 0 failed
+4192 passed, 0 failed
 ```
