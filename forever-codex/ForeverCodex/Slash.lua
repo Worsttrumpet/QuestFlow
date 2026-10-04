@@ -27,6 +27,7 @@ local function helpLines()
 	say("  /codex questiedb [quest id] [npc id]   whether the QuestieDB addon is in use, and a check of what it knows")
 	say("  /codex minimap reset   put the (draggable) minimap button back at its default spot")
 	say("  /codex spells [restore]   SPELL TRAINING: what the client reported; restore = bring back spells you marked Don't Want to Learn")
+	say("  /codex feedback [status|list]   REPORT A PROBLEM (also the Feedback button in the window); /codex report is the developer diagnostic")
 	say("  /codex professions [hide <name>|restore]   PROFESSIONS: what the client reported")
 	say("  /codex where | reset | help")
 end
@@ -211,6 +212,16 @@ local function handle(msg)
 		else
 			for _, l in ipairs(ns.SpellTraining.ReportLines(ns.State.ctx)) do say(l) end
 			say("/codex spells restore brings back spells you marked Don't Want to Learn.")
+		end
+	elseif cmd == "feedback" then
+		if restLower == "status" then
+			for _, l in ipairs(ns.Feedback.ReportLines()) do say(l) end
+		elseif restLower == "list" then
+			local list = ns.Feedback.Stored()
+			say(#list == 0 and "No feedback reports are stored." or (#list .. " feedback report(s) stored locally:"))
+			for _, r in ipairs(list) do say("  " .. r.id .. " | " .. tostring(r.category) .. " | not sent (Codex cannot send reports)") end
+		else
+			ns.UI.OpenFeedback({ from = "WINDOW" })
 		end
 	elseif cmd == "professions" then
 		local a, b = restLower:match("^(%S+)%s*(%S*)")

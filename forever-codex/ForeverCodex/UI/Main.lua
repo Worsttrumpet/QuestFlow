@@ -172,6 +172,9 @@ local function buildTracker()
 	-- the one way to the options from here (the minimap button's right click and /codex options are the others)
 	UI.main.optionsButton = W.Button(frame, 60, 20, "Options", function() UI.ShowPage("options") end)
 	UI.main.optionsButton:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -7)
+	-- REPORT A PROBLEM: one button, no slash command (UI/Feedback.lua)
+	UI.main.feedbackButton = W.Button(frame, 62, 20, "Feedback", function() if UI.OpenFeedback then UI.OpenFeedback({ from = "WINDOW" }) end end)
+	UI.main.feedbackButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -32, -7)
 	buildPage(defOf("codex"), frame)
 	-- NEW FOR YOU lasts exactly one minute and then disappears by itself: a light check keeps the card honest while the window is open
 	local sinceCheck = 0

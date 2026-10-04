@@ -54,6 +54,9 @@ local function build(page)
 		if a then ns.Say("Skipped: " .. tostring(a.title) .. ". (/codex unskip brings skipped items back.)") end
 	end)
 	c.nowSkip:SetPoint("TOPRIGHT", c.nowBox, "TOPRIGHT", -PAD + 4, -PAD + 3)
+	-- Report: opens the feedback form about THIS recommendation (category and context already chosen)
+	c.nowReport = W.Button(c.nowBox, 46, 16, "Report", function() if ns.UI.OpenFeedback then ns.UI.OpenFeedback({ category = "wrong", from = "NOW" }) end end)
+	c.nowReport:SetPoint("TOPRIGHT", c.nowBox, "TOPRIGHT", -PAD - 40, -PAD + 3)
 	c.nowLabel = W.Label(c.nowBox, "NOW", W.STYLE_NOW.label)
 	c.nowLabel:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX, -PAD)
 	c.nowKindIcon = W.Icon(c.nowBox, 16)                -- "!" for a pickup, "?" for a hand-in; nothing for objectives
@@ -190,6 +193,7 @@ local function drawNow(c, card)
 		c.nowInfo:SetText("")
 	end
 	W.SetColor(c.nowTitle, n and W.WARM_GOLD or W.DIM)
+	if n then c.nowReport:Show() else c.nowReport:Hide() end
 	if n and not n.guidance then c.nowSkip:Show() else c.nowSkip:Hide() end       -- (guidance is not a planner recommendation: there is nothing to skip)
 	c.thenFS:SetText(card.thenLine and ("Then: " .. card.thenLine) or "")
 	c.thenWhereFS:SetText(card.thenLine and card.thenWhere or "")

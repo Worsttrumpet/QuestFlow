@@ -38,6 +38,7 @@ Dungeons.lua
 Items.lua
 SpellTraining.lua
 Professions.lua
+Feedback.lua
 ItemProbe.lua
 OfferProbe.lua
 Gear.lua
@@ -66,5 +67,6 @@ UI\PageOptions.lua
 UI\PageWorld.lua
 UI\PageJourney.lua
 UI\PageAppendices.lua
+UI\Feedback.lua
 Slash.lua
 Boot.lua
