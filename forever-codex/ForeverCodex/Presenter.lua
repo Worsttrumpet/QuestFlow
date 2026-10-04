@@ -205,6 +205,47 @@ function Pr.QuestItems(plan)
 	return out
 end
 
+--- GUIDANCE for a quest the player is working on when the planner has no NOW: the quest log's own wording, never a location. Pure presentation:
+-- the planner's decision (no NOW), the waypoint and the arrow are untouched, so nothing here can point anywhere. Returns a card item or nil.
+-- Order: a finished quest to hand in, then an unfinished objective (each by quest id, skipped and dungeon-card quests left out).
+function Pr.Guidance(plan, ctx)
+	if not plan then return nil end
+	local P = ns.Prefs
+	local function usable(a)
+		if not a.quest or (P and a.skipKey and P.IsSkipped(a.skipKey)) then return false end
+		return not (ns.Dungeons and ns.Dungeons.IsDungeon(ctx, a.quest))
+	end
+	local pick
+	for _, a in ipairs(plan.turnIns or {}) do if usable(a) then pick = a break end end
+	if not pick then
+		for _, a in ipairs(plan.objectives or {}) do
+			if a.kind == "OBJECTIVE" and usable(a) and #unfinished(a) + (a.objectiveState and a.objectiveState.known and 0 or 1) > 0 then pick = a break end
+		end
+	end
+	if not pick then return nil end
+	local it = describe(pick, plan, ctx, "star")
+	it.guidance, it.quest = true, pick.quest
+	local placed = Pl.Locate(pick) ~= nil
+	it.who = placed and "Codex could not measure the way there from here, so there is no arrow."
+		or "Codex has no map location for this quest, so there is no arrow. Use the quest's own text."
+	if not placed then it.dist, it.whereShort, it.where = nil, nil, nil end
+	-- the quest log's own objective text; the quest is never given a place Codex does not have
+	if pick.kind == "TURN_IN" then
+		it.detail = "Your objectives are done. Hand the quest in."
+	elseif it.objectives and #it.objectives > 0 then
+		it.detail = nil                                       -- the rows carry the objective text
+	else
+		local entry = ctx and ctx.log and ctx.log[pick.quest]
+		local text
+		for _, o in ipairs(entry and entry.objectives or {}) do
+			local t = type(o) == "table" and Pr.CleanObjective(o.text) or nil
+			if t then text = t break end
+		end
+		it.detail = text and (text .. ".") or "Open your quest log for what this quest asks."
+	end
+	return it
+end
+
 function Pr.Card(plan, ctx)
 	local card = { reminders = {} }
 	card.questItems = Pr.QuestItems(plan)
@@ -212,6 +253,20 @@ function Pr.Card(plan, ctx)
 		if #card.reminders < 3 then card.reminders[#card.reminders + 1] = questName(a) end
 	end
 	if not (plan and plan.now) then
+		local g = Pr.Guidance(plan, ctx)
+		if g then
+			-- the player has a quest to work on: say what it is, in the game's own words, instead of "nothing"; the READY list does not repeat it
+			card.now, card.guidance = g, true
+			card.also = {}
+			card.ready = {}
+			for _, r in ipairs(ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}) do
+				if r.quest ~= g.quest or g.kind ~= "TURN_IN" then card.ready[#card.ready + 1] = r end
+			end
+			card.slots = Pr.Slots(ctx)
+			card.dungeons = ns.Dungeons and ns.Dungeons.List(ctx) or {}
+			card.spells = ns.SpellTraining and ns.SpellTraining.Card(ctx) or nil
+			return card
+		end
 		local lines = {}
 		if #card.reminders > 0 then
 			lines[1] = "You have quests Codex cannot place on the map yet."

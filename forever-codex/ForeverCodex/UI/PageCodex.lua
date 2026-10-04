@@ -165,7 +165,7 @@ local function drawNow(c, card)
 		c.nowTitle:SetText(n.title or "")
 		c.nowWho:SetText(n.who or "")
 		-- the one-line detail is only for an objective whose counts the quest log did not report
-		c.nowDetail:SetText(n.caution or ((n.kind == "OBJECTIVE" and #objectives == 0) and (n.detail or "")) or "")
+		c.nowDetail:SetText(n.caution or (((n.kind == "OBJECTIVE" and #objectives == 0) or n.guidance) and (n.detail or "")) or "")
 		-- the distance as a number ("600 yd", "Here"), then the quest's level when the data has one: secondary information
 		c.nowInfo:SetText(ns.Presenter.Join(n.dist or n.whereShort or n.where, n.level and ("Lv " .. n.level)) or "")
 	else
@@ -176,7 +176,7 @@ local function drawNow(c, card)
 		c.nowInfo:SetText("")
 	end
 	W.SetColor(c.nowTitle, n and W.WARM_GOLD or W.DIM)
-	if n then c.nowSkip:Show() else c.nowSkip:Hide() end
+	if n and not n.guidance then c.nowSkip:Show() else c.nowSkip:Hide() end       -- (guidance is not a planner recommendation: there is nothing to skip)
 	c.thenFS:SetText(card.thenLine and ("Then: " .. card.thenLine) or "")
 	c.thenWhereFS:SetText(card.thenLine and card.thenWhere or "")
 	st:Skip(18)                                       -- the NOW label row

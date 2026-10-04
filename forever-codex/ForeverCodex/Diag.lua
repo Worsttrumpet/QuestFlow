@@ -591,7 +591,7 @@ function D.PlaytestLines(snap, lines)
 			add(string.format("%s: %s | who: %s | where: %s | detail: %s | why: %s", label, tostring(it.title), tostring(it.who), tostring(it.where), tostring(it.detail), tostring(it.why)))
 			if it.progress then add("    progress: " .. tostring(type(it.progress) == "table" and (tostring(it.progress.have) .. "/" .. tostring(it.progress.need)) or it.progress)) end
 		end
-		if card.now then show("NOW", card.now) else add("NOW: " .. tostring(card.empty and card.empty.title or "nothing")) end
+		if card.now then show(card.guidance and "NOW (guidance only: the planner has no NOW, no arrow)" or "NOW", card.now) else add("NOW: " .. tostring(card.empty and card.empty.title or "nothing")) end
 		for _, o in ipairs(card.now and card.now.objectives or {}) do
 			add(string.format("    unfinished: %s %s/%s", tostring(o.text), tostring(o.have), tostring(o.need)))
 		end

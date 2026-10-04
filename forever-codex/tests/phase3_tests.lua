@@ -121,7 +121,10 @@ do
 	ns3.Prefs.Skip("Q:1")
 	ns3.State.Recompute()
 	local c3 = ns3.Presenter.Card(ns3.State.plan, ns3.State.ctx)
-	check(c3.now == nil and #c3.reminders == 1 and c3.reminders[1] == "Mystery" and c3.empty.lines[1]:find("cannot place"), "unplaceable quests are named as reminders, never as a destination")
+	-- 0.7.1 (Fix 1): a finished quest Codex cannot place is no longer "nothing": the card is GUIDANCE (the quest's name, no location, no arrow); it is still a reminder
+	check(c3.guidance == true and c3.now.guidance == true and c3.now.title == "Turn in Mystery" and c3.empty == nil and #c3.reminders == 1 and c3.reminders[1] == "Mystery"
+		and c3.now.who:find("no map location", 1, true), "unplaceable quests are named as reminders and as guidance, never as a destination")
+	check(ns3.State.plan.now == nil and ns3.Navigation.Target() == nil, "(the planner still has no NOW, and nothing is pointed at)")
 end
 
 -- ================================================================ the player window
