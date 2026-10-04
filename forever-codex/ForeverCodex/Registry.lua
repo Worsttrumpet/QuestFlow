@@ -150,6 +150,7 @@ local function merge(id, layers)
 	take("name"); take("level"); take("objectives"); take("giverNpc"); take("giverName"); take("zone")
 	take("req"); take("prereq"); take("faction"); take("races"); take("classes"); take("repeatable")
 	take("breadcrumb"); take("objCoords"); take("restrictionUnparsed")
+	take("startKind"); take("startObject"); take("startItem"); take("startItemName")     -- what starts the quest (NPC, object or item): QuestieDB reference data
 	take("prereqAll"); take("turnIn"); take("raceMask"); take("classMask"); take("zoneMap"); take("event"); take("sort"); take("areaId")
 	-- location: the giver coordinate of the first layer that has one, observed player position only as a labelled fallback.
 	-- A pack that sets meta.guardGiver (QuestieDB) is skipped when a higher layer names a DIFFERENT giver NPC: its coordinate

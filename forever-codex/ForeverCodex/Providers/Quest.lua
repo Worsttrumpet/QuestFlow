@@ -225,12 +225,19 @@ local function acceptAction(view, pinned, ctx)
 	local pl = prereqLine(view)
 	if pl then lines[#lines + 1] = pl end
 	local t = target(view, label)
+	-- a quest that starts from a world object or an item is not given by a person: say what it starts from (QuestieDB, reference data, unverified on Forever) and name no giver
+	local fromThing = view.startKind == "OBJECT" or view.startKind == "ITEM"
+	if fromThing then
+		lines[1] = view.startKind == "ITEM" and ("Starts from an item" .. (view.startItemName and (": " .. view.startItemName) or "") .. " (QuestieDB, unverified on Forever)")
+			or "Starts from a world object (QuestieDB, unverified on Forever)"
+	end
 	return attach(R.NewAction({
 		id = "Q:" .. view.id .. ":ACCEPT", type = "QUEST", kind = "ACCEPT", quest = view.id, skipKey = "Q:" .. view.id, name = view.name,
 		title = "Accept: " .. (view.name or ("quest " .. view.id)), reqLevel = view.req, level = view.level,
 		breadcrumb = view.breadcrumb, target = t, pinned = pinned or false, lines = lines,
 		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name,
-		giver = view.giverName,
+		giver = (not fromThing) and view.giverName or nil,
+		sourceKind = view.startKind, sourceItem = view.startItemName, sourceObject = view.startObject,
 		-- no layer that covers this quest carries class / race restriction data: "none listed" is then NOT "unrestricted" (the planner will not send the player far for it)
 		restrictionUnknown = view.restrictionKnown ~= true or nil,
 	}), view.id, view, ctx, t)

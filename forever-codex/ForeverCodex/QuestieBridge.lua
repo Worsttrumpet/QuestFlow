@@ -180,6 +180,20 @@ local function firstNpc(slot)
 	return type(slot) == "table" and type(slot[1]) == "table" and type(slot[1][1]) == "number" and slot[1][1] or nil
 end
 
+--- The first id in one slot of a QuestieDB `startedBy` value ({ creatureIds, objectIds, itemIds }), or nil.
+local function slotId(slot, n)
+	local s = type(slot) == "table" and slot[n] or nil
+	return type(s) == "table" and type(s[1]) == "number" and s[1] or nil
+end
+
+--- The name of a QuestieDB item (documented Item.Get), or nil. Objects have no documented read here, so an object is kept by id only.
+local function itemName(id)
+	local lib = QB.api.lib()
+	if type(id) ~= "number" or type(lib) ~= "table" or type(lib.Item) ~= "table" then return nil end
+	local ok, n = pcall(lib.Item.Get, id, "name")
+	return ok and type(n) == "string" and n ~= "" and n or nil
+end
+
 local function idsOf(t)
 	if type(t) ~= "table" then return nil end
 	local out = {}
@@ -235,8 +249,15 @@ function QB.Record(id)
 			r.sort = zs
 			if EVENT_SORTS[zs] then r.event = true end      -- a holiday / world-event quest: only possible while its event runs
 		end
+		-- WHAT starts it: an NPC, a world object or an item (QuestieDB's startedBy has one slot for each). A quest started by an object or an item is NOT given by the NPC who happens to
+		-- stand beside it, so when there is no creature starter no giver is set at all; the source kind is kept so the player is told where it really starts.
+		local sb = v[K.startedBy]
+		local objId, itmId = slotId(sb, 2), slotId(sb, 3)
+		if objId then r.startObject = objId end
+		if itmId then r.startItem = itmId; r.startItemName = itemName(itmId) end
+		r.startKind = (firstNpc(sb) and "NPC") or (itmId and "ITEM") or (objId and "OBJECT") or nil
 		-- who gives it (and where they stand); who takes it back
-		local giver = npcInfo(N, firstNpc(v[K.startedBy]))
+		local giver = npcInfo(N, firstNpc(sb))
 		if giver then
 			r.giverNpc, r.giverName = giver.id, giver.name
 			r.faction = giver.faction

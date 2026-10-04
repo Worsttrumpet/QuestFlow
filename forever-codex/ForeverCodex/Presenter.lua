@@ -177,6 +177,10 @@ local function describe(a, plan, ctx, icon)
 		it.title = "Accept " .. name
 		it.who = a.giver
 		it.npc = a.giver
+		-- a quest that starts from an item or a world object: no NPC is named as its giver, and the card says where it starts
+		if a.sourceKind == "ITEM" or a.sourceKind == "OBJECT" then
+			it.who, it.npc = nil, nil
+		end
 		-- the quest giver's own dialog declined to offer it when last asked (OfferProbe, at the character's current progression): say so instead of promising an accept
 		local st, ev = Pl.OfferState(a)
 		it.offerState = st
@@ -184,6 +188,9 @@ local function describe(a, plan, ctx, icon)
 		local view = a.quest and R.Quest(a.quest)
 		local obj = view and view.objectives and Pr.CleanObjective(view.objectives[1])
 		it.detail = obj and ("Goal: " .. obj .. ".") or (a.giver and ("Talk to " .. a.giver .. ".") or nil)
+		if a.sourceKind == "ITEM" or a.sourceKind == "OBJECT" then
+			it.detail = a.sourceKind == "ITEM" and ("Starts from an item" .. (a.sourceItem and (": " .. a.sourceItem) or "") .. ". Not from an NPC.") or "Starts from a world object. Not from an NPC."
+		end
 	elseif a.kind == "OBJECTIVE" then
 		it.title = "Finish " .. name
 		local todo = unfinished(a)
