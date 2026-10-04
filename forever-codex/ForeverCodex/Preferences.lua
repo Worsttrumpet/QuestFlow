@@ -83,6 +83,99 @@ function P.Root() return root() end
 function P.Char() return ensureChar(charKey) end
 function P.UI() return root().ui end
 
+-- ---------------------------------------------------------------- character IDENTITY (0.7.5)
+--
+-- "Name-Realm" is NOT a character identity: deleting a character and creating another with the same name gave the new one the old one's skips, journey, turn-in count and dialog stamps
+-- (found in the 0.7.4 playtest on build 70205). The client offers no account or character id that Codex can rely on: UnitGUID is proven to answer for an NPC, but whether UnitGUID("player")
+-- returns a usable "Player-..." value on Forever is UNPROVEN. So identity is a DEFENCE, not a proof:
+--   * if UnitGUID("player") returns a "Player-..." string it is stored ONLY as a one-way hash (never raw); a different hash is a different character, an equal hash is the same one;
+--   * otherwise (or when there is nothing stored yet to compare) the stored fingerprint is class, race, faction and the highest level seen: a different class, race or faction, or a
+--     level LOWER than the highest seen, cannot be the same character (levels never go down), so it is a new one;
+--   * a legacy save with no fingerprint is judged by the highest level in its journey.
+-- It CANNOT detect a deleted character recreated with the same name, class, race and faction whose level has not gone below the old one's highest (for example a level 1 re-roll of a
+-- level 1 character, which has nothing to lose, or an old character that never got past the new one's level). A normal level-up never resets anything.
+-- A new character gets a clean slate for GAMEPLAY state only: skips, added quests, journey and turn-ins, the saved waypoint, route zone, Spell Training and Professions state.
+-- Window position and every other UI / route-style / toggle setting is kept; the account-wide stores (offers, items, telemetry, feedback) are never touched.
+
+P.IDENTITY_VERSION = 1
+
+--- A one-way hash for a GUID string (two independent polynomial hashes, 16 hex digits). Not cryptographic: it only has to be stable, short and not the GUID.
+local function hashOf(s)
+	local a, b = 7, 11
+	for i = 1, #s do
+		local c = s:byte(i)
+		a = (a * 131 + c) % 2147483629
+		b = (b * 137 + c * (i % 7 + 1)) % 2147483587
+	end
+	return string.format("%08x%08x", a, b)
+end
+P._hashOf = hashOf
+
+local function highestLevelSeen(c)
+	local m = type(c.journey) == "table" and type(c.journey.lastLevel) == "number" and c.journey.lastLevel or 0
+	for _, e in ipairs(type(c.journey) == "table" and c.journey.entries or {}) do
+		if type(e) == "table" and type(e.lvl) == "number" and e.lvl > m then m = e.lvl end
+	end
+	return m
+end
+
+--- The gameplay state of a character, cleared (see the comment above for what stays).
+function P.ResetCharacterState()
+	local c = P.Char()
+	c.skipped, c.added, c.nav = {}, {}, nil
+	c.routeZone = "auto"
+	c.journey = { entries = {} }
+	c.spellTraining, c.professions = nil, nil
+end
+
+--- Decides whether the character logging in is the one this entry was saved for, and resets the gameplay state when it clearly is not.
+-- snap = { class, race, faction, level, guid } as the client reports them (any may be nil). Returns { result = "FIRST" | "SAME" | "RESET", reason, signal }.
+function P.CheckIdentity(snap)
+	snap = snap or {}
+	local c = P.Char()
+	local guid = (type(snap.guid) == "string" and snap.guid:find("^Player%-")) and hashOf(snap.guid) or nil
+	local level = (type(snap.level) == "number" and snap.level >= 1) and snap.level or nil
+	local id = type(c.identity) == "table" and c.identity or nil
+	local verdict
+	if id and id.v == P.IDENTITY_VERSION then
+		if guid and id.guid then
+			if guid ~= id.guid then verdict = { "RESET", "a different character id (hashed) under the same name", "guid" } else verdict = { "SAME", "same character id (hashed)", "guid" } end
+		end
+		if not verdict then
+			if snap.class and id.class and snap.class ~= id.class then verdict = { "RESET", "different class: " .. tostring(id.class) .. " -> " .. tostring(snap.class), "class" }
+			elseif snap.race and id.race and snap.race ~= id.race then verdict = { "RESET", "different race: " .. tostring(id.race) .. " -> " .. tostring(snap.race), "race" }
+			elseif snap.faction and id.faction and snap.faction ~= id.faction then verdict = { "RESET", "different faction", "faction" }
+			elseif level and type(id.maxLevel) == "number" and level < id.maxLevel then verdict = { "RESET", string.format("level %d is below the highest level seen (%d)", level, id.maxLevel), "level" }
+			else verdict = { "SAME", "class, race, faction and level are consistent", "fingerprint" } end
+		end
+	else
+		-- no fingerprint stored: a first run of this feature, or a character never seen. A legacy save is judged by its journey's highest level.
+		local seen = highestLevelSeen(c)
+		if seen > 0 and level and level < seen then verdict = { "RESET", string.format("legacy save: level %d is below the highest level in its journey (%d)", level, seen), "legacy-level" }
+		elseif seen > 0 then verdict = { "FIRST", "legacy save with no fingerprint; nothing contradicts it", "legacy" }
+		else verdict = { "FIRST", "no earlier state", "none" } end
+	end
+	local result = { result = verdict[1], reason = verdict[2], signal = verdict[3], guidAvailable = guid ~= nil }
+	if result.result == "RESET" then
+		local old = id and { class = id.class, race = id.race, maxLevel = id.maxLevel } or { maxLevel = highestLevelSeen(c) }
+		P.ResetCharacterState()
+		id = nil
+		c.identityReset = { at = type(_G.time) == "function" and _G.time() or 0, reason = verdict[2], signal = verdict[3], was = old }
+	end
+	if not id then id = { v = P.IDENTITY_VERSION }; c.identity = id end
+	id.class, id.race, id.faction = snap.class or id.class, snap.race or id.race, snap.faction or id.faction
+	if guid then id.guid = guid end
+	if level and (type(id.maxLevel) ~= "number" or level > id.maxLevel) then id.maxLevel = level end
+	P.lastIdentity = result
+	return result
+end
+
+--- Keeps the highest level seen current (called with every fresh context; a level-up is never a reset).
+function P.NoteLevel(level)
+	local id = P.Char().identity
+	if type(id) == "table" and type(level) == "number" and (type(id.maxLevel) ~= "number" or level > id.maxLevel) then id.maxLevel = level end
+end
+
 -- ---------------------------------------------------------------- setup, notifications, navigation, window (Phase 3)
 
 function P.SetupDone() return P.Char().setupDone == true end

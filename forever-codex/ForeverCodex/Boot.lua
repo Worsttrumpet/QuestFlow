@@ -38,8 +38,20 @@ local function onAddonLoaded(name)
 	ns.Say(string.format("Forever Codex v%s loaded. Type /codex to open it, /codex help for commands. Recommendations are suggestions: you stay in control.", C.VERSION))
 end
 
+--- What the client says about the logged-in character, for the identity check (each read is pcall'd; anything missing is nil).
+local function identitySnapshot()
+	local function try(fn, ...) if type(fn) ~= "function" then return nil end local ok, a, b = pcall(fn, ...) if ok then return a, b end end
+	local _, class = try(_G.UnitClass, "player")
+	local _, race = try(_G.UnitRace, "player")
+	return { class = class, race = race, faction = try(_G.UnitFactionGroup, "player"), level = try(_G.UnitLevel, "player"), guid = try(_G.UnitGUID, "player") }
+end
+
 local function onLogin()
 	P.SetCharKey(characterKey())
+	-- a deleted and re-created character can reuse a name: clear the old one's gameplay state before anything reads it (see Preferences.CheckIdentity)
+	local okI, idRes = pcall(P.CheckIdentity, identitySnapshot())
+	if not okI then ns.RecordError("identity", idRes)
+	elseif idRes.result == "RESET" then ns.Say("This looks like a new character with a name Codex has seen before (" .. idRes.reason .. "): its old skips, journey and training state were cleared.") end
 	-- quest knowledge from the optional QuestieDB addon; when it is not usable, say why once (Codex still works on its own small data)
 	if ns.QuestieBridge then
 		ns.Safe(ns.QuestieBridge.Init)

@@ -95,6 +95,7 @@ function S.RecomputeInner()
 			if not okO then ns.RecordError(name, errO) end
 		end
 	end
+	if ns.Prefs.NoteLevel then ns.Prefs.NoteLevel(ctx.char and ctx.char.level) end
 	observeCtx("journey", ns.Journey, "OnContext")
 	observeCtx("party", ns.Party, "OnContext")
 	observeCtx("newforyou", ns.NewForYou, "OnContext")
