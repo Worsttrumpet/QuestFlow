@@ -281,7 +281,7 @@ local function matchBrief(ex)
 	local l = ex and ex.listing
 	if not l then return "no dialog recorded for this giver" end
 	local how = HOW_TEXT[l.how] or tostring(l.how)
-	local fresh = l.noStamp and "no progression stamp stored on that dialog" or
+	local fresh = l.noStamp and "no progression stamp stored on that dialog: treated as STALE (never a fresh negative)" or
 		(l.fresh and ("FRESH: read at the current progression " .. tostring(ex.stamp)) or ("STALE: read at progression " .. tostring(l.prog) .. ", now " .. tostring(ex.stamp) .. "; ignored by the planner until the NPC is asked again"))
 	return how .. "; dialog with " .. npcText(l.id, l.name) .. " | " .. fresh
 end
@@ -359,7 +359,7 @@ function D.PickupEvidenceLines(a, role)
 		local stampLine = string.format("    progression stamp (level : turn-ins Codex saw : quests ready to hand in): current %s", tostring(ex.stamp))
 		if l then
 			stampLine = stampLine .. string.format(" | that NPC dialog was read at %s | %s", l.noStamp and "no stamp stored" or tostring(l.prog),
-				l.noStamp and "no comparison possible" or (l.fresh and "they MATCH: fresh" or "they DIFFER: stale"))
+				l.noStamp and "no comparison possible: stale" or (l.fresh and "they MATCH: fresh" or "they DIFFER: stale"))
 		else
 			stampLine = stampLine .. " | no NPC dialog to compare"
 		end

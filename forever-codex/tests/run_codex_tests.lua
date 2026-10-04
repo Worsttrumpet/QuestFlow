@@ -1362,7 +1362,7 @@ do
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
 	H.fake = dofile(dir .. "/fake_questiedb.lua")
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

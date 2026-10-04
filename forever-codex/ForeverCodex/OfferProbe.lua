@@ -382,7 +382,9 @@ function O.OfferEvidence(qid, giverNpcId, giverName)
 	-- the contextual kind from the giver's latest listing (never from an incomplete one); `current` = read at the character's present progression
 	local ctxKind, ctxAt, current
 	if av then
-		current = av.prog == nil or av.prog == O.Stamp()
+		-- A dialog with NO progression stamp (saved before stamps existed, or by an older build) cannot be shown to belong to the character's present progression, and the offers store
+		-- is account-wide: it is never current. A negative read from it is stale (UNKNOWN), not a hold. Codex does not invent a stamp for it.
+		current = av.prog ~= nil and av.prog == O.Stamp()
 		if av.state == "EMPTY" then ctxKind, ctxAt = "EMPTY_AT_NPC", av.at
 		elseif av.state == "LISTED" and av.complete then
 			local listed = false
@@ -423,7 +425,7 @@ function O.Explain(qid, giverNpcId, giverName)
 		else how = "NAME_LISTING_HAS_NO_ID" end
 		local av = ctx.avail or {}
 		out.listing = { name = ctx.name, id = ctx.id, how = how, state = av.state, complete = av.complete, at = av.at or ctx.last, prog = av.prog,
-			noStamp = av.prog == nil, fresh = av.prog == nil or av.prog == stamp }
+			noStamp = av.prog == nil, fresh = av.prog ~= nil and av.prog == stamp }
 	end
 	local q = O.QuestEvidence(qid)
 	if q then out.positive = { via = q.via, npcName = q.npcName, npcId = q.npcId, last = q.last, n = q.n, prog = q.prog, by = q.by } end
