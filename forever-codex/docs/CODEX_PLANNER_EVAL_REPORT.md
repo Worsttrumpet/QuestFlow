@@ -672,5 +672,5 @@ SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objective
   bridge equivalence: 22 scenarios layered, 9 as the only source (13 need ATT-only data the bridge does not read: objective areas, race lists)
 == planner evaluation: the Phase 2.5 baseline is unchanged ==
 
-4549 passed, 0 failed
+4645 passed, 0 failed
 ```

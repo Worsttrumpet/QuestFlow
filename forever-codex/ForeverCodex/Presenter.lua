@@ -280,6 +280,7 @@ function Pr.Guidance(plan, ctx)
 	local it = describe(pick, plan, ctx, "star")
 	it.guidance, it.quest = true, pick.quest
 	local placed = Pl.Locate(pick) ~= nil
+	it.unplaced = not placed
 	it.who = placed and "Codex could not measure the way there from here, so there is no arrow."
 		or "Codex has no map location for this quest, so there is no arrow. Use the quest's own text."
 	if not placed then it.dist, it.whereShort, it.where = nil, nil, nil end
@@ -320,7 +321,7 @@ function Pr.Feature(key, ctx, cardFn)
 	return cardFn(ctx)
 end
 
-function Pr.Card(plan, ctx)
+local function buildCard(plan, ctx)
 	local card = { reminders = {} }
 	card.questItems = Pr.QuestItems(plan)
 	for _, a in ipairs(plan and plan.reminders or {}) do
@@ -403,6 +404,68 @@ function Pr.Card(plan, ctx)
 			card.thenWhere = Pr.Join(th.dist, th.npc)
 		end
 	end
+	return card
+end
+
+--- IN YOUR LOG, NOT ON THE MAP: quests in the player's log that Codex cannot show anywhere else, so none of them disappears just because it has no usable map position.
+-- A quest is listed when the planner holds it as a reminder (known, but no usable location) or when no pack knows it at all. Quests already shown (NOW, the guidance quest),
+-- finished quests the READY TO TURN IN list already carries, dungeon quests (their own card) and skipped quests are left out. Low priority: the card only reads, it never routes.
+-- Returns nil when there are none, else { rows = { { quest, title, state, ready }, ... } (at most Pr.UNPLACED_ROWS), more = N, ids = { [quest] = true } (all of them) }.
+Pr.UNPLACED_ROWS = 5
+function Pr.Unplaced(plan, ctx, shownQuest)
+	if not (plan and ctx and ctx.log) then return nil end
+	local P = ns.Prefs
+	local covered, want = {}, {}
+	for _, list in ipairs({ plan.objectives or {}, plan.turnIns or {}, plan.inProgress or {}, plan.reminders or {} }) do
+		for _, a in ipairs(list) do if a.quest then covered[a.quest] = true end end
+	end
+	if plan.now and plan.now.quest then covered[plan.now.quest] = true end
+	for _, a in ipairs(plan.reminders or {}) do
+		if a.quest and a.kind == "OBJECTIVE" and not a.offered and not (P and a.skipKey and P.IsSkipped(a.skipKey)) then want[a.quest] = true end
+	end
+	for id in pairs(ctx.log) do
+		if not covered[id] then want[id] = true end
+	end
+	local list = {}
+	for id in pairs(want) do
+		local e = ctx.log[id]
+		if e and id ~= shownQuest and not (plan.now and plan.now.quest == id) and not (ns.Dungeons and ns.Dungeons.IsDungeon(ctx, id)) then
+			local left = 0
+			for _, o in ipairs(e.objectives or {}) do if type(o) == "table" and not o.finished then left = left + 1 end end
+			local state = e.complete and "Ready to turn in" or (left > 0 and string.format("%d objective%s left", left, left == 1 and "" or "s") or "In progress")
+			list[#list + 1] = { quest = id, title = e.title or ("quest " .. id), state = state, ready = e.complete == true }
+		end
+	end
+	if #list == 0 then return nil end
+	table.sort(list, function(x, y)
+		if x.ready ~= y.ready then return x.ready end
+		if x.title ~= y.title then return x.title < y.title end
+		return x.quest < y.quest
+	end)
+	local out = { rows = {}, more = 0, ids = {} }
+	for i, r in ipairs(list) do
+		out.ids[r.quest] = true
+		if i <= Pr.UNPLACED_ROWS then out.rows[i] = r else out.more = out.more + 1 end
+	end
+	return out
+end
+
+--- QUEST DETAILS for one quest in the log (nil when it is not there any more). Whether Codex has a map position for it is read from the card already built (the NOT ON THE MAP list,
+-- the guidance quest, the READY rows); QuestieDB's NPC names are secondary and marked unverified, never a position. See QuestDetail.lua.
+function Pr.QuestDetail(id, card, ctx)
+	if not ns.QuestDetail then return nil end
+	local unplaced = (card and card.unplaced and card.unplaced.ids[id]) or (card and card.now and card.now.guidance and card.now.quest == id and card.now.unplaced) or false
+	for _, r in ipairs(card and card.ready or {}) do
+		if r.quest == id and r.placed == false then unplaced = true end
+	end
+	local QB = ns.QuestieBridge
+	local names = QB and QB.Names and QB.Names(id) or nil
+	return ns.QuestDetail.Describe(id, ctx, { unplaced = unplaced, names = names })
+end
+
+function Pr.Card(plan, ctx)
+	local card = buildCard(plan, ctx)
+	card.unplaced = Pr.Unplaced(plan, ctx, card.guidance and card.now and card.now.quest or nil)
 	return card
 end
 

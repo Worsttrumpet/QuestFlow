@@ -434,6 +434,17 @@ function QB.Describe(id)
 	return out
 end
 
+--- QuestieDB's quest giver and turn-in NPC NAMES for a quest, { giver = "...", turnIn = "..." } (either may be nil), or nil when QuestieDB is off, missing or does not know the quest.
+-- Names only, for display next to a "QuestieDB, unverified" label: never a position, never an input to the plan.
+function QB.Names(id)
+	if not QB.Available() then return nil end
+	local d = QB.Describe(id)
+	if not (d and d.known) then return nil end
+	local g, t = d.giver and d.giver.name, d.turnIn and d.turnIn.name
+	if not g and not t then return nil end
+	return { giver = g, turnIn = t }
+end
+
 --- The entity tables the installed QuestieDB exposes (names only), e.g. { "Npc", "Quest" }: tells whether object / item data is reachable.
 function QB.Entities()
 	local lib = QB.api.lib()

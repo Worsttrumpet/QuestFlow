@@ -174,7 +174,7 @@ function Ov.Ready(plan, ctx)
 			local d = distanceTo(a, ctx)
 			if d and d >= E.DIFFERENT_CONTINENT then d = nil end
 			local short = Ov.ShortWhere(d)
-			out[#out + 1] = { title = questName(a) .. suffix(ctx, a.quest), who = a.giver, where = short, quest = a.quest, dist = d,
+			out[#out + 1] = { title = questName(a) .. suffix(ctx, a.quest), who = a.giver, where = short, quest = a.quest, dist = d, placed = Pl.Locate(a) ~= nil,
 				distText = ns.Presenter.Dist(d), npc = a.turnInNpc and a.giver or nil, unlocks = ns.Presenter.Unlocks(a, ctx) }
 		end
 	end

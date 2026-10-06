@@ -887,6 +887,9 @@ function D.PlaytestLines(snap, lines)
 		end
 		add(string.format("quest tags (the game's own; PROVEN on Forever for Elite = 1 and Dungeon = 81 on logged quests, 0.4.2): API %s | %d of %d logged quests tagged (0 is normal when none of them is Elite, Dungeon or Raid) | %d dungeon-style | area-name API %s", api, tagged, #ids, dungeon, (type(C_Map) == "table" and type(C_Map.GetAreaInfo) == "function") and "present" or "absent"))
 	end
+	if ns.QuestDetail then
+		for _, l in ipairs(ns.QuestDetail.ApiLines()) do add(l) end
+	end
 	if ns.QuestItems then
 		local okQ, qlines = pcall(ns.QuestItems.ReportLines)
 		if okQ then for _, l in ipairs(qlines) do add(l) end else add("QUEST-STARTING ITEMS: error: " .. tostring(qlines)) end

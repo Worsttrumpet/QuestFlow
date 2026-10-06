@@ -28,6 +28,7 @@ local READY_ROWS = 12              -- hand-ins listed in READY TO TURN IN (the w
 local DG_GROUPS, DG_ROWS = 4, 12      -- DUNGEON QUESTS: dungeons and quest lines drawn (the rest are summarised in one line)
 local ST_ROWS = ns.SpellTraining and ns.SpellTraining.MAX_ROWS or 12   -- SPELL TRAINING rows drawn (the rest are summarised in one line)
 local PF_ROWS = 12                  -- PROFESSIONS rows drawn
+local UN_ROWS = 5                    -- IN YOUR LOG, NOT ON THE MAP rows drawn (Presenter caps the list; the rest are summarised in one line)
 local MAX_ROWS = 8                  -- objective rows drawn in one card (the rest are summarised in one line)
 
 --- Places a card at a vertical offset below the page top and sizes it.
@@ -35,6 +36,53 @@ local function placeCard(c, card, y, w, h)
 	card:ClearAllPoints()
 	card:SetPoint("TOPLEFT", c.page, "TOPLEFT", card.__x or 0, -y)
 	card:SetSize(w, h)
+end
+
+--- A transparent click area over a quest row: opens (or collapses) that quest's QUEST DETAILS card. It has a subtle hover highlight (W.Row) and a tooltip; it only ever reads.
+-- Pools are per card (`pool` is a table in c); `i` picks the area, creating it on first use.
+local function hitArea(c, pool, i, parent)
+	local list = c[pool]
+	local b = list[i]
+	if not b then
+		b = W.Row(parent, 10, 10, function(quest) UI.ToggleQuestDetail(quest) end)
+		b:SetScript("OnEnter", function(self)
+			self.bg:SetColorTexture(1, 1, 1, 0.12)
+			W.ShowTooltip(self, "ANCHOR_RIGHT", { title = "Quest details", rows = { { "Click", "Show or hide this quest's details" } } })
+		end)
+		b:SetScript("OnLeave", function(self)
+			self.bg:SetColorTexture(0, 0, 0, 0)
+			local tip = rawget(_G, "GameTooltip")
+			if tip then ns.Safe(tip.Hide, tip) end
+		end)
+		list[i] = b
+	end
+	return b
+end
+
+local function placeHit(b, box, x, y, w, h, quest)
+	b:ClearAllPoints()
+	b:SetPoint("TOPLEFT", box, "TOPLEFT", x, -y)
+	b:SetSize(math.max(1, w), math.max(1, h))
+	b.action = quest
+	b:Show()
+end
+
+local function hideHits(c, pool, from)
+	for i = from, #c[pool] do c[pool][i]:Hide() end
+end
+
+--- The quest whose details card is open (this session only: never saved, so nothing about it can outlive a reload).
+function UI.ToggleQuestDetail(id)
+	if not UI.main then return end
+	UI.main.detailQuest = (UI.main.detailQuest ~= id) and id or nil
+	if UI.Refresh then UI.Refresh() end
+end
+
+function UI.CloseQuestDetail()
+	if UI.main and UI.main.detailQuest ~= nil then
+		UI.main.detailQuest = nil
+		if UI.Refresh then UI.Refresh() end
+	end
 end
 
 local function build(page)
@@ -148,6 +196,37 @@ local function build(page)
 		c.pfRows[i] = row
 	end
 
+	-- QUEST DETAILS: a small Codex-owned card for ONE quest the player clicked (a quest Codex cannot place on the map); present only while one is open. Not a quest journal.
+	c.qdBox = W.Card(page, FULL, 60, "optional")
+	c.qdLabel = W.CardLabel(c.qdBox, "QUEST DETAILS")
+	c.qdClose = W.Button(c.qdBox, 40, 16, "Close", function() UI.CloseQuestDetail() end)
+	c.qdClose:SetPoint("TOPRIGHT", c.qdBox, "TOPRIGHT", -PAD + 4, -PAD + 3)
+	c.qdTitle = W.Line(c.qdBox, 14, W.WARM_GOLD, "LEFT", true)
+	c.qdHead = W.Line(c.qdBox, 11, W.DIM, "LEFT")
+	c.qdStatus = W.Line(c.qdBox, 12, W.TEXT, "LEFT")
+	c.qdRows = {}
+	for i = 1, MAX_ROWS do c.qdRows[i] = W.ProgressRow(c.qdBox) end
+	c.qdMore = W.Line(c.qdBox, 11, W.DIM, "LEFT")
+	c.qdGiver = W.Line(c.qdBox, 11, W.DIM, "LEFT", true)
+	c.qdTurn = W.Line(c.qdBox, 11, W.DIM, "LEFT", true)
+	c.qdNote = W.Line(c.qdBox, 11, W.DIM, "LEFT", true)
+
+	-- IN YOUR LOG, NOT ON THE MAP: every quest in the log Codex cannot place (no usable map position). Quiet and low priority: it never competes with NOW; each row opens QUEST DETAILS.
+	c.unBox = W.Card(page, FULL, 40, "later")
+	c.unLabel = W.CardLabel(c.unBox, "IN YOUR LOG, NOT ON THE MAP")
+	c.unHint = W.Line(c.unBox, 11, W.DIM, "LEFT", true)
+	c.unRows, c.unSubs, c.unArrows = {}, {}, {}
+	for i = 1, UN_ROWS do
+		c.unRows[i] = W.Line(c.unBox, 12, W.TEXT, "LEFT")
+		c.unSubs[i] = W.Line(c.unBox, 11, W.DIM, "LEFT")
+		c.unArrows[i] = W.Line(c.unBox, 11, W.DIM, "RIGHT")
+	end
+	c.unMore = W.Line(c.unBox, 11, W.DIM, "LEFT")
+	c.unHits, c.readyHits, c.nowHits = {}, {}, {}
+	c.nowHint = W.Line(c.nowBox, 11, W.DIM, "LEFT")                  -- "Click the quest name for its details." (guidance with no map position only)
+	c.readyArrows = {}
+	for i = 1, READY_ROWS do c.readyArrows[i] = W.Line(c.readyBox, 11, W.DIM, "RIGHT") end
+
 	-- NEW FOR YOU: secondary, fits its content; present only while active
 	c.nfyBox = W.Card(page, FULL, 80, "discovery")
 	c.nfyLabel = W.CardLabel(c.nfyBox, "NEW FOR YOU")
@@ -212,12 +291,23 @@ local function drawNow(c, card)
 	st:Skip(18)                                       -- the NOW label row
 	local kindIcon = n and (n.kind == "ACCEPT" and "bang" or (n.kind == "TURN_IN" and "query")) or nil
 	c.nowKindIcon:Set(kindIcon)
+	local titleY, titleH = st.y, 0
 	if kindIcon then
 		c.nowKindIcon:Place(box, box.insetX, st.y + 1)
-		st:Add(c.nowTitle, 3, box.insetX + 20, inner - 24)
+		titleH = st:Add(c.nowTitle, 3, box.insetX + 20, inner - 24)
 	else
-		st:Add(c.nowTitle, 3, nil, inner - 4)
+		titleH = st:Add(c.nowTitle, 3, nil, inner - 4)
 	end
+	-- guidance for a quest Codex has no map position for: the title opens its QUEST DETAILS (a quest Codex CAN route keeps its normal guided behaviour: no click area)
+	local clickable = n and n.guidance and n.quest and n.unplaced
+	if clickable then
+		placeHit(hitArea(c, "nowHits", 1, box), box, box.insetX, titleY, inner - 4, titleH, n.quest)
+		c.nowHint:SetText(UI.main.detailQuest == n.quest and "Click the quest name to hide its details." or "Click the quest name for its details.")
+	else
+		hideHits(c, "nowHits", 1)
+		c.nowHint:SetText("")
+	end
+	st:Add(c.nowHint, 3)
 	st:Add(c.nowWho, 3)
 	st:Add(c.nowDetail, 4)
 	local left = drawObjectives(box, st, c.nowRows, objectives, inner, box.insetX)
@@ -415,6 +505,18 @@ local function drawReady(c, items)
 		c.readySubs[i]:SetText(sub or "")
 		st:Add(row, sub and 0 or 2, box.insetX + 18, inner - 18)
 		st:Add(c.readySubs[i], 3, box.insetX + 18, inner - 18)
+		-- a finished quest Codex has no map position for: the row opens its QUEST DETAILS (one with a position keeps its normal behaviour)
+		if it and it.placed == false and it.quest then
+			placeHit(hitArea(c, "readyHits", i, box), box, box.insetX, y0, inner, st.y - y0 - 1, it.quest)
+			c.readyArrows[i]:ClearAllPoints()
+			c.readyArrows[i]:SetPoint("TOPRIGHT", box, "TOPRIGHT", -PAD, -y0)
+			c.readyArrows[i]:SetText(UI.main.detailQuest == it.quest and "[-]" or "[+]")
+			c.readyArrows[i]:Show()
+		else
+			if c.readyHits[i] then c.readyHits[i]:Hide() end
+			c.readyArrows[i]:SetText("")
+			c.readyArrows[i]:Hide()
+		end
 		if it then
 			c.readyIcons[i]:Set("query")
 			c.readyIcons[i]:Place(box, box.insetX, y0 + 0)
@@ -425,6 +527,87 @@ local function drawReady(c, items)
 	left = #items - #c.readyRows
 	c.readyMore:SetText(left > 0 and string.format("+ %d more", left) or "")
 	st:Add(c.readyMore, 0)
+	return math.floor(st.y + PAD - 2 + 0.5)
+end
+
+--- IN YOUR LOG, NOT ON THE MAP: quests with no usable map position, each opening its QUEST DETAILS. Returns the card height, or nil when there are none.
+local function drawUnplaced(c, un)
+	local box = c.unBox
+	if not un or #un.rows == 0 then hideHits(c, "unHits", 1) return nil end
+	local inner = FULL - box.insetX - PAD
+	local st = W.Stack(box, inner)
+	st:Skip(16)
+	c.unHint:SetText("No arrow for these: Codex has no map position for them. Click one for its details.")
+	st:Add(c.unHint, 4)
+	for i = 1, UN_ROWS do
+		local r = un.rows[i]
+		if r then
+			local y0 = st.y
+			c.unRows[i]:SetText(r.title)
+			c.unSubs[i]:SetText(r.state)
+			st:Add(c.unRows[i], 0, nil, inner - 28)
+			st:Add(c.unSubs[i], 4)
+			placeHit(hitArea(c, "unHits", i, box), box, box.insetX, y0, inner, st.y - y0 - 2, r.quest)
+			c.unArrows[i]:ClearAllPoints()
+			c.unArrows[i]:SetPoint("TOPRIGHT", box, "TOPRIGHT", -PAD, -y0)
+			c.unArrows[i]:SetText(UI.main.detailQuest == r.quest and "[-]" or "[+]")
+			c.unArrows[i]:Show()
+		else
+			c.unRows[i]:SetText("")
+			c.unSubs[i]:SetText("")
+			c.unArrows[i]:SetText("")
+			c.unArrows[i]:Hide()
+			if c.unHits[i] then c.unHits[i]:Hide() end
+			c.unRows[i]:Hide()
+			c.unSubs[i]:Hide()
+		end
+	end
+	c.unMore:SetText(un.more > 0 and string.format("+ %d more in your quest log", un.more) or "")
+	st:Add(c.unMore, 0)
+	return math.floor(st.y + PAD - 2 + 0.5)
+end
+
+--- QUEST DETAILS for the clicked quest (UI.main.detailQuest). Closes itself (and returns nil) when that quest is no longer in the log. Read-only: it never opens the game's own quest UI.
+local function drawDetail(c, card, ctx)
+	local id = UI.main.detailQuest
+	if not id then return nil end
+	local d = ns.Presenter.QuestDetail(id, card, ctx)
+	if not d then
+		UI.main.detailQuest = nil                             -- the quest left the log (handed in, abandoned): the card closes
+		return nil
+	end
+	local box = c.qdBox
+	local inner = FULL - box.insetX - PAD
+	local st = W.Stack(box, inner)
+	st:Skip(18)
+	c.qdTitle:SetText(d.title .. (d.tag and (" (" .. d.tag .. ")") or ""))
+	c.qdHead:SetText(d.header and ("Quest log: " .. d.header) or "")
+	c.qdStatus:SetText(d.status)
+	W.SetColor(c.qdStatus, d.state == "READY" and ns.Theme.Color("ready") or W.TEXT)
+	st:Add(c.qdTitle, 3, nil, inner - 46)
+	st:Add(c.qdHead, 2)
+	st:Add(c.qdStatus, 5)
+	local shown = 0
+	for i, row in ipairs(c.qdRows) do
+		local o = d.objectives[i]
+		if o then
+			row:Place(box, box.insetX, st.y, inner)
+			local text = o.loading and "Objective still loading" or (ns.Presenter.CleanObjective(o.text) or o.text)
+			row:Set(text, o.have, o.need)
+			st.y = st.y + W.ROW_H + 3
+			shown = shown + 1
+		else
+			row:Clear()
+		end
+	end
+	c.qdMore:SetText(#d.objectives > shown and string.format("+ %d more", #d.objectives - shown) or "")
+	st:Add(c.qdMore, 2)
+	c.qdGiver:SetText(d.giver or "")
+	c.qdTurn:SetText(d.turnIn or "")
+	c.qdNote:SetText(d.note or "")
+	st:Add(c.qdGiver, 2)
+	st:Add(c.qdTurn, 2)
+	st:Add(c.qdNote, 2)
 	return math.floor(st.y + PAD - 2 + 0.5)
 end
 
@@ -585,6 +768,16 @@ local function refresh()
 	placeCard(c, c.nowBox, TOP, FULL, nowH)
 	local bottom = TOP + nowH
 
+	-- QUEST DETAILS: directly under NOW while a quest is open (it belongs to the quest the player clicked, so it sits next to the guidance)
+	local qdH = drawDetail(c, card, ctx)
+	if qdH then
+		c.qdBox:Show()
+		placeCard(c, c.qdBox, bottom + GAP - 2, FULL, qdH)
+		bottom = bottom + GAP - 2 + qdH
+	else
+		c.qdBox:Hide()
+	end
+
 	local tmH = drawTimers(c, card.timers or {})
 	if tmH then
 		c.tmBox:Show()
@@ -619,6 +812,15 @@ local function refresh()
 		bottom = bottom + GAP - 2 + readyH
 	else
 		c.readyBox:Hide()
+	end
+
+	local unH = drawUnplaced(c, card.unplaced)
+	if unH then
+		c.unBox:Show()
+		placeCard(c, c.unBox, bottom + GAP - 2, FULL, unH)
+		bottom = bottom + GAP - 2 + unH
+	else
+		c.unBox:Hide()
 	end
 
 	local dgH = drawDungeons(c, card.dungeons or {})
