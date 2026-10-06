@@ -261,7 +261,7 @@ do
 	ns.State.Recompute()
 	local K, ctx = ns.Knowledge, ns.State.ctx
 	local function q(id) return K.Quest(id, ctx) end
-	check(q(1).label == "Available" and q(1).detail == "You haven't found this yet.", "available: 'You haven't found this yet.'")
+	check(q(1).label == "Available" and q(1).detail == "Codex's data says you could pick this up.", "available: says it is Codex's data, not a claim about what you have found")
 	check(q(2).label == "Not yet" and q(2).detail == "You need level 20 first.", "level-gated: says which level")
 	check(q(3).label == "In progress" and q(3).detail == "Progress 2 / 9.", "in progress, with progress")
 	check(q(4).label == "Ready to turn in", "ready to turn in")
@@ -652,7 +652,7 @@ do
 	local lines = Hc.Learned()
 	local text = table.concat(lines, "|")
 	check(text:find("Quests you accepted: 2", 1, true) and text:find("Quests you turned in: 1", 1, true) and not text:find("Creatures defeated", 1, true), "only kinds that were actually recorded are listed, with real counts")
-	check(s.note:find("nothing is uploaded or shared", 1, true) and Hc.COPY.tagline == "Codex learns from your adventures.", "it says plainly that nothing leaves the machine")
+	check(s.note:find("Nothing is uploaded or shared", 1, true) and Hc.COPY.tagline == "Codex learns from your adventures.", "it says plainly that nothing leaves the machine")
 	check(not Hc.COPY.body:lower():find("telemetry"), "the player-facing text does not lead with the word 'telemetry'")
 	-- the page
 	ns.UI.Open("appendices")

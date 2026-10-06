@@ -2,7 +2,7 @@
 -- table H (the stub client). Run it on its own, with full reports:
 --
 --     cd forever-codex/tests
---     lua5.1 run_planner_eval.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide
+--     lua5.1 run_planner_eval.lua ../ForeverCodex
 --
 -- PURPOSE. Show what the CURRENT Planner decides in situations taken from the level 1-5 Orc Warrior playtest
 -- (docs/CODEX_PLANNING_MODEL.md), so a human can judge whether it is what we want BEFORE a UI is built around it.
@@ -665,7 +665,7 @@ do
 	end
 	print(string.format("  %d scenarios: %d deterministic (assertions), %d review (report only); %d assertions", #scenarios, counts.deterministic, counts.review, counts.checks))
 	runSweeps()
-	if not VERBOSE then print("  (full reports and sweep tables: lua5.1 run_planner_eval.lua <addonDir> <m8-13 dir>)") end
+	if not VERBOSE then print("  (full reports and sweep tables: lua5.1 run_planner_eval.lua <addonDir>)") end
 end
 
 section("planner evaluation: the trace changes nothing")
@@ -722,7 +722,7 @@ end
 -- tests/golden/planner_eval_baseline.txt holds every scenario's decision (NOW / ALSO DO / THEN / stops / net value) and
 -- every sweep row as the Planner made them at Phase 2.5. Later phases (the player UI, navigation, ...) must not move it;
 -- a deliberate Planner change regenerates it, together with docs/CODEX_PLANNER_EVAL_REPORT.md, in the same reviewed commit:
---     CODEX_WRITE_GOLDEN=1 lua5.1 run_codex_tests.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide
+--     CODEX_WRITE_GOLDEN=1 lua5.1 run_codex_tests.lua ../ForeverCodex
 section("planner evaluation: the Phase 2.5 baseline is unchanged")
 do
 	local lines = {}

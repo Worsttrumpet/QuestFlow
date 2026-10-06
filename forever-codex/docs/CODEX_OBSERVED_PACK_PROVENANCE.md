@@ -134,3 +134,7 @@ road position was not visible in the playtest; whether the other creature ids ar
 No change to `Planner.lua`, the UNKNOWN pickup policy, offer-state behaviour, NPC matching, `Registry.merge`, QuestieDB/ATT handling, `Pack_Observed.lua`, the generators or
 the recorder. No per-quest checkpoint was invented inside the pack, and no user-facing text claims a particular record came from `QUEST_DETAIL`. The future data task is
 `CODEX_BACKLOG.md` item C-12.
+
+
+## Input location (audit hardening pass)
+The generator now reads the observed table from `forever-codex/generator/inputs/observed_m6_data.lua`, a byte-for-byte copy (sha256 `636f854c...`) of `m8-13-progression/ForeverQuestGuide/Data.lua`, so Codex's generator and tests do not need the legacy addon. The M8.13 original is untouched. The only change in `Pack_Observed.lua` is the `input` path in its header.

@@ -200,6 +200,10 @@ Ctx.DefaultReader = reader
 
 -- ---------------------------------------------------------------- build
 
+--- The player's current place as the client reports it ({ available, map, x, y, world, zone, subzone }): the same read Build uses for ctx.loc, without building the rest of the context. State uses it to
+-- tell whether the player has MOVED since the last plan.
+function Ctx.Position() return reader.location() end
+
 --- Builds a context. `r` (optional) overrides any reader function (tests).
 function Ctx.Build(r)
 	r = setmetatable(r or {}, { __index = reader })

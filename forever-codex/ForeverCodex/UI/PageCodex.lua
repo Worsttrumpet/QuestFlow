@@ -227,6 +227,7 @@ local function drawNow(c, card)
 	c.nowWhy:SetText(n and n.whyPlayer and ("Why: " .. n.whyPlayer) or "")
 	st:Add(c.nowWhy, 3)
 	c.nowNav:SetText(n and n.navNote or "")
+	W.SetColor(c.nowNav, (n and n.navDirection) and W.TEXT or W.DIM)         -- a direction to head in is guidance, not a footnote
 	st:Add(c.nowNav, 3)
 	if W.TextOf(c.thenFS) ~= "" then
 		c.nowDivider:ClearAllPoints()

@@ -40,8 +40,9 @@ do
 	local g = gameplay(ns)
 	check(g.skips == 2 and g.added == 1 and g.turned == 2 and g.journey >= 1 and g.spells and g.profs, "(setup) the Rogue has accumulated state")
 	ForeverCodexDB.ui.window = { point = "CENTER", rel = "CENTER", x = 10, y = 20, w = 330, h = 300 }
-	ForeverCodexDB.offers = { v = 1, quests = { [5] = { title = "kept" } } }
-	ForeverCodexDB.telemetry = { v = 1, enabled = true, events = { { e = "X" } }, accepted = {}, cap = 300 }
+	ForeverCodexDB.offers = { v = 1, owner = ns.Prefs.CharKey(), quests = { [5] = { title = "old rogue" } } }
+	ForeverCodexDB.telemetry = { v = 1, owner = ns.Prefs.CharKey(), enabled = true, events = { { e = "X" } }, accepted = {}, cap = 300 }
+	ForeverCodexDB.items = { v = 1, facts = { kept = true } }               -- (item facts are the GAME's, not a character's: account-wide on purpose)
 	local db = _G.ForeverCodexDB
 	local ns2 = session(HUNTER, db)
 	local g2 = gameplay(ns2)
@@ -52,7 +53,8 @@ do
 	for _, m in ipairs(H.world().chat) do if m:find("new character with a name Codex has seen before", 1, true) then said = true end end
 	check(said, "and tells the player once")
 	check(ns2.Prefs.Char().identityReset and ns2.Prefs.Char().identityReset.was.class == "ROGUE", "the reset is recorded (what it replaced, no gameplay data)")
-	check(db.ui.window and db.ui.window.x == 10 and db.offers.quests[5].title == "kept" and db.telemetry.events[1].e == "X", "the window position and the account-wide stores are untouched")
+	check(db.ui.window and db.ui.window.x == 10 and db.items and db.items.facts.kept == true, "the window position and the genuinely account-wide stores are untouched")
+	check((db.offers == nil or db.offers.quests == nil or db.offers.quests[5] == nil) and (db.telemetry == nil or db.telemetry.events == nil or db.telemetry.events[1] == nil or db.telemetry.events[1].e ~= "X"), "the old character's NPC offer evidence and telemetry are not inherited by the re-created one")
 	check(ns2.Prefs.GetStyle() == "fast" and ns2.Prefs.IsSystemOn("flight") == false, "route style and system toggles are kept")
 	check(#ns2.errors == 0, "no errors")
 end

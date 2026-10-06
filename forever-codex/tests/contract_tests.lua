@@ -9,7 +9,7 @@
 --   B. CONTRACT: identity, quest states, targets, provenance, objective progress, skip compatibility, immutability.
 --
 -- To regenerate the golden file deliberately (only when a behaviour change is INTENDED and reviewed):
---     CODEX_WRITE_GOLDEN=1 lua5.1 run_codex_tests.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide
+--     CODEX_WRITE_GOLDEN=1 lua5.1 run_codex_tests.lua ../ForeverCodex
 
 local H = ...
 ns_Contract = nil   -- set by the sections below (a global only inside this test file)

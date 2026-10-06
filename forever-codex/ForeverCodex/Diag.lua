@@ -158,6 +158,8 @@ function D.Lines(s)
 			L[#L + 1] = string.format("QuestieDB: IN USE | version %s, build %s | mode %s, flavor %s, contract %s (supports from %s) | %s quests known; %d records read so far, %d with a location, %d errors | unverified on Forever; a quest missing from it is UNKNOWN, not absent",
 				tostring(q.version or "?"), tostring(q.commit or "?"), tostring(q.mode or "?"), tostring(q.flavor or "?"), tostring(q.contract or "?"), tostring(q.minContract or "?"),
 				tostring(q.quests or "?"), q.stats.built, q.stats.withLocation, q.stats.errors)
+			local am = q.stats and q.stats.areaMap
+			if am then L[#L + 1] = "  QuestieDB area map (AreaID -> map): " .. tostring(am.state) .. (am.n and am.n > 0 and (" (" .. am.n .. " entries)") or "") .. (am.reason and (" - " .. am.reason .. ": NPC areas cannot be placed on a map until this is fixed") or "") end
 		else
 			L[#L + 1] = "QuestieDB: NOT in use (" .. tostring(q.state) .. "). " .. tostring(q.message)
 		end
@@ -521,7 +523,8 @@ function D.PerformanceLines()
 		return #out > 0 and table.concat(out, " ") or "none"
 	end
 	local timed = pf.last ~= nil
-	L[#L + 1] = "PERFORMANCE (counters only; no timers or polling added; times are real client milliseconds, not stub)"
+	if ns.SavedData then for _, line in ipairs(ns.SavedData.SavedDataLines()) do L[#L + 1] = line end end
+	L[#L + 1] = "PERFORMANCE (counters only; times are real client milliseconds, not stub)"
 	L[#L + 1] = string.format("  recomputes: %d | last %s | worst %s%s | total %s | average %s", pf.count,
 		timed and string.format("%.2f ms", pf.last) or "n/a", timed and string.format("%.2f ms", pf.worst) or "n/a",
 		pf.worstReason and (" (" .. pf.worstReason .. ")") or "", timed and string.format("%.1f ms", pf.total) or "n/a",
@@ -534,7 +537,16 @@ function D.PerformanceLines()
 		local qb = ns.QuestieBridge and ns.QuestieBridge.Stats and ns.QuestieBridge.Stats()
 		if qb then L[#L + 1] = string.format("  QuestieDB records built so far: %s in %s (a one-time cost per session: each record is read and cached the first time it is needed)", tostring(qb.built), qb.ms and string.format("%.0f ms", qb.ms) or "n/a") end
 	end
-	L[#L + 1] = "  recomputes by cause: " .. byList(pf.recomputeBy) .. "   (dirty = after an event or choice; periodic = the 3 s refresh while a Codex window is open; direct = a command or button; report = this report itself)"
+	L[#L + 1] = "  recomputes by cause: " .. byList(pf.recomputeBy) .. "   (dirty = after an event or choice; periodic = a refresh while a Codex window is open AND the player moved or a timed quest is counting down; direct = a command or button; report = this report itself)"
+	do
+		local w = ns.State.warmup or {}
+		local wtxt
+		if w.state == "done" then wtxt = string.format("first scan spread over %d frame(s), %s ms of work in total%s", w.frames or 0, w.ms and string.format("%.0f", w.ms) or "?", w.early and " (a command needed the plan first, so it finished early)" or "")
+		elseif w.state == "running" then wtxt = string.format("first scan in progress: %d of %d quests warmed", (w.i or 1) - 1, w.n or 0)
+		elseif w.state == "skipped" then wtxt = string.format("not needed (%d known quests: recomputed at once)", w.n or 0)
+		else wtxt = "not started" end
+		L[#L + 1] = "  login warm-up: " .. wtxt .. string.format(" | idle refreshes skipped (window open, nothing changed): %d", pf.skippedIdle or 0)
+	end
 	L[#L + 1] = "  events that marked the plan stale: " .. byList(pf.dirtyBy)
 	local now = type(_G.GetTime) == "function" and _G.GetTime() or nil
 	if now and pf.startedAt then
@@ -591,7 +603,7 @@ function D.PlaytestLines(snap, lines)
 	add("--- WHAT THE WINDOW SHOWS ---")
 	local slots = ns.Presenter.Slots(ctx)
 	add("Quest log: " .. (slots and string.format("%d/%d quests (%d free)%s", slots.used, slots.max, slots.free, slots.full and " - FULL: new quests are not recommended" or "") or "unreadable")
-		.. " | quest-starting items are separate from these slots and are not tracked yet")
+		.. " | quest-starting items in your bags do not use these slots; Codex lists the ones the game says start a quest as NEW QUEST ITEM")
 	local okC, card = pcall(ns.Presenter.Card, plan, ctx)
 	if okC and card then
 		local function show(label, it)
@@ -762,7 +774,7 @@ function D.PlaytestLines(snap, lines)
 			n("level"), n("prereq"), n("tooLow"), n("noLocation"), n("logFull")))
 		add(string.format("CURRENT: %d pickups, %d objectives, %d hand-ins -> %s stops -> %s sequences searched%s", kinds.ACCEPT, kinds.OBJECTIVE, kinds.TURN_IN, tostring(d.stops), tostring(d.sequences),
 			d.slotPressure and " | quest log nearly full: hand-ins are not deferred" or ""))
-		add("CONDITIONAL (quest-starting drops / items): not modelled yet; none is treated as a current quest")
+		add("CONDITIONAL: quest-starting items already in your bags are listed (NEW QUEST ITEM); quest-starting DROPS you have not picked up are not modelled, and none is treated as a current quest")
 
 		-- quests Codex cannot place: which layer lacks the data (provenance, never a guess)
 		add("")

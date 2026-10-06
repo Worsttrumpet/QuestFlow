@@ -215,7 +215,7 @@ local function describe(a, plan, ctx, icon)
 	-- when Codex will not point at the destination (or only as a straight line), say why in the player's words; the arrow and the waypoint follow the same assessment
 	if ns.Navigation and ns.Navigation.Assess and a.type ~= "FLIGHT" then
 		local as = ns.Navigation.Assess(a, ctx)
-		if Pl.Locate(a) and (as.reason or as.straight) then it.navNote, it.navReason = as.text, as.reason end
+		if Pl.Locate(a) and (as.reason or as.straight) then it.navNote, it.navReason, it.navDirection = as.text, as.reason, as.direction end
 		if as.inArea then it.dist, it.whereShort = "In the objective area", "In the objective area" end
 	end
 	it.whyPlayer = Pr.WhyPlayer(a, it, plan)

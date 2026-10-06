@@ -5,7 +5,7 @@
 --   Systems()       -> trainers, professions and recipes, pets, flight paths: what Codex can and cannot actually see of each TODAY (see the notes above SYSTEMS)
 --   Commands()      -> the few slash commands a player should know about
 --
--- Quest wording: "You did this", "In progress", "Ready to turn in", "Available" (You haven't found this yet),
+-- Quest wording: "You did this", "In progress", "Ready to turn in", "Available" (Codex's data says you could pick it up),
 -- "Not yet" (needs a level / another quest / is for someone else), "Codex does not know this quest".
 -- "You did this" rests on C_QuestLog.IsQuestFlaggedCompleted (still UNVERIFIED on Forever at startup) or on Codex having
 -- seen the turn-in itself; the planner is not changed by this.
@@ -34,7 +34,7 @@ function Kn.Quest(id, ctx)
 		local prog = os and ns.Presenter and ns.Presenter.Progress({ objectiveState = os })
 		return { label = "In progress", detail = prog and ("Progress " .. prog .. ".") or nil }
 	elseif st.state == "AVAILABLE" then
-		return { label = "Available", detail = "You haven't found this yet." }
+		return { label = "Available", detail = "Codex's data says you could pick this up." }
 	elseif st.state == "BLOCKED" then
 		local detail = "Not for your character right now."
 		if st.why == "LEVEL_TOO_LOW" and view and view.req then detail = "You need level " .. view.req .. " first."
@@ -53,7 +53,7 @@ end
 --   flight paths  Codex's data places many flight masters (unverified ATT data). Whether THIS character discovered one is not detectable (Providers/Flight.lua: DISCOVERY_UNDETECTABLE).
 local SYSTEMS = {
 	{ key = "trainers", label = "Trainers", status = "partly known",
-		text = "When you open a class trainer, Codex reads each spell's name, rank, cost, level requirement and whether you can learn it yet, and tries to notice spells you buy there. It only knows what a trainer has shown it, and if the trainer's filters hide learned or locked spells it can miss that you learned one." },
+		text = "When you open a class trainer, Codex reads each spell's name, rank, cost, level requirement and whether you can learn it yet, and tries to notice spells you buy there (still being tested on Forever). It only knows what a trainer has shown it, and if the trainer's filters hide learned or locked spells it can miss that you learned one." },
 	{ key = "recipes", label = "Professions and recipes", status = "partly known",
 		text = "Codex reads which professions you have and your skill in each (for example Herbalism 3/75), and what a profession trainer offers when you open one. It does not read your recipes, so it cannot tell which recipes you know." },
 	{ key = "pets", label = "Pets", status = "not known yet",

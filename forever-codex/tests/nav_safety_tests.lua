@@ -138,3 +138,31 @@ do
 	local ns = world({ rec(1, "Near", 0.6, 0.5) })
 	check(#ns.errors == 0, "no errors")
 end
+
+section("NOW guidance when the arrow is withheld (audit M5): a compass direction and a rounded distance, never a coordinate, and the arrow stays withheld")
+do
+	local ns0 = boot({ char = { level = 10 }, synthetic = true })
+	local C = ns0.Navigation.Compass
+	check(C(0) == "north" and C(math.pi / 2) == "east" and C(math.pi) == "south" and C(-math.pi / 2) == "west" and C(math.pi / 4) == "north-east" and C(-3 * math.pi / 4) == "south-west" and C(2 * math.pi) == "north", "the compass words")
+	check(C(nil) == nil and C(0 / 0) == nil, "junk gives no direction")
+	local far = { rec(2, "Objective", 0.5, 0.5, { objCoords = { { map = 9001, x = 0.99, y = 0.99 } } }) }
+	local ns, W = world(far, { [2] = { title = "Objective", objectives = { { text = "Kill boars", have = 0, need = 5 } } } }, { map = 9001, x = 0.01, y = 0.01 })
+	local as = ns.Navigation.Assess(ns.State.plan.now, ns.State.ctx)
+	check(as.pin == false and as.reason == "APPROX_FAR" and ns.Navigation.Target() == nil and W.sets == 0, "(setup) the arrow and the waypoint are still withheld")
+	check(as.direction == "south-east" and as.hintYards and as.hintYards % 10 == 0 and as.hintYards > 1000, "the destination is south-east of the player and about " .. tostring(as.hintYards) .. " yards (rounded to ten)")
+	check(as.text:find("Head roughly south-east", 1, true) and as.text:find("so there is no arrow", 1, true) and not as.text:find("0%.%d%d"), "the text gives the direction, keeps the reason, and shows no coordinate")
+	local c = card(ns)
+	check(c.now.navNote == as.text and c.now.navDirection == "south-east", "the NOW card carries it")
+	local ui = ns.UI
+	ui.Open("codex")
+	check(ui.main.codex.nowNav.__text:find("Head roughly south-east", 1, true) ~= nil, "and the window shows it under the action")
+	-- no measurement, no hint: another continent / an unconvertible map
+	local nsU = world({ rec(1, "Elsewhere", 0.6, 0.5) }, nil, { map = 7777, x = 0.5, y = 0.5 })
+	local act
+	for _, cnd in ipairs(nsU.Engine.Candidates(nsU.Context.Build()).candidates) do if cnd.id == "Q:1:ACCEPT" then act = cnd end end
+	local asU = nsU.Navigation.Assess(act, nsU.State.ctx)
+	check(asU.reason == "UNMEASURED" and asU.direction == nil and asU.text == nsU.Navigation.REASON_TEXT.UNMEASURED, "when Codex cannot measure the way there, it says only that (no invented direction)")
+	-- special travel keeps its own message
+	check(ns.Navigation.REASON_TEXT.SPECIAL_TRAVEL:find("boat", 1, true) ~= nil, "special travel keeps its dedicated wording (no direction is offered for a boat or portal)")
+	check(#ns.errors == 0 and #nsU.errors == 0, "no errors")
+end

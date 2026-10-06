@@ -827,7 +827,7 @@ level-breakpoint actions, death shortcuts, trainer/vendor/inn/pet/profession act
 decision is identical with it on or off).
 
 **Run it** (one command, from `forever-codex/tests`):
-`lua5.1 run_planner_eval.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide` prints a report per scenario plus
+`lua5.1 run_planner_eval.lua ../ForeverCodex` prints a report per scenario plus
 sweep tables. `lua5.1 run_codex_tests.lua ...` runs the same scenarios as part of the full suite (one line per REVIEW
 scenario; assertions counted). The committed output is `CODEX_PLANNER_EVAL_REPORT.md` (generated; regenerate, do not edit).
 Pipeline per scenario: scenario data -> stub client state -> `Engine.Candidates` -> `Planner.Compute` (trace) -> report.

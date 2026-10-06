@@ -1,5 +1,5 @@
--- run_codex_tests.lua <addonDir> <m8-13 ForeverQuestGuide dir>        (lua5.1)
---   from forever-codex/tests:   lua5.1 run_codex_tests.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide
+-- run_codex_tests.lua <addonDir>        (lua5.1; a second argument, the legacy M8.13 addon directory, is no longer needed and is ignored)
+--   from forever-codex/tests:   lua5.1 run_codex_tests.lua ../ForeverCodex
 --
 -- Stub-environment tests for Forever Codex 0.1 "First Light". The addon is loaded exactly as the client would load
 -- it: every file in .toc order sharing one namespace table, THEN SavedVariables restored, THEN ADDON_LOADED, THEN
@@ -11,7 +11,6 @@
 -- separately (docs/CODEX_TEST_GUIDE.md) and is reported separately.
 
 local ADDON = arg[1] or "../ForeverCodex"
-local M813 = arg[2] or "../../m8-13-progression/ForeverQuestGuide"
 local passed, failed = 0, 0
 -- run_planner_eval.lua sets PLANNER_EVAL_ONLY: print only failures and the planner evaluation reports
 local QUIET = rawget(_G, "PLANNER_EVAL_ONLY") == true
@@ -191,6 +190,11 @@ local function boot(opts)
 	if opts.login ~= false then
 		ns._selftest.boot.onEvent(nil, "PLAYER_LOGIN")
 		ns._selftest.telemetry.onEvent("PLAYER_LOGIN")
+		-- a real client keeps calling OnUpdate: with a large data set the first scan is spread over a few frames (State.BeginLogin), so let those frames pass
+		if not opts.keepWarmup then
+			local guard = 0
+			while ns.State.warmup and ns.State.warmup.state == "running" and guard < 5000 do ns.State.Tick(0.016); guard = guard + 1 end
+		end
 	end
 	return ns
 end
@@ -279,40 +283,12 @@ do
 	check(#claims == 0, "no UI/engine string presents data as confirmed or verified" .. (#claims > 0 and (": " .. claims[1]) or ""))
 end
 
-section("copy fidelity: reused M8.13 modules differ from the originals only by the documented renames")
+section("copied modules: the M8.13 copies keep their COPIED banner (their exact content is pinned by hash in generator/test_frozen_inputs.py; the legacy addon is not needed)")
 do
-	local function expected(name, subs)
-		local t = readFile(M813 .. "/" .. name)
-		for _, s in ipairs(subs) do
-			local a, b = s[1], s[2]
-			local i, j = t:find(a, 1, true)
-			if i then t = t:sub(1, i - 1) .. b .. t:sub(j + 1) end
-			-- global replace for repeated tokens
-			local from = 1
-			while true do
-				local i2, j2 = t:find(a, from, true)
-				if not i2 then break end
-				t = t:sub(1, i2 - 1) .. b .. t:sub(j2 + 1)
-				from = i2 + #b
-			end
-		end
-		return t
-	end
-	local function stripBanner(text)
-		return (text:gsub("^%-%- COPIED from[^\n]*\n%-%- Only[^\n]*\n%-%- Re%-copy[^\n]*\n\n", ""))
-	end
-	local cases = {
-		{ "ProgressionEval.lua", { { "ns.ProgressionEval = {", "ns.Eval = {" }, { "-- ForeverQuestGuide.ProgressionEval:", "-- ForeverCodex.Eval (was ForeverQuestGuide.ProgressionEval):" } } },
-		{ "MapPin.lua", { { "-- ForeverQuestGuide.MapPin:", "-- ForeverCodex.MapPin (was ForeverQuestGuide.MapPin):" } } },
-		-- MinimapButton.lua is no longer a verbatim copy: it gained drag-to-move and a saved position (see phase4_tests.lua, "minimap button").
-	}
-	for _, c in ipairs(cases) do
-		local copy = stripBanner(readFile(ADDON .. "/" .. c[1]))
-		check(copy == expected(c[1], c[2]), c[1] .. " is the M8.13 original plus only the documented renames")
+	for _, f in ipairs({ "ProgressionEval.lua", "MapPin.lua" }) do
+		check(readFile(ADDON .. "/" .. f):find("^%-%- COPIED from m8%-13%-progression/") ~= nil, f .. " still carries its COPIED banner")
 	end
 end
-
--- ================================================================ 2. loading and lifecycle
 
 section("loading through the stub client (TOC order, SavedVariables timing, ADDON_LOADED, PLAYER_LOGIN)")
 do
@@ -347,7 +323,7 @@ do
 	check(c.hardcore == false and c.hereRadius == 200 and type(c.added) == "table" and type(c.systems) == "table", "missing keys get defaults, per key")
 	check(c.systems.flight == true and c.systems.professions == false and c.systems.camping == false, "systems default: only the real one (flight hints) is on")
 	check(ns.Prefs.IsSavedVariablesSafe(ForeverCodexDB), "the SavedVariable contains only SavedVariables-safe values")
-	check(ForeverCodexDB.version == 1 and type(ForeverCodexDB.ui) == "table" and type(ForeverCodexDB.diag) == "table", "root keys present")
+	check(ForeverCodexDB.version == ns.Prefs.DB_VERSION and type(ForeverCodexDB.ui) == "table" and type(ForeverCodexDB.diag) == "table", "root keys present")
 end
 
 section("per-character choices")
@@ -965,10 +941,10 @@ do
 	slash("")
 	local c = ns.State.computeCount
 	ns.State.Tick(3.5)
-	check(ns.State.computeCount == c + 1, "with the window open the plan refreshes every few seconds (the character moves)")
+	check(ns.State.computeCount == c, "with the window open and NOTHING changed (no event, the character standing still) the idle refresh is skipped (0.7.9)")
 	W.loc.x, W.loc.y = 0.3, 0.3
 	ns.State.Tick(3.5)
-	check(ns.State.ctx.loc.x == 0.3, "and follows the character's position")
+	check(ns.State.ctx.loc.x == 0.3 and ns.State.computeCount == c + 1, "but once the character has moved the plan follows the character's position")
 end
 
 section("generator output provenance as loaded (end to end)")
@@ -1096,28 +1072,17 @@ do
 	check(not anyNegative and ns.Telemetry.Status().anomalies >= 1, "a real decrease with no level change is counted as an anomaly, never recorded as a gain")
 end
 
-section("telemetry: kills (combat log), no GUIDs stored")
+section("telemetry: no GUIDs stored, and no kill counting (the combat log is not available to addons on Forever)")
 do
 	local ns = boot()
-	local function kill(flags, destGuid) W.clog = { 1000, "PARTY_KILL", false, "Player-1-0000AAAA", "Thrall", flags, 0, destGuid, "Mottled Boar", 0x10a48 }; tfire(ns, "COMBAT_LOG_EVENT_UNFILTERED") end
-	kill(0x511, "Creature-0-3-1-2-3144-00001A2B")
-	local k = last(evOf(ns, "MOB_KILL"))
-	check(k and k.npc == 3144 and k.by == "me" and k.pet == nil, "a player killing blow records the creature id")
+	tfire(ns, "QUEST_ACCEPTED", 4242)
 	W.xp = 1075; tfire(ns, "PLAYER_XP_UPDATE")
 	local g = last(evOf(ns, "XP_GAIN"))
-	check(g.d == 75 and g.sk == 0, "an XP gain right after a kill carries the seconds-since-kill (timing only; no attribution claimed)")
-	W.now = W.now + 30; W.xp = 1200; tfire(ns, "PLAYER_XP_UPDATE")
-	check(last(evOf(ns, "XP_GAIN")).sk == nil, "an XP gain long after the last kill carries no kill link")
-	kill(0x512, "Creature-0-3-1-2-5555-00000001")
-	check(last(evOf(ns, "MOB_KILL")).by == "party", "a party member's kill is recorded as 'party'")
-	kill(0x1511, "Creature-0-3-1-2-6666-00000002")
-	check(last(evOf(ns, "MOB_KILL")).pet == true and last(evOf(ns, "MOB_KILL")).by == "me", "a kill by the player's pet is flagged")
+	check(g and g.d == 75 and g.sk == nil, "an XP gain is recorded without any kill link (that link needed the combat log)")
 	local before = #evOf(ns, "MOB_KILL")
-	kill(0x548, "Creature-0-3-1-2-7777-00000003")
-	kill(0x511, "Player-1-0000BBBB")
-	kill(0x511, nil)
-	W.clog = { 1000, "SWING_DAMAGE", false, "Player-1-0000AAAA", "Thrall", 0x511, 0, "Creature-0-3-1-2-3144-00001A2B", "x", 0x10a48 }; tfire(ns, "COMBAT_LOG_EVENT_UNFILTERED")
-	check(#evOf(ns, "MOB_KILL") == before, "other combat-log events, hostile killers, player victims and malformed payloads record nothing")
+	W.clog = { 1000, "PARTY_KILL", false, "Player-1-0000AAAA", "Thrall", 0x511, 0, "Creature-0-3-1-2-3144-00001A2B", "Mottled Boar", 0x10a48 }
+	tfire(ns, "COMBAT_LOG_EVENT_UNFILTERED")
+	check(#evOf(ns, "MOB_KILL") == before and before == 0, "even if the event were delivered, nothing records a kill")
 	local leaks = {}
 	for _, ev in ipairs(ns.Telemetry.Events()) do
 		for key, v in pairs(ev) do
@@ -1127,10 +1092,8 @@ do
 	end
 	check(#leaks == 0, "no event contains a GUID or any non-primitive value")
 	W.clog = nil
-	local ns2 = boot()
-	_G.CombatLogGetCurrentEventInfo = nil
-	ns2._selftest.telemetry.onEvent("COMBAT_LOG_EVENT_UNFILTERED", 1000, "PARTY_KILL", false, "Player-1-0000AAAA", "Thrall", 0x511, 0, "Creature-0-3-1-2-3144-00001A2B", "Mottled Boar", 0x10a48)
-	check(#evOf(ns2, "MOB_KILL") == 1, "if the client passes the payload as event arguments instead of CombatLogGetCurrentEventInfo, kills still record")
+	local code = readFile(ADDON .. "/Telemetry.lua"):gsub("%-%-[^\n]*", "")
+	check(not code:find("CombatLogGetCurrentEventInfo", 1, true) and not code:find("onCombatLog", 1, true) and not code:find("event == \"COMBAT_LOG", 1, true), "Telemetry.lua has no combat-log handler (the capability list still NAMES it, as UNAVAILABLE)")
 end
 
 section("telemetry: combat, quests")
@@ -1322,7 +1285,6 @@ do
 	local weightsBefore = nsA.Registry.Strategy("fast").w.distScale
 	-- flood telemetry with every event type
 	W.xp = 2000; tfire(nsA, "PLAYER_XP_UPDATE"); tfire(nsA, "PLAYER_REGEN_DISABLED"); W.now = W.now + 5; tfire(nsA, "PLAYER_REGEN_ENABLED")
-	W.clog = { 1, "PARTY_KILL", false, "Player-1-1", "x", 0x511, 0, "Creature-0-1-1-1-100-1", "m", 0 }; tfire(nsA, "COMBAT_LOG_EVENT_UNFILTERED")
 	tfire(nsA, "QUEST_ACCEPTED", 4242); tfire(nsA, "QUEST_TURNED_IN", 4242, 500, 0); tfire(nsA, "QUEST_LOG_UPDATE"); ttick(nsA, 5)
 	check(nsA.State.computeCount == computes, "telemetry events do not mark the plan dirty or trigger a recompute")
 	local planB = recompute(nsA)
@@ -1364,7 +1326,7 @@ do
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
 	H.fake = dofile(dir .. "/fake_questiedb.lua")
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua", "spell_lifecycle_tests.lua", "spell_purchase_tests.lua", "ui_roles_tests.lua", "timer_tests.lua", "area_tests.lua", "planner_flow_tests.lua", "quest_source_tests.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua", "spell_lifecycle_tests.lua", "spell_purchase_tests.lua", "ui_roles_tests.lua", "saved_data_tests.lua", "recompute_tests.lua", "timer_tests.lua", "area_tests.lua", "planner_flow_tests.lua", "quest_source_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

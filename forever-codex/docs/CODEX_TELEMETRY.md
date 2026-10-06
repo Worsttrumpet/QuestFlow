@@ -27,7 +27,7 @@ of the engine and navigation code.
 |---|---|---|---|
 | `SESSION` | `w`, `v` (schema), `lvl`, `xp`, `max`, `build` | login | n/a |
 | `XP_GAIN` | `d`, `xp`, `max`, `lvl`, `src` (`event`/`poll`/`level_event`), `sk` (s since last kill, if <= 10 s), `lvlup`, `multi` | `PLAYER_XP_UPDATE`, plus a 1 Hz `UnitXP`/`UnitXPMax` poll as fallback | **UNPROVEN**: never probed here |
-| `MOB_KILL` | `npc` (creature id), `by` (`me`/`party`), `pet` | combat log `PARTY_KILL` (flags from `CombatLogGetCurrentEventInfo`, or the event arguments if that function is absent) | **UNPROVEN** |
+| `MOB_KILL` | (never recorded) | **REMOVED in the audit hardening pass.** Forever refuses an addon's registration of `COMBAT_LOG_EVENT_UNFILTERED`; the dead handler and the `sk` (seconds since kill) field on `XP_GAIN` are gone. The capability list still names it as UNAVAILABLE so reports are honest. | **UNAVAILABLE** |
 | `LEVEL_UP` | `lvl`, `src` | `PLAYER_LEVEL_UP`, plus `UnitLevel` change in the poll | **UNPROVEN** (`UnitLevel` itself is proven) |
 | `QUEST_ACCEPT` | `q`, `w` | `QUEST_ACCEPTED(questID)` | **proven** (M8.7) |
 | `QUEST_COMPLETE` | `q`, `dur` (wall seconds since accept, only if the accept was seen) | quest-log diff on `UNIT_QUEST_LOG_CHANGED`/`QUEST_LOG_UPDATE` + `C_QuestLog.IsComplete`. Means **objectives complete**, not turn-in | **proven** (M8.9: the events carry no quest id, so the diff finds it) |
@@ -101,3 +101,7 @@ GUID keeps only the numeric creature id: **raw GUIDs, character names, chat and 
 Add an event type: one `EVENT_DEFS` entry (with its evidence status) + a handler that calls `T.Record(type, fields)`.
 Add a metric: one pure function/field in `TelemetryMetrics.Summary`, labelled with its kind. Teach the engine to
 use it: add a reader in `Strategies`/`Engine` that calls `Summary`; telemetry itself stays decision-free.
+
+
+## Storage (audit hardening pass)
+The log is **per character**: the live table `ForeverCodexDB.telemetry` carries an `owner` (the character key) and another character's log is parked under `chars[owner].parked`. See `CODEX_SAVED_DATA.md`. "Codex learned N observations from this character" is therefore accurate.

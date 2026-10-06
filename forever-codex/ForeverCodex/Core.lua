@@ -13,19 +13,29 @@ local addonName, ns = ...
 
 ForeverCodex = ForeverCodex or {}
 local C = ForeverCodex
-C.VERSION = "0.7.8"       -- must equal ## Version in ForeverCodex.toc (the packager checks); bump both for every packaged change
+C.VERSION = "0.7.9"       -- must equal ## Version in ForeverCodex.toc (the packager checks); bump both for every packaged change
 C.EXPECTED_INTERFACE = 16001
 
 ns.errors = {}
 local MAX_ERRORS = 20
 
 --- Records a caught error for /codex diag. Never raises.
+-- A caught error used to be visible only in /codex diag, so a tester could play with a broken feature and never know. The FIRST error from each place is now announced once in chat (at most
+-- MAX_ANNOUNCED per session, so a loop that fails every frame cannot spam), pointing at /codex report. Every error is still recorded as before. Nothing is thrown at the game's error handler.
+local MAX_ANNOUNCED = 3
+local announced, announcedWhere = 0, {}
 function ns.RecordError(where, err)
 	local msg = tostring(where) .. ": " .. tostring(err)
 	if #msg > 300 then msg = msg:sub(1, 300) end
 	table.insert(ns.errors, msg)
 	while #ns.errors > MAX_ERRORS do
 		table.remove(ns.errors, 1)
+	end
+	local key = tostring(where)
+	if not announcedWhere[key] and announced < MAX_ANNOUNCED and type(ns.Say) == "function" then
+		announcedWhere[key] = true
+		announced = announced + 1
+		pcall(ns.Say, "Codex caught an error in " .. key .. " and carried on. /codex report has the details; please include it if you report a problem.")
 	end
 end
 

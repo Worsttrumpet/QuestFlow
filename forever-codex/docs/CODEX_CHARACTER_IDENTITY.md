@@ -8,7 +8,7 @@ Skyborne Rogue), Spell Training dismissals and profession state. Separately, 8-1
 | Scope | Stored in | Contents |
 |---|---|---|
 | Per character (`ForeverCodexDB.chars["Name-Realm"]`) | Preferences | gameplay: `skipped`, `added`, `journey` (entries, turned-in quests, last level), `nav` (last waypoint), `routeZone`, `spellTraining`, `professions`; preferences: `style`, `systems`, `navigation`, `arrow`, `partyNotify`, `hardcore`, `hereRadius`, `setupDone`; and (new) `identity`, `identityReset` |
-| Global / account-wide | `ForeverCodexDB.ui`, `.offers`, `.items`, `.quest`, `.telemetry`, `.feedback`, `.diag` | window and minimap settings, OfferProbe dialogs, item and eligibility evidence, remembered quest items, telemetry events, feedback reports |
+| Global / account-wide | `ForeverCodexDB.ui`, `.items`, `.quest`, `.spellCatalog`, `.feedback`, `.diag` (NOT `.offers` / `.telemetry`: those are per character since the audit hardening pass, see `CODEX_SAVED_DATA.md`) | window and minimap settings, OfferProbe dialogs, item and eligibility evidence, remembered quest items, telemetry events, feedback reports |
 
 ## What identity signal Forever provides
 * `UnitGUID` is proven to answer on Forever for an NPC (`UnitGUID("npc")`, used by OfferProbe). **Whether `UnitGUID("player")` returns a usable `Player-...` value on Forever is unproven.** Codex uses it only if it returns a string
@@ -24,7 +24,7 @@ system toggles and every account-wide store are untouched. A normal level-up or 
 
 ## What it cannot detect (stated plainly: this is a defence, not an identity)
 A deleted character recreated with the same name, class, race and faction whose level has not gone below the old one's highest (for example a level 1 re-roll of a level 1 character: nothing is lost), or an old character that
-never got past the new one's level, is not detected unless `UnitGUID("player")` works. The account-wide offers store is still shared between characters; dialogs are protected only by the progression stamp, which is not
+never got past the new one's level, is not detected unless `UnitGUID("player")` works. (Superseded: the offers store is no longer shared, see `CODEX_SAVED_DATA.md`; the progression stamp stays as a second defence.) Originally: the account-wide offers store was shared between characters; dialogs were protected only by the progression stamp, which is not
 character-specific (a coincidental `level:turn-ins:ready` match between two characters is possible).
 
 ## Unstamped dialogs (second fix)

@@ -25,7 +25,10 @@ local R = ns.Registry
 local P = {}
 ns.Prefs = P
 
-local DB_VERSION = 1
+-- SAVED DATA VERSION (see SavedData.lua for the migration steps). 1 = every build before the per-character observation stores; 2 = they belong to ONE character.
+-- A save from a NEWER build (a higher number) is never touched. Additive defaults (ensureChar) still fill in anything missing; a migration step is only for a field that was MOVED, RENAMED, RESHAPED or REMOVED.
+local DB_VERSION = 2
+P.DB_VERSION = DB_VERSION
 local charKey = "unknown"
 
 local function root()
@@ -33,7 +36,10 @@ local function root()
 		ForeverCodexDB = {}
 	end
 	local db = ForeverCodexDB
-	db.version = db.version or DB_VERSION
+	if db.version == nil then
+		-- a save from before the version number existed is version 1; a table with nothing in it is a brand-new install (current)
+		db.version = next(db) ~= nil and 1 or DB_VERSION
+	end
 	db.ui = type(db.ui) == "table" and db.ui or {}
 	db.chars = type(db.chars) == "table" and db.chars or {}
 	db.diag = type(db.diag) == "table" and db.diag or {}
@@ -83,9 +89,15 @@ function P.Root() return root() end
 function P.Char() return ensureChar(charKey) end
 function P.UI() return root().ui end
 
+--- Whether Codex may read quest knowledge from the QuestieDB addon when it is installed (account-wide; default ON, the way Codex has always worked). QuestieDB is third-party data: it is never copied
+-- into Codex and never treated as confirmed on Forever (see docs/CODEX_DATA_SOURCES.md). Turning it off makes Codex use only its own observed data and its ATT-derived packs.
+function P.UseQuestieDB() return root().ui.useQuestieDB ~= false end
+function P.SetUseQuestieDB(on) root().ui.useQuestieDB = on and true or false end
+
 --- The chosen look of the player window (see UI/Theme.lua): a theme key, or nil for the default. Account-wide (it is how the player wants Codex to look, not a character choice).
 function P.ThemeKey() return root().ui.theme end
 function P.SetThemeKey(k) root().ui.theme = type(k) == "string" and k or nil end
+
 
 -- ---------------------------------------------------------------- character IDENTITY (0.7.5)
 --
@@ -126,6 +138,7 @@ end
 --- The gameplay state of a character, cleared (see the comment above for what stays).
 function P.ResetCharacterState()
 	local c = P.Char()
+	if ns.SavedData then ns.SavedData.ClearLive(charKey) end        -- a re-created character with the same name inherits none of the old one's observations either
 	c.skipped, c.added, c.nav = {}, {}, nil
 	c.routeZone = "auto"
 	c.journey = { entries = {} }

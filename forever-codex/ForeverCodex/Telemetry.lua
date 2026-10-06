@@ -49,7 +49,6 @@ local MAX_STEP = 120              -- yards per sample: more is a teleport/flight
 local STILL_SAMPLES = 2           -- consecutive still samples that end a movement segment
 local MAX_SEGMENT = 120           -- seconds: longer travel is split into several PLAYER_MOVE events
 local MIN_SEG_DUR, MIN_SEG_DIST = 1, 5
-local KILL_LINK = 10              -- seconds: an XP gain this soon after a kill carries `sk`
 local MAX_ACCEPTED = 60           -- remembered quest accept times (for durations)
 local MAP_YARDS = 3000            -- rough yards per full map width, ONLY for the flagged approximate fallback
 
@@ -77,7 +76,7 @@ local WATCHED_EVENTS = { "PLAYER_XP_UPDATE", "PLAYER_LEVEL_UP", "QUEST_ACCEPTED"
 	"QUEST_LOG_UPDATE", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }
 -- COMBAT_LOG_EVENT_UNFILTERED is deliberately NOT here: the Forever client refuses an addon's registration of it and raises a
 -- taint popup ("ForeverCodex has been blocked from an action only available to the Blizzard UI"; real-client taint log
--- pointed at registerAll). The MOB_KILL handler below stays for a future, proven source, but nothing feeds it today.
+-- pointed at registerAll). Kill counting was therefore REMOVED (0.7.9): there is no handler and no combat-log code here. MOB_KILL stays in the capability list only so reports say it is UNAVAILABLE.
 
 -- ---------------------------------------------------------------- client readers (replaceable in tests)
 
@@ -162,7 +161,6 @@ local frame = CreateFrame("Frame")
 local started = false
 local registered = {}           -- watched event -> true/false (did RegisterEvent succeed?)
 local seen = {}                 -- telemetry event type -> count recorded this session
-local lastKillT = nil
 local combatStart = nil
 local xpState = {}              -- lvl, cur, max, pendingDrop, anomalies
 local moveState = {}            -- last = last sample, seg = open segment, still = consecutive still samples
@@ -180,7 +178,7 @@ local function store()
 	if type(ForeverCodexDB) ~= "table" then return nil end
 	local s = ForeverCodexDB.telemetry
 	if type(s) ~= "table" then
-		s = {}
+		s = { owner = ns.SavedData and ns.SavedData.Owner() or nil }
 		ForeverCodexDB.telemetry = s
 	end
 	if s.v == nil then s.v = T.SCHEMA end
@@ -220,14 +218,6 @@ function T.Counts() return seen end
 
 -- ---------------------------------------------------------------- XP and level
 
-local function sinceKill()
-	if lastKillT then
-		local d = now() - lastKillT
-		if d >= 0 and d <= KILL_LINK then return round2(d) end
-	end
-	return nil
-end
-
 local function checkXp(src)
 	local r = T.reader
 	local lvl, cur, max = r.level(), r.xp(), r.xpMax()
@@ -240,12 +230,12 @@ local function checkXp(src)
 		-- finished the old level, plus progress into the new one. If several levels passed at once the middle levels
 		-- are unknown, so the delta is a lower bound and flagged.
 		local delta = (xpState.max or 0) - xpState.cur + cur
-		T.Record("XP_GAIN", { d = delta, xp = cur, max = max, lvl = lvl, src = src, sk = sinceKill(), lvlup = true,
+		T.Record("XP_GAIN", { d = delta, xp = cur, max = max, lvl = lvl, src = src, lvlup = true,
 			multi = (lvl - xpState.lvl > 1) or nil })
 		T.Record("LEVEL_UP", { lvl = lvl, src = src })
 		xpState.lvl, xpState.cur, xpState.max, xpState.pendingDrop = lvl, cur, max, nil
 	elseif lvl == xpState.lvl and cur > xpState.cur then
-		T.Record("XP_GAIN", { d = cur - xpState.cur, xp = cur, max = max, lvl = lvl, src = src, sk = sinceKill() })
+		T.Record("XP_GAIN", { d = cur - xpState.cur, xp = cur, max = max, lvl = lvl, src = src })
 		xpState.cur, xpState.max, xpState.pendingDrop = cur, max, nil
 	elseif lvl == xpState.lvl and cur < xpState.cur then
 		-- The XP bar reset can arrive a moment before UnitLevel updates: wait one more check for the level before
@@ -259,39 +249,6 @@ local function checkXp(src)
 	elseif lvl < xpState.lvl then
 		xpState.lvl, xpState.cur, xpState.max, xpState.pendingDrop = lvl, cur, max, nil   -- e.g. a level reset: rebase silently
 	end
-end
-
--- ---------------------------------------------------------------- combat log (kills only)
-
-local function flagSet(flags, mask)
-	return flags % (mask * 2) >= mask    -- single-bit test without a bit library
-end
-
---- The creature id from a GUID, or nil. The GUID itself is never returned or stored.
-local function creatureId(guid)
-	if type(guid) ~= "string" then return nil end
-	local kind, npc = guid:match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
-	if (kind == "Creature" or kind == "Vehicle") and npc then return tonumber(npc) end
-	return nil
-end
-
-local function onCombatLog(...)
-	local sub, sFlags, dGUID
-	if type(CombatLogGetCurrentEventInfo) == "function" then
-		local _, s, _, _, _, f, _, d = CombatLogGetCurrentEventInfo()
-		sub, sFlags, dGUID = s, f, d
-	else
-		local _, s, _, _, _, f, _, d = ...
-		sub, sFlags, dGUID = s, f, d
-	end
-	if sub ~= "PARTY_KILL" or type(sFlags) ~= "number" then return end
-	local mine = flagSet(sFlags, 0x1)                      -- COMBATLOG_OBJECT_AFFILIATION_MINE
-	local party = flagSet(sFlags, 0x2) or flagSet(sFlags, 0x4)   -- PARTY / RAID
-	if not (mine or party) then return end
-	local npc = creatureId(dGUID)
-	if not npc then return end                              -- not a creature (e.g. a player): not a mob kill
-	lastKillT = now()
-	T.Record("MOB_KILL", { npc = npc, by = mine and "me" or "party", pet = flagSet(sFlags, 0x1000) or nil })
 end
 
 -- ---------------------------------------------------------------- quests
@@ -467,7 +424,7 @@ local function beginSession()
 	sinceTick = 0
 	seen = {}
 	moveState = {}
-	combatStart, lastKillT = nil, nil
+	combatStart = nil
 	xpState = {}
 	logPrev, logObj = nil, nil
 	local r = T.reader
@@ -489,11 +446,11 @@ function T.OnEvent(event, ...)
 		return
 	end
 	if event == "PLAYER_LOGIN" then
+		pcall(ns.SavedData.PrepareLogin)                -- (this character's telemetry must be the live one BEFORE the session marker is written: Boot may not have run yet)
 		if T.IsEnabled() then beginSession() end
 		return
 	end
 	if not started or not T.IsEnabled() then return end
-	local extra = { ... }          -- only the combat-log fallback (old payload-as-arguments API) needs the full list
 	local ok, err = pcall(function()
 		if event == "PLAYER_XP_UPDATE" then
 			checkXp("event")
@@ -517,8 +474,6 @@ function T.OnEvent(event, ...)
 				T.Record("COMBAT_END", { dur = round2(now() - combatStart) })
 				combatStart = nil
 			end
-		elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-			onCombatLog(unpack(extra, 1, 12))
 		end
 	end)
 	if not ok then ns.RecordError("telemetry " .. tostring(event), err) end

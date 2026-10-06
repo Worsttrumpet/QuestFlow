@@ -41,7 +41,7 @@ function H.Summary()
 		text = string.format("Codex has learned %d %s from this character.", total, total == 1 and "observation" or "observations")
 	end
 	return { enabled = st.enabled, total = total, cap = st.cap, text = text,
-		note = string.format("Codex keeps the most recent %d. It stays on this character; nothing is uploaded or shared.", st.cap) }
+		note = string.format("Codex keeps the most recent %d for this character only. Nothing is uploaded or shared.", st.cap) }
 end
 
 --- What Codex learned: one line per kind of observation that has actually been recorded.
@@ -66,5 +66,5 @@ end
 H.COPY = {
 	title = "Help Improve Codex",
 	tagline = "Codex learns from your adventures.",
-	body = "While you play, Codex can notice things it did not know: quests, the NPCs who give them, where objectives are, how you travel, and how quests and fights progress. You do not need to report anything. What Codex notices stays on this character unless you choose to export it later.",
+	body = "While you play, Codex can notice things it did not know: quests, the NPCs who give them, where objectives are, how you travel, and how quests and fights progress. You do not need to report anything. What Codex notices is kept on your computer, separately for each character, and is never uploaded. A problem report you write yourself is also only saved on your computer.",
 }

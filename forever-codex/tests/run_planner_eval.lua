@@ -1,7 +1,7 @@
 -- run_planner_eval.lua: ONE command to run every Planner calibration scenario and print the full reports.
 --
 --     cd forever-codex/tests
---     lua5.1 run_planner_eval.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide
+--     lua5.1 run_planner_eval.lua ../ForeverCodex
 --
 -- It runs the normal Codex test harness (so the stub client and every guarantee are the same) in a quiet mode: only
 -- failures and the evaluation output are printed. DETERMINISTIC scenarios are asserted; REVIEW scenarios are only

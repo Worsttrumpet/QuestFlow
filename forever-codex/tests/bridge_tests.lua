@@ -439,3 +439,24 @@ do
 	check(#ns.errors == 0, "no errors")
 	f.uninstall()
 end
+
+section("QuestieDB area map: the AreaID table is read as DATA and never executed (no loadstring), and a malformed one is rejected, not run")
+do
+	local ns = boot({ char = HORDE_WARRIOR, synthetic = true, loc = HERE })
+	local P = ns.QuestieBridge.ParseAreaMap
+	local t, n = P("return {[12]=1411,[14]=1412}")
+	check(t and n == 2 and t[12] == 1411 and t[14] == 1412, "a plain table is read")
+	t, n = P("-- a comment\nreturn {\n  [1] = 1411, -- one\n  [2] = 1412;\n}\n")
+	check(t and n == 2 and t[2] == 1412, "comments, line breaks and spacing are fine")
+	local ran = false
+	_G.__codex_injected = function() ran = true end
+	for _, bad in ipairs({ "return {[1]=__codex_injected()}", "__codex_injected() return {[1]=2}", "return {[1]=2} __codex_injected()", "return {[1]=2, x=3}", "return setmetatable({}, {})", "return {}", "", "return {[1]=2", string.rep("x", 500000) }) do
+		local tt, why = P(bad)
+		check(tt == nil and type(why) == "string", "rejected: " .. tostring(bad):sub(1, 36))
+	end
+	check(ran == false, "nothing was executed")
+	_G.__codex_injected = nil
+	check(P(nil) == nil and P(42) == nil, "non-text is rejected")
+	local src = (H.readFile(H.addonDir .. "/QuestieBridge.lua"):gsub("%-%-[^\n]*", ""))
+	check(not src:find("loadstring", 1, true), "QuestieBridge.lua no longer calls loadstring")
+end

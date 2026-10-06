@@ -163,6 +163,38 @@ local REASON_TEXT = {
 }
 N.REASON_TEXT = REASON_TEXT
 
+--- The eight compass words for a bearing in radians (0 = north, clockwise). The only direction wording Codex uses when it withholds an arrow.
+local POINTS = { "north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west" }
+function N.Compass(bearing)
+	if type(bearing) ~= "number" or bearing ~= bearing then return nil end
+	local i = math.floor(((bearing % (2 * math.pi)) / (math.pi / 4)) + 0.5) % 8
+	return POINTS[i + 1]
+end
+
+-- When the arrow is withheld the player still deserves a direction when Codex can honestly give one: the compass direction from the player to the destination's representative point, said as "roughly", with a
+-- rounded distance. It is the same measurement the arrow would use, so it is only given when that measurement exists (same continent, convertible map); it never shows a coordinate, and it never replaces the reason.
+local HINT = {
+	APPROX_FAR = function(dir, yd) return string.format("Head roughly %s, about %d yards. Only an approximate area is known and it is far away, so there is no arrow.", dir, yd) end,
+	PLAYER_POSITION_FAR = function(dir, yd) return string.format("Head roughly %s, about %d yards. Only a spot where someone once stood is known for this, so there is no arrow.", dir, yd) end,
+	UNMEASURED = function(dir, yd) return string.format("Head roughly %s, about %d yards. It is too far for a reliable arrow, so there is no arrow.", dir, yd) end,
+}
+
+local function withheld(out, reason, ctx, pos)
+	out.reason = reason
+	out.text = REASON_TEXT[reason]
+	local loc = ctx and ctx.loc
+	if HINT[reason] and loc and loc.available and ns.Arrow and ns.Arrow.Bearing then
+		local ok, b, dist = pcall(ns.Arrow.Bearing, ctx, { map = loc.map, x = loc.x, y = loc.y }, { map = pos.map, x = pos.x, y = pos.y })
+		local dir = ok and N.Compass(b)
+		if dir and type(dist) == "number" and dist >= 50 then
+			local yd = math.floor(dist / 10 + 0.5) * 10
+			out.direction, out.hintYards = dir, yd
+			out.text = HINT[reason](dir, yd)
+		end
+	end
+	return out
+end
+
 --- Should Codex point at this action's destination? Returns { pin = true|false, reason = code|nil, straight = bool, distance = yards|nil, text = player-facing note|nil }.
 -- (No location at all is not an assessment: the caller has nothing to point at.)
 function N.Assess(a, ctx)
@@ -199,12 +231,11 @@ function N.Assess(a, ctx)
 	out.distance = d
 	if d == nil then out.reason = "UNMEASURED" out.text = REASON_TEXT.UNMEASURED return out end
 	if kind == "player_position" then
-		if d > N.MAX_PLAYER_POS_YD then out.reason = "PLAYER_POSITION_FAR" out.text = REASON_TEXT.PLAYER_POSITION_FAR return out end
+		if d > N.MAX_PLAYER_POS_YD then return withheld(out, "PLAYER_POSITION_FAR", ctx, pos) end
 	elseif status ~= "known" then
-		if d > N.MAX_APPROX_YD then out.reason = "APPROX_FAR" out.text = REASON_TEXT.APPROX_FAR return out end
+		if d > N.MAX_APPROX_YD then return withheld(out, "APPROX_FAR", ctx, pos) end
 	elseif d > N.MAX_EXACT_YD then
-		out.reason = "UNMEASURED" out.text = REASON_TEXT.UNMEASURED                      -- farther than a straight line means anything
-		return out
+		return withheld(out, "UNMEASURED", ctx, pos)                      -- farther than a straight line means anything
 	end
 	if d > N.TRAVEL_NEAR_YD and N.TravelWord(a) then out.reason = "SPECIAL_TRAVEL" out.text = REASON_TEXT.SPECIAL_TRAVEL return out end
 	out.pin = true

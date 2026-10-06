@@ -63,7 +63,7 @@ local function store()
 	if type(ForeverCodexDB) ~= "table" then return nil end
 	local s = ForeverCodexDB.offers
 	if type(s) ~= "table" then
-		s = {}
+		s = { owner = ns.SavedData and ns.SavedData.Owner() or nil }
 		ForeverCodexDB.offers = s
 	end
 	if s.v == nil then s.v = O.SCHEMA end

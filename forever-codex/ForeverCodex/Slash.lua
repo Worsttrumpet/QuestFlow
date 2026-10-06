@@ -24,7 +24,7 @@ local function helpLines()
 	say("  /codex sys <key> on|off   toggle a system;  /codex hardcore on|off")
 	say("  /codex telemetry [status|summary|events|on|off|reset]   observation log (does not affect recommendations)")
 	say("  /codex planner [on|off]   the sequence planner (default on); off = the previous one-action-at-a-time engine")
-	say("  /codex questiedb [quest id] [npc id]   whether the QuestieDB addon is in use, and a check of what it knows")
+	say("  /codex questiedb [on|off | quest id] [npc id]   turn QuestieDB data on or off, and whether the QuestieDB addon is in use, and a check of what it knows")
 	say("  /codex minimap reset   put the (draggable) minimap button back at its default spot")
 	say("  /codex spells [restore]   SPELL TRAINING: what the client reported; restore = bring back spells you marked Don't Want to Learn")
 	say("  /codex feedback [status|list]   REPORT A PROBLEM (also the Feedback button in the window); /codex report is the developer diagnostic")
@@ -178,6 +178,13 @@ local function handle(msg)
 		-- /codex questiedb [quest id] [npc id]: what QuestieDB is, and a development check of the bridge. The defaults below are only the
 		-- ids this check was written with (a Forever-only quest and its giver): nothing in the planner or product logic uses them.
 		local QB = ns.QuestieBridge
+		if restLower == "on" or restLower == "off" then
+			P.SetUseQuestieDB(restLower == "on")
+			ns.Safe(QB.Init)
+			ns.State.Recompute()
+			say("QuestieDB data is " .. restLower .. ". " .. tostring(QB.Status().message or ""))
+			return
+		end
 		local st = QB.Status()
 		if st.state ~= "available" then
 			say("QuestieDB is NOT in use (" .. tostring(st.state) .. "). " .. tostring(st.message))

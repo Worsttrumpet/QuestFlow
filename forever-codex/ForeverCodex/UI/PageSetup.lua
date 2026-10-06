@@ -116,6 +116,8 @@ function UI.BuildSetup(parent, mode)
 		w.hardcore = W.CheckRow(f, 0, y, WIDTH, function() P.SetHardcore(not P.IsHardcore()); recompute() end)
 		w.hardcore.text = w.hardcore.label
 		y = y - W.ROW_H_CHECK
+		w.questie = W.CheckRow(f, 0, y, WIDTH, function() P.SetUseQuestieDB(not P.UseQuestieDB()); if ns.QuestieBridge then ns.Safe(ns.QuestieBridge.Init) end; recompute() end)
+		y = y - W.ROW_H_CHECK
 		w.party = dropdownRow(f, y, "Party news", function(key) P.SetPartyNotify(key) end)
 		y = y - W.ROW_H_DROP - 4
 		w.again = W.Button(f, 150, 22, "Run setup again", function() P.ReopenSetup(); UI.ShowPage("codex") end)
@@ -139,6 +141,7 @@ function UI.BuildSetup(parent, mode)
 		if not isSetup then
 			w.nav:SetOn(P.NavigationOn(), "Move the map waypoint for me", "Codex points the game's waypoint at your current target. A waypoint you set yourself is left alone.")
 			w.hardcore:SetOn(P.IsHardcore(), "Hardcore character", "Codex will never suggest a shortcut that needs you to die.")
+			w.questie:SetOn(P.UseQuestieDB(), "Use QuestieDB quest data if installed", "Where quests are, and what comes first, from the QuestieDB addon. It is third-party data, not something Codex saw on Forever.")
 			w.party:SetOptions(PARTY_OPTIONS)
 			w.party:SetValue(P.PartyNotify())
 			w.party.help:SetText(P.PartyNotify() == "off" and "Nothing about your party is shown." or "A card shows what your party members have finished.")

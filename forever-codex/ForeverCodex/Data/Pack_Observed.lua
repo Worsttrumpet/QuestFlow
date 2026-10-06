@@ -1,7 +1,7 @@
 -- ForeverCodex/Data/Pack_Observed.lua
 -- GENERATED FILE -- do not hand-edit. Regenerate with forever-codex/generator/build_codex_data.py.
 -- Generator: codex-data-1
--- input m8-13-progression/ForeverQuestGuide/Data.lua sha256=636f854cde38fa3811aa6d78640a55d85d42fe8b78692e280e8d2e7a4d2568d3
+-- input forever-codex/generator/inputs/observed_m6_data.lua sha256=636f854cde38fa3811aa6d78640a55d85d42fe8b78692e280e8d2e7a4d2568d3
 --
 -- PROVENANCE: src=observed, verified=true. Quest title/level/objectives/giver were observed on the live Forever client by ForeverRecorder and passed the M6 guide-readiness rule. `pos` is the PLAYER's position at a recorder checkpoint, not a surveyed NPC location.
 

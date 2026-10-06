@@ -10,7 +10,7 @@
 --   LibQuestieDB.RequireContract(n)                  version-range check
 --   LibQuestieDB.Quest.GetAll(id, keys) / .Get / .Exists / .GetAllIds()      (global shorthand: QuestDB)
 --   LibQuestieDB.Npc.GetAll(id, keys) / .Get                                  (global shorthand: NpcDB)
---   LibQuestieDB.Support.Get("ZoneDB").private.areaIdToUiMapId               (a Lua source string: AreaID -> UiMapID)
+--   LibQuestieDB.Support.Get("ZoneDB").private.areaIdToUiMapId               (a Lua source string: AreaID -> UiMapID; read as DATA by ParseAreaMap, never executed)
 --   LibQuestieDB.readMode, LibQuestieDB.ModeIndicator.GetStatus()
 --   the addon metadata of "QuestieDB" (Version, X-BUILD-COMMIT, X-Flavor, X-Mode) through GetAddOnMetadata
 --
@@ -116,20 +116,47 @@ local function entities()
 	return lib, Q, N
 end
 
---- AreaID -> UiMapID. QuestieDB publishes it as Lua source text (a documented quirk), so it is decoded once.
+--- Reads QuestieDB's AreaID -> UiMapID text WITHOUT running it. QuestieDB publishes the table as Lua source text (`return { [12]=1411, ... }`); an earlier build executed that text with loadstring, which runs
+-- another addon's code inside Codex. This reads it as DATA: only `[integer] = integer` pairs inside one `return { ... }` are accepted (comments and whitespace are skipped); anything else rejects the
+-- whole text, so nothing foreign can ever run. Returns the table and the number of pairs, or nil and a reason.
+function QB.ParseAreaMap(src)
+	if type(src) ~= "string" then return nil, "not text" end
+	if #src > 400000 then return nil, "too large" end
+	local clean = src:gsub("%-%-[^\n]*", "")
+	local body = clean:match("^%s*return%s*(%b{})%s*$")
+	if not body then return nil, "not a plain return { ... } table" end
+	local rest = body:sub(2, -2)
+	local t, n, pos = {}, 0, 1
+	while true do
+		local s1, e1, a1, b1 = rest:find("^%s*%[(%d+)%]%s*=%s*(%d+)%s*[,;]?", pos)
+		if not s1 then break end
+		t[tonumber(a1)] = tonumber(b1)
+		n = n + 1
+		pos = e1 + 1
+	end
+	if n == 0 then return nil, "no [id]=id pairs found" end
+	if not rest:find("^%s*$", pos) then return nil, "unexpected content after " .. n .. " pairs" end
+	return t, n
+end
+
+QB.zoneMapInfo = { state = "not read yet" }
+
+--- AreaID -> UiMapID (QuestieDB's own table, read as data: see ParseAreaMap). Codex has NO area table of its own: the Blizzard AreaTable it would come from is not redistributable (docs/CODEX_DATA_SOURCES.md),
+-- so without QuestieDB's table an NPC's area cannot be turned into a map and its position is left out (unknown stays unknown).
 local function areaToMap(area)
 	if zoneMapOk == nil then
 		zoneMapOk = false
 		local lib = QB.api.lib()
 		local ok, src = pcall(function() return lib.Support.Get("ZoneDB").private.areaIdToUiMapId end)
-		if ok and type(src) == "string" and type(loadstring) == "function" then
-			local chunk = loadstring(src)
-			if chunk then
-				local okRun, t = pcall(chunk)
-				if okRun and type(t) == "table" then zoneMap, zoneMapOk = t, true end
-			end
+		if ok and type(src) == "string" then
+			local t, n = QB.ParseAreaMap(src)
+			if t then zoneMap, zoneMapOk = t, true QB.zoneMapInfo = { state = "read as data", n = n }
+			else QB.zoneMapInfo = { state = "REJECTED", reason = n } end
 		elseif ok and type(src) == "table" then
 			zoneMap, zoneMapOk = src, true
+			QB.zoneMapInfo = { state = "table", n = 0 }
+		else
+			QB.zoneMapInfo = { state = "absent" }
 		end
 	end
 	local m = zoneMapOk and zoneMap[area] or nil
@@ -300,6 +327,11 @@ end
 function QB.Init()
 	R.RemovePack("quests", QB.PACK_NAME)
 	reset()
+	if ns.Prefs and ns.Prefs.UseQuestieDB and not ns.Prefs.UseQuestieDB() then
+		-- the player (or project owner) turned it off: nothing is read from the addon at all
+		QB.status = { state = "disabled", checkedLib = false, message = "QuestieDB is turned off in Codex Options. Codex is using only its own observed data and its ATT-derived packs (/codex questiedb on turns it back on)." }
+		return false
+	end
 	local lib, Q, N = entities()
 	local st = { state = "missing", checkedLib = type(lib) == "table" }
 	QB.status = st
@@ -356,7 +388,7 @@ end
 
 function QB.Available() return QB.status.state == "available" end
 function QB.Status() return QB.status end
-function QB.Stats() return { built = stats.built, withLocation = stats.withLocation, errors = stats.errors, ms = stats.ms } end
+function QB.Stats() return { built = stats.built, withLocation = stats.withLocation, errors = stats.errors, ms = stats.ms, areaMap = QB.zoneMapInfo } end
 
 -- ---------------------------------------------------------------- diagnostics: what does QuestieDB hold for ONE quest?
 

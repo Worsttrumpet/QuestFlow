@@ -31,8 +31,19 @@ end
 
 local function wanted() return P.HideBlizzardTracker() end
 
+-- IN COMBAT the game restricts what addons may do to frames it manages, and a Hide on the tracker's frame from an addon's call path during combat is the classic source of "action blocked" taint reports.
+-- So no Hide or Show is attempted while InCombatLockdown() is true: the change is REMEMBERED and applied when combat ends (PLAYER_REGEN_ENABLED, via T.OnCombatEnd). Out of combat nothing changes.
+local function locked() return type(_G.InCombatLockdown) == "function" and _G.InCombatLockdown() == true end
+T.pending = false
+
 --- Brings the tracker in line with the setting. Safe to call any time (login, a toggle, a re-show).
 function T.Apply()
+	if locked() then
+		T.pending = true
+		last = { state = "waiting for combat to end", frame = nil, hooked = false }
+		return last
+	end
+	T.pending = false
 	local f, name = find()
 	if not f then
 		last = { state = wanted() and "not found" or "off", frame = nil }
@@ -41,7 +52,9 @@ function T.Apply()
 	if wanted() then
 		if type(hooksecurefunc) == "function" and not hooked[f] then
 			local ok = pcall(hooksecurefunc, f, "Show", function()
-				if wanted() then pcall(f.Hide, f) end
+				if not wanted() then return end
+				if locked() then T.pending = true return end
+				pcall(f.Hide, f)
 			end)
 			if ok then hooked[f] = true end
 		end
@@ -52,6 +65,11 @@ function T.Apply()
 		last = { state = "off", frame = name }
 	end
 	return last
+end
+
+--- PLAYER_REGEN_ENABLED: apply what was postponed during combat.
+function T.OnCombatEnd()
+	if T.pending then T.Apply() end
 end
 
 function T.Status()

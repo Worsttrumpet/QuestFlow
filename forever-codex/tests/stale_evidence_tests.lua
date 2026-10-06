@@ -29,7 +29,7 @@ end
 local function pickup(id) return { kind = "ACCEPT", quest = id } end
 --- An old dialog as saved before progression stamps existed: an EMPTY available list at the NPC, no `prog`, a long time ago.
 local function oldUnstampedEmpty(npcId, npcName)
-	ForeverCodexDB.offers = ForeverCodexDB.offers or { v = 1 }
+	ForeverCodexDB.offers = ForeverCodexDB.offers or { v = 1, owner = ns.Prefs.CharKey() }
 	local s = ForeverCodexDB.offers
 	s.obs, s.proof, s.stats, s.quests = s.obs or {}, s.proof or {}, s.stats or {}, s.quests or {}
 	s.npcs = s.npcs or {}

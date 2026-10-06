@@ -257,7 +257,7 @@ inert systems (see E). Tier rules (route / stop / extra / context) are in the de
 **Status:** BUILT (runtime consumption, no copied code or data); limits listed
 * Consumed at runtime through the documented API (quests, NPCs; the Item table only as an unverified annotation). Not used: race masks (Forever's new races), class masks only when all bits
   are known classes, objective areas, object/item starters, exclusivity, chains beyond prerequisites, Questie's hide/blacklist policy.
-* **NEEDS VERIFICATION:** the M1 licensing matrix (`docs/LICENSING.md`) still says Questie/QuestieDB is "Not read"; the addon now consumes QuestieDB at runtime. See K-03.
+* **DECIDED 2026-10-06:** acceptable as a runtime read (nothing copied, labelled unverified, optional and off-switchable); the licensing documents were corrected. QuestieDB's own licence is still unconfirmed and must be confirmed before any PUBLIC release. See `CODEX_DATA_SOURCES.md`.
 
 ### C-04 Observed (Forever) quest data growth
 **Status:** PARTIAL
@@ -436,7 +436,7 @@ INTEGRATIONS report block. No `Integrations.lua`. The addon-loaded detection API
 Not integrated, by decision: DBM / BigWigs / GTFO / rotation helpers.
 
 ### H-03 Licensing of each integration
-**Status:** NEEDS VERIFICATION (no conclusions drawn here). Facts: Codex consumes QuestieDB's public API at runtime and copies none of its code or data; ATT-derived data is bundled in Codex's
+**Status:** DECIDED for private/dev use 2026-10-06 (`CODEX_DATA_SOURCES.md`); public release still gated. Facts: Codex consumes QuestieDB's public API at runtime and copies none of its code or data; ATT-derived data is bundled in Codex's
 own packs (MIT upstream, but "upstream provenance of coordinates unresolved"); no LICENSE file exists in the repository; no third-party notice file exists.
 
 ---

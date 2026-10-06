@@ -47,7 +47,9 @@ local function identitySnapshot()
 end
 
 local function onLogin()
-	P.SetCharKey(characterKey())
+	-- the character key, then saved data brought up to date, then THIS character's observation stores made live (other characters' are parked, never shared)
+	local okP, errP = pcall(ns.SavedData.PrepareLogin, true)
+	if not okP then ns.RecordError("login preparation", errP) P.SetCharKey(characterKey()) end
 	-- a deleted and re-created character can reuse a name: clear the old one's gameplay state before anything reads it (see Preferences.CheckIdentity)
 	local okI, idRes = pcall(P.CheckIdentity, identitySnapshot())
 	if not okI then ns.RecordError("identity", idRes)
@@ -56,7 +58,7 @@ local function onLogin()
 	-- quest knowledge from the optional QuestieDB addon; when it is not usable, say why once (Codex still works on its own small data)
 	if ns.QuestieBridge then
 		ns.Safe(ns.QuestieBridge.Init)
-		if not ns.QuestieBridge.Available() then ns.Say(ns.QuestieBridge.Status().message) end
+		if not ns.QuestieBridge.Available() and ns.QuestieBridge.Status().state ~= "disabled" then ns.Say(ns.QuestieBridge.Status().message) end
 	end
 	if ns.MinimapButton and ns.MinimapButton.Build then
 		local ok, err = pcall(ns.MinimapButton.Build)
@@ -69,7 +71,7 @@ local function onLogin()
 	if ns.Party then ns.Safe(ns.Party.Register) end
 	if ns.BlizzardTracker then ns.Safe(ns.BlizzardTracker.Apply) end
 	if ns.WorldMapButton then ns.Safe(ns.WorldMapButton.Apply) end
-	ns.State.Recompute()
+	ns.State.BeginLogin()                  -- the first scan is spread over a few frames when there is a lot of data (see State)
 	-- the tracker comes back after a reload / login unless the player closed it
 	if ns.UI and ns.UI.Init then ns.Safe(ns.UI.Init) end        -- the window (or first-time setup) appears by itself: nothing waits for a click on the minimap button
 	-- the player-facing build stays quiet: the engineering summary (data counts, provenance, the plan) is /codex diag
@@ -93,6 +95,8 @@ local function onEvent(_, event, arg1, arg2, arg3, arg4)
 			if ns.SpellTraining then ns.SpellTraining.OnTrainerEvent() end
 			if ns.Professions then ns.Professions.OnTrainerEvent() end
 			ns.State.MarkDirty(event)
+		elseif event == "PLAYER_REGEN_ENABLED" then
+			if ns.BlizzardTracker then ns.BlizzardTracker.OnCombatEnd() end
 		elseif event == "LEARNED_SPELL_IN_TAB" or event == "SPELLS_CHANGED" then
 			if ns.SpellTraining then ns.SpellTraining.OnLearnEvent(event) end
 			ns.State.MarkDirty(event)
@@ -114,7 +118,7 @@ for _, ev in ipairs(EVENTS) do
 end
 -- SPELL TRAINING: standard Classic trainer / spellbook events, NOT yet observed on Forever. A refused registration is ignored (no error recorded): the
 -- known-spell check also runs on every recompute, so a missed event only delays the section by one refresh.
-for _, ev in ipairs({ "TRAINER_SHOW", "TRAINER_UPDATE", "LEARNED_SPELL_IN_TAB", "SPELLS_CHANGED", "SKILL_LINES_CHANGED", "CHAT_MSG_SKILL" }) do
+for _, ev in ipairs({ "TRAINER_SHOW", "TRAINER_UPDATE", "LEARNED_SPELL_IN_TAB", "SPELLS_CHANGED", "SKILL_LINES_CHANGED", "CHAT_MSG_SKILL", "PLAYER_REGEN_ENABLED" }) do
 	pcall(frame.RegisterEvent, frame, ev)
 end
 frame:SetScript("OnEvent", onEvent)

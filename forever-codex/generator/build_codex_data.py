@@ -3,7 +3,7 @@
 
 Reads, READ-ONLY:
   * the local ATT `forever` database (through the existing, frozen foreverdb ATT parser), and
-  * the observed-quest table already shipped in the M8.13 addon (m8-13-progression/.../Data.lua),
+  * the observed-quest table shipped in the M8.13 addon, copied byte for byte to generator/inputs/observed_m6_data.lua,
 and writes deterministic Lua data packs under ForeverCodex/Data/.
 
 Provenance rules (see docs/CODEX_ARCHITECTURE.md):
@@ -31,7 +31,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 FOREVERDB_SRC = REPO / "forever-db" / "src"
 DEFAULT_ATT_ROOT = REPO / "forever-db" / "data" / "raw" / "att-head" / ".contrib" / ".db" / "forever"
-DEFAULT_OBSERVED = REPO / "m8-13-progression" / "ForeverQuestGuide" / "Data.lua"
+DEFAULT_OBSERVED = HERE / "inputs" / "observed_m6_data.lua"      # a byte-for-byte copy of the M8.13 observed table (see inputs/README.md); the legacy addon is not needed
 DEFAULT_OUT = REPO / "forever-codex" / "ForeverCodex" / "Data"
 SOURCES_TOML = REPO / "forever-db" / "config" / "sources.toml"
 

@@ -6,7 +6,7 @@ See `docs/CODEX_ARCHITECTURE.md`, `docs/CODEX_PROVENANCE_DECISION.md` and `docs/
 ```
 ForeverCodex/     the addon (copy this folder to Interface\AddOns\)
 generator/        deterministic data-pack generator + tests (reads the local ATT snapshot and the M8.13 observed table)
-tests/            Lua 5.1 stub-client tests:   lua5.1 run_codex_tests.lua ../ForeverCodex ../../m8-13-progression/ForeverQuestGuide
+tests/            Lua 5.1 stub-client tests:   lua5.1 run_codex_tests.lua ../ForeverCodex
 docs/             architecture, provenance decision, real-client test guide
 dist/             packaged addon zips for testers, one folder per minor version (dist/0.4/ ...) (built by generator/package_addon.py)
 ```
