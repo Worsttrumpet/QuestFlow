@@ -100,7 +100,7 @@ do
 	check(d.reason == "ONLY_DISTANT_UNMEASURED" and d.unknownLegs >= 1 and d.net < 0, "diagnosed: only distant, unmeasurable, net-negative (" .. tostring(d.reason) .. ")")
 	check(H.world().sets == 0 and ns.Navigation.Owned() == nil and ns.Navigation.Target() == nil, "no waypoint and no arrow target for it")
 	local card = ns.Presenter.Card(plan, ns.State.ctx)
-	check(card.now == nil and card.empty.title == "Nothing to recommend right now", "the card says so honestly")
+	check(card.now == nil and card.empty.title == "Nothing urgent right now", "the card says so honestly")
 	-- the ATT location is still used when the player decides
 	ns.Prefs.SetStyle("fast"); ns.Prefs.SetStyle("efficient")
 	ns.Prefs.Add(6541)
@@ -422,13 +422,14 @@ do
 	for _, f in ipairs(W.frames) do if f.__kind == "Button" and f.text then labels[f.text.__text] = true end end
 	check(not labels["<"] and not labels[">"] or ns.Prefs.SetupDone(), "the Codex page has no back / forward arrows")
 	check(UI.main.nav == nil and not labels["Codex  v"] and not labels["Appendices  v"], "there is no dropdown button (and no arrow glyph) any more")
-	check(UI.main.optionsButton and UI.main.optionsButton.text.__text == "Options" and UI.options == nil, "the tracker has a small Options button; the options window is not built until asked for")
+	if UI.options then UI.options:Hide() end                              -- (this world finished setup AFTER login, so its setup panel opened at login)
+	check(UI.main.optionsButton and UI.main.optionsButton.text.__text == "Options" and (UI.options == nil or not UI.options.__shown), "the tracker has a small Options button; the options window is not open until asked for")
 	click(UI.main.optionsButton)
 	check(UI.options and UI.options.__shown and UI.optionsKey == "options" and UI.current == "options", "clicking it opens the options window on Codex Options")
 	local tabs = {}
 	for k, t in pairs(UI.main.tabs) do tabs[#tabs + 1] = k .. "=" .. t.text.__text end
 	table.sort(tabs)
-	check(table.concat(tabs, ",") == "appendices=Appendices,journey=Journey,options=Codex Options,world=World", "its tabs are Codex Options, World, Journey and Appendices")
+	check(table.concat(tabs, ",") == "appendices=Appendices,journey=Journey,options=Codex Options,themes=Themes,world=World", "its tabs are Codex Options, Themes, World, Journey and Appendices")
 	click(UI.main.tabs.journey)
 	check(UI.current == "journey" and UI.optionsKey == "journey" and UI.pages.journey.frame.__shown and not UI.pages.world.frame.__shown, "choosing a tab shows that page")
 	click(UI.main.tabs.appendices); click(UI.main.tabs.world); click(UI.main.tabs.options)

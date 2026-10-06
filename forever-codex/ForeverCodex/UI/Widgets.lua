@@ -128,12 +128,14 @@ W.WARM_GOLD = { 1, 0.84, 0.36 }              -- the primary action: gold, not ye
 W.ALERT = { 0.92, 0.38, 0.32 }                 -- a full quest log
 W.SOFT_GREEN = { 0.56, 0.80, 0.52 }          -- distance / good news: muted, not neon
 
---- Card styles. bg = fill, edge = 1 px border, accent = the 2 px edge, label = section label colour, side = which edge carries the accent.
-W.STYLE_NOW  = { bg = { 0.17, 0.13, 0.07, 0.92 }, edge = { 0.52, 0.40, 0.14, 0.95 }, accent = { 0.92, 0.70, 0.20, 1 }, label = { 0.92, 0.74, 0.30 }, side = "left" }
-W.STYLE_NEAR = { bg = { 0.08, 0.09, 0.14, 0.88 }, edge = { 0.22, 0.23, 0.36, 0.85 }, accent = { 0.46, 0.42, 0.78, 0.95 }, label = { 0.62, 0.60, 0.86 }, side = "left" }
-W.STYLE_DUNGEON = { bg = { 0.15, 0.07, 0.07, 0.90 }, edge = { 0.46, 0.17, 0.15, 0.90 }, accent = { 0.85, 0.30, 0.26, 0.95 }, label = { 0.93, 0.44, 0.40 }, side = "left" }   -- dungeon quests: red
-W.STYLE_READY = { bg = { 0.07, 0.12, 0.08, 0.88 }, edge = { 0.20, 0.34, 0.22, 0.85 }, accent = { 0.45, 0.72, 0.42, 0.95 }, label = { 0.56, 0.80, 0.52 }, side = "left" }
-W.STYLE_NEW  = { bg = { 0.12, 0.11, 0.08, 0.88 }, edge = { 0.38, 0.33, 0.20, 0.85 }, accent = { 0.74, 0.64, 0.32, 0.95 }, label = { 0.82, 0.72, 0.40 }, side = "top" }
+--- Card styles are SEMANTIC (UI/Theme.lua): a card asks for a role ("primary", "urgent", "training", ...) and the active theme decides how it looks. The W.STYLE_* names below stay as the
+-- default theme's role styles for code that still passes a style table; new code passes the role name.
+local Theme = ns.Theme
+W.STYLE_NOW = Theme.Style("primary", Theme.DEFAULT)
+W.STYLE_NEAR = Theme.Style("optional", Theme.DEFAULT)
+W.STYLE_DUNGEON = Theme.Style("dungeon", Theme.DEFAULT)
+W.STYLE_READY = Theme.Style("ready", Theme.DEFAULT)
+W.STYLE_NEW = Theme.Style("discovery", Theme.DEFAULT)
 
 local sizes = setmetatable({}, { __mode = "k" })       -- FontString -> the size W.Font gave it
 
@@ -184,36 +186,98 @@ function W.Label(parent, text, color)
 	return fs
 end
 
+--- A role marker: a small box in the role's accent colour with its one-character marker (">" primary, "!" urgent, "T" training ...). m:Set(role) re-reads the active theme.
+function W.Marker(parent, role, size)
+	local f = CreateFrame("Frame", nil, parent)
+	size = size or 12
+	f:SetSize(size, size)
+	f.bg = f:CreateTexture(nil, "ARTWORK")
+	f.bg:SetAllPoints()
+	f.letter = W.Line(f, size - 2, { 0.05, 0.05, 0.05 }, "CENTER")
+	f.letter:SetPoint("CENTER", f, "CENTER", 0, 0)
+	function f:Set(r)
+		self.role = r
+		local st = Theme.Style(r)
+		self.bg:SetColorTexture(st.accent[1], st.accent[2], st.accent[3], 1)
+		self.letter:SetText(st.marker)
+	end
+	f:Set(role)
+	return f
+end
+
+--- A card's section label with its role marker in front: "[T] SPELL TRAINING". Returns the label; card.marker and card.labelFS are set so a theme change repaints them.
+function W.CardLabel(card, text, size)
+	card.marker = W.Marker(card, card.role or "optional", size or 11)
+	card.marker:SetPoint("TOPLEFT", card, "TOPLEFT", card.insetX, -(card.insetY - 1))
+	local fs = W.Label(card, text, card.style and card.style.label)
+	fs:SetPoint("TOPLEFT", card, "TOPLEFT", card.insetX + (size or 11) + 5, -(card.insetY))
+	card.labelFS = fs
+	return fs
+end
+
 local function tex(f, layer, c)
 	local t = f:CreateTexture(nil, layer)
 	if c then t:SetColorTexture(c[1], c[2], c[3], c[4] or 1) end
 	return t
 end
 
---- A card: border, fill and a 2 px accent edge. `style` is one of W.STYLE_* (or any table of the same shape).
+local cards = setmetatable({}, { __mode = "k" })       -- card -> true (so a theme change can restyle what is on screen)
+
+local function paintCard(f, style)
+	f.style = style
+	f.edge:SetColorTexture(style.edge[1], style.edge[2], style.edge[3], style.edge[4] or 1)
+	f.bg:SetColorTexture(style.bg[1], style.bg[2], style.bg[3], style.bg[4] or 1)
+	f.accent:SetColorTexture(style.accent[1], style.accent[2], style.accent[3], style.accent[4] or 1)
+	local wgt = style.weight or 2
+	f.accent:ClearAllPoints()
+	if style.side == "top" then
+		f.accent:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+		f.accent:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
+		f.accent:SetSize(1, wgt)
+	else
+		f.accent:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+		f.accent:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
+		f.accent:SetSize(wgt, 1)
+	end
+	if f.marker then f.marker:Set(f.role) end
+	if f.labelFS then W.SetColor(f.labelFS, style.label) end
+end
+
+--- A card: border, fill and an accent edge. `style` is a ROLE NAME ("primary", "urgent", ...: the active theme decides the look and the card follows a theme change) or a style table
+-- (fixed). The accent's weight is part of the style (heavier for primary and urgent): the weight, the marker and the label say what the card is even without the colour.
 function W.Card(parent, w, h, style)
 	local f = CreateFrame("Frame", nil, parent)
 	f:SetSize(w, h)
-	f.style = style
+	if type(style) == "string" then f.role, style = style, Theme.Style(style) end
 	f.edge = tex(f, "BACKGROUND", style.edge)
 	f.edge:SetAllPoints()
 	f.bg = tex(f, "BORDER", style.bg)
 	f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
 	f.bg:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
 	f.accent = tex(f, "ARTWORK", style.accent)
-	if style.side == "top" then
-		f.accent:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
-		f.accent:SetPoint("TOPRIGHT", f, "TOPRIGHT", -1, -1)
-		f.accent:SetSize(1, 2)
-	else
-		f.accent:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
-		f.accent:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 1, 1)
-		f.accent:SetSize(2, 1)
-	end
+	paintCard(f, style)
 	-- where content may start: inside the border and past the accent edge
 	f.insetX = W.PAD + (style.side == "left" and 2 or 0)
 	f.insetY = W.PAD + (style.side == "top" and 2 or 0)
+	if f.role then cards[f] = true end
 	return f
+end
+
+--- Changes a role card's role (a card whose meaning changes, e.g. the timed card under urgency): style, marker and label follow.
+function W.SetCardStyle(card, style)
+	if not card then return end
+	paintCard(card, style)
+end
+
+--- Re-applies the ACTIVE theme to every role card and marker that exists (called when the player picks another theme).
+function W.Restyle()
+	for f in pairs(cards) do
+		if f.role then
+			local st = (f.styleOverride and f.styleOverride()) or Theme.Style(f.role)
+			paintCard(f, st)
+		end
+	end
+	if W.OnRestyle then W.OnRestyle() end
 end
 
 --- Height of a FontString's current text: the client's own measurement when it gives one, else a line-count estimate.
@@ -406,4 +470,151 @@ function W.Icon(parent, size)
 	end
 	t:Hide()
 	return t
+end
+
+-- ---------------------------------------------------------------- settings controls (0.7.8): one look for every option
+--
+-- A SECTION header (a small gold label with a thin rule), a CHECK ROW (a check box, a white label and one dim line saying what it changes) and a DROPDOWN (a
+-- button showing the CURRENT choice, opening a short list with the current row marked). Built only from Frame / Button / CreateTexture + SetColorTexture /
+-- CreateFontString, like everything else here: no Blizzard dropdown template (it is unverified on Forever). One list is open at a time; choosing a row, opening
+-- another dropdown or hiding the page closes it.
+
+W.ROW_H_CHECK = 38                     -- height of a check row (label line + description line)
+W.ROW_H_DROP = 46                      -- height of a dropdown row (label + control, description under it)
+
+--- A section header: SMALL GOLD CAPITALS and a thin rule under it, `width` wide. Returns the label; header.rule is the rule texture.
+function W.Section(parent, text, x, y, width)
+	local fs = W.Line(parent, 11, W.WARM_GOLD, "LEFT")
+	fs:SetText(text or "")
+	fs:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+	local rule = tex(parent, "ARTWORK", { 0.40, 0.34, 0.18, 0.55 })
+	rule:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y - 15)
+	rule:SetSize(width, 1)
+	fs.rule = rule
+	return fs
+end
+
+--- A check row at (x, y): b:SetOn(on, label, description). Clicking runs onClick(b); the caller re-reads the setting and calls SetOn again.
+function W.CheckRow(parent, x, y, width, onClick)
+	local b = CreateFrame("Button", nil, parent)
+	b:SetSize(width, W.ROW_H_CHECK - 4)
+	b:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+	b.box = b:CreateTexture(nil, "ARTWORK")
+	b.box:SetSize(22, 22)
+	b.box:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+	ns.Safe(b.box.SetTexture, b.box, "Interface\\Buttons\\UI-CheckBox-Up")
+	b.checkTex = b:CreateTexture(nil, "OVERLAY")
+	b.checkTex:SetSize(22, 22)
+	b.checkTex:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+	ns.Safe(b.checkTex.SetTexture, b.checkTex, "Interface\\Buttons\\UI-CheckBox-Check")
+	b.checkTex:Hide()
+	ns.Safe(b.SetHighlightTexture, b, "Interface\\Buttons\\UI-CheckBox-Highlight", "ADD")
+	b.label = W.Line(b, 12, W.WHITE, "LEFT")
+	b.label:SetPoint("TOPLEFT", b, "TOPLEFT", 28, -2)
+	b.label:SetWidth(width - 32)
+	b.desc = W.Line(b, 11, W.DIM, "LEFT", true)
+	b.desc:SetPoint("TOPLEFT", b, "TOPLEFT", 28, -17)
+	b.desc:SetWidth(width - 32)
+	b.enabled = true
+	b:SetScript("OnClick", function(self) if self.enabled and onClick then onClick(self) end end)
+	function b:SetOn(on, label, desc)
+		self.on = on and true or false
+		self.label:SetText(label or "")
+		self.desc:SetText(desc or "")
+		if self.on then self.checkTex:Show() else self.checkTex:Hide() end
+	end
+	return b
+end
+
+local openDropdown
+local function closeDropdown(d)
+	if d and d.list then d.list:Hide() end
+	if openDropdown == d then openDropdown = nil end
+end
+W.CloseDropdowns = function() closeDropdown(openDropdown) end
+
+--- A dropdown at (x, y): d:SetOptions({ { key, label, color? }, ... }), d:SetValue(key). Choosing a row runs onSelect(key). The closed button shows the current label.
+function W.Dropdown(parent, x, y, width, onSelect)
+	local d = CreateFrame("Button", nil, parent)
+	d:SetSize(width, 22)
+	d:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+	d.edge = tex(d, "BACKGROUND", { 0.45, 0.38, 0.18, 0.95 })
+	d.edge:SetAllPoints()
+	d.bg = tex(d, "BORDER", { 0.10, 0.10, 0.11, 0.97 })
+	d.bg:SetPoint("TOPLEFT", d, "TOPLEFT", 1, -1)
+	d.bg:SetPoint("BOTTOMRIGHT", d, "BOTTOMRIGHT", -1, 1)
+	d.text = W.Line(d, 12, W.TEXT, "LEFT")
+	d.text:SetPoint("LEFT", d, "LEFT", 8, 0)
+	d.text:SetWidth(width - 30)
+	d.caret = W.Line(d, 10, W.WARM_GOLD, "RIGHT")             -- a plain letter: the arrow glyphs render as boxes on this client
+	d.caret:SetPoint("RIGHT", d, "RIGHT", -7, 0)
+	d.caret:SetText("v")
+	d.options, d.rows, d.enabled = {}, {}, true
+	d.list = CreateFrame("Frame", nil, d)
+	d.list:SetFrameStrata("FULLSCREEN_DIALOG")
+	d.list:SetFrameLevel(200)
+	d.list.edge = tex(d.list, "BACKGROUND", { 0.45, 0.38, 0.18, 0.98 })
+	d.list.edge:SetAllPoints()
+	d.list.bg = tex(d.list, "BORDER", { 0.07, 0.07, 0.08, 0.99 })
+	d.list.bg:SetPoint("TOPLEFT", d.list, "TOPLEFT", 1, -1)
+	d.list.bg:SetPoint("BOTTOMRIGHT", d.list, "BOTTOMRIGHT", -1, 1)
+	d.list:Hide()
+	function d:SetOptions(opts)
+		self.options = opts or {}
+		self.list:SetSize(width, #self.options * 20 + 2)
+		self.list:ClearAllPoints()
+		self.list:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 0, 1)
+		for i, o in ipairs(self.options) do
+			local row = self.rows[i]
+			if not row then
+				row = CreateFrame("Button", nil, self.list)
+				row:SetSize(width - 2, 20)
+				row.hl = tex(row, "ARTWORK", { 1, 1, 1, 0 })
+				row.hl:SetAllPoints()
+				row.text = W.Line(row, 12, W.TEXT, "LEFT")
+				row.text:SetPoint("LEFT", row, "LEFT", 14, 0)
+				row.text:SetWidth(width - 20)
+				row.mark = W.Line(row, 12, W.WARM_GOLD, "LEFT")
+				row.mark:SetPoint("LEFT", row, "LEFT", 4, 0)
+				row.mark:SetText(">")
+				row:SetScript("OnEnter", function(r) r.hl:SetColorTexture(1, 1, 1, 0.12) end)
+				row:SetScript("OnLeave", function(r) r.hl:SetColorTexture(1, 1, 1, 0) end)
+				self.rows[i] = row
+			end
+			row:ClearAllPoints()
+			row:SetPoint("TOPLEFT", self.list, "TOPLEFT", 1, -1 - (i - 1) * 20)
+			row.key = o.key
+			row.text:SetText(o.label or tostring(o.key))
+			W.SetColor(row.text, o.color or W.TEXT)
+			row:SetScript("OnClick", function(r)
+				closeDropdown(self)
+				if self.enabled and onSelect then onSelect(r.key) end
+			end)
+			row:Show()
+		end
+		for i = #self.options + 1, #self.rows do self.rows[i]:Hide() end
+		if self.value ~= nil then self:SetValue(self.value) end
+	end
+	function d:SetValue(key)
+		self.value = key
+		local label
+		for i, o in ipairs(self.options) do
+			local cur = o.key == key
+			if cur then label = o.label or tostring(o.key); W.SetColor(self.text, o.color or W.TEXT) end
+			local row = self.rows[i]
+			if row then if cur then row.mark:Show() else row.mark:Hide() end end
+		end
+		self.text:SetText(label or tostring(key or ""))
+	end
+	d:SetScript("OnClick", function(self)
+		if not self.enabled then return end
+		if openDropdown == self then closeDropdown(self) return end
+		closeDropdown(openDropdown)
+		self.list:Show()
+		openDropdown = self
+	end)
+	d:SetScript("OnHide", function(self) closeDropdown(self) end)
+	d:SetScript("OnEnter", function(self) self.bg:SetColorTexture(0.16, 0.15, 0.10, 0.97) end)
+	d:SetScript("OnLeave", function(self) self.bg:SetColorTexture(0.10, 0.10, 0.11, 0.97) end)
+	return d
 end

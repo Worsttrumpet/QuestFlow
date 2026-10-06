@@ -71,7 +71,7 @@ local function onLogin()
 	if ns.WorldMapButton then ns.Safe(ns.WorldMapButton.Apply) end
 	ns.State.Recompute()
 	-- the tracker comes back after a reload / login unless the player closed it
-	if P.SetupDone() and P.TrackerShown() and ns.UI and ns.UI.Open then ns.Safe(ns.UI.Open, "codex") end
+	if ns.UI and ns.UI.Init then ns.Safe(ns.UI.Init) end        -- the window (or first-time setup) appears by itself: nothing waits for a click on the minimap button
 	-- the player-facing build stays quiet: the engineering summary (data counts, provenance, the plan) is /codex diag
 	if not P.SetupDone() then ns.Say("Welcome! Type /codex to set up Forever Codex.") end
 end

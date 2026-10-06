@@ -12,7 +12,7 @@ local R = ns.Registry
 C.RegisterActionType("TRAVEL", { label = "Travel" })
 
 -- Active systems.
-C.RegisterSystem({ key = "flight", label = "Flight path hints", desc = "Show nearby flight masters under 'While you're here'.", default = true })
+C.RegisterSystem({ key = "flight", label = "Suggest flight masters", desc = "Codex may suggest a flight master you pass. It cannot tell which flight paths you already have.", default = true })
 
 -- Planned systems: no reliable data yet.
 local planned = {

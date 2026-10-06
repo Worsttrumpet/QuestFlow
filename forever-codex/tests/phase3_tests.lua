@@ -116,7 +116,7 @@ do
 	-- nothing to recommend
 	local ns2 = world(6, {}, {})
 	local c2 = ns.Presenter.Card(ns2.State.plan, ns2.State.ctx)
-	check(c2.now == nil and c2.empty and c2.empty.title == "Nothing to recommend right now" and #c2.empty.lines >= 1, "no NOW: an honest empty card, no filler")
+	check(c2.now == nil and c2.empty and c2.empty.title == "Nothing urgent right now" and #c2.empty.lines >= 1, "no NOW: an honest empty card, no filler")
 	local ns3 = world(6, { Q(1, "Located", 10, 0) }, { [900] = { title = "Mystery", complete = true } })
 	ns3.Prefs.Skip("Q:1")
 	ns3.State.Recompute()
@@ -135,30 +135,31 @@ do
 	H.attPack(ns, { Q(1, "Pickup", 30, 0, { giverName = "Someone" }) }, nil)
 	local W = H.world()
 	H.slash("")
-	check(ns.UI.IsShown() and ns.UI.options and ns.UI.frame == nil, "first run: /codex opens the options window (where setup is), not the tracker")
+	check(ns.UI.IsShown() and ns.UI.options and ns.UI.options.__shown and (ns.UI.frame == nil or not ns.UI.frame.__shown), "first run: the options window (where setup is) is open, not the tracker (it opened by itself at login; /codex keeps it open)")
 	check(ns.DevUI.frame == nil, "the developer window is not built for a normal player")
 	local setup = ns.UI.main.setupPanel
 	check(not ns.Prefs.SetupDone() and setup.frame.__shown and ns.UI.optionsKey == "options", "first run: the setup panel is shown on the Codex Options tab")
-	check(setup.w.title.__text == "Here's your character." and setup.w.char.__text:find("Thrall - level 12 Troll Warrior", 1, true), "setup says 'Here's your character' and shows who it is")
+	check(setup.w.title.__text == "Welcome to Forever Codex" and setup.w.char.__text:find("Thrall - level 12 Troll Warrior", 1, true), "setup welcomes the player and shows who it is")
 	check(setup.w.start ~= nil, "setup has a Start button")
 	-- choices
 	local zonesBefore = ns.Prefs.GetRouteZone()
 	local btns = {}
 	for _, f in ipairs(W.frames) do if f.__kind == "Button" then btns[#btns + 1] = f end end
 	check(#btns >= 6, "setup has buttons (tabs, pickers, toggles, Start)")
-	for _, f in ipairs(W.frames) do
-		if f.__kind == "Button" and f.text and f.text.__text == ">" then click(f) break end    -- first ">" is the route-zone picker
-	end
-	check(ns.Prefs.GetRouteZone() ~= zonesBefore or #ns.Registry.Zones() == 0, "the route-zone picker changes the route zone")
+	-- the zone and style are DROPDOWNS: the button shows the current choice, clicking opens the list, clicking a row picks it
+	check(setup.w.zone.text.__text ~= "" and setup.w.style.text.__text ~= "", "the dropdowns show the current choices")
+	click(setup.w.zone)
+	check(setup.w.zone.list.__shown == true, "clicking a dropdown opens its list")
+	local zoneRow = setup.w.zone.rows[2]
+	if zoneRow then click(zoneRow) end
+	check(ns.Prefs.GetRouteZone() ~= zonesBefore or #ns.Registry.Zones() == 0, "choosing a zone changes the route zone")
+	check(setup.w.zone.list.__shown == false, "and closes the list")
 	local styleBefore = ns.Prefs.GetStyle()
-	local seen = 0
-	for _, f in ipairs(W.frames) do
-		if f.__kind == "Button" and f.text and f.text.__text == ">" then
-			seen = seen + 1
-			if seen == 2 then click(f) break end
-		end
-	end
-	check(ns.Prefs.GetStyle() ~= styleBefore, "the style picker changes the route style")
+	click(setup.w.style)
+	local other
+	for _, r in ipairs(setup.w.style.rows) do if r.__shown and r.key ~= styleBefore then other = r break end end
+	if other then click(other) end
+	check(ns.Prefs.GetStyle() ~= styleBefore, "choosing a style changes the route style")
 	check(ns.Prefs.GetStyle() ~= "solo" and ns.Prefs.GetStyle() ~= "hardcore", "and never lands on a planned style")
 	local flightBtn
 	for _, b in ipairs(setup.w.sys) do if b.sysKey == "flight" then flightBtn = b end end
@@ -275,9 +276,17 @@ do
 	J.OnQuestTurnedIn(99998, 10)
 	check(K.Quest(99998, ctx).label == "You did this", "a turn-in Codex saw itself counts, even for a quest it has no data for")
 	local sys = K.Systems()
-	local keys, allUnknown = {}, true
-	for _, s in ipairs(sys) do keys[s.key] = true; if s.state ~= "unknown" then allUnknown = false end end
-	check(keys.trainers and keys.recipes and keys.pets and keys.flight and allUnknown, "trainers, recipes, pets and flight paths are reported as unknown (their client APIs are unverified), never faked")
+	local by = {}
+	for _, s2 in ipairs(sys) do by[s2.key] = s2 end
+	check(by.trainers and by.recipes and by.pets and by.flight and #sys == 4, "trainers, professions/recipes, pets and flight paths are described")
+	local noOld = true
+	for _, s2 in ipairs(sys) do if s2.text:find("cannot yet", 1, true) or s2.state == "unknown" then noOld = false end end
+	check(noOld, "none of them carries the old blanket 'cannot yet see' statement")
+	check(by.trainers.text:find("cost", 1, true) and by.trainers.text:find("level requirement", 1, true) and by.trainers.text:find("filters hide", 1, true), "Trainers: says what is read (cost, level requirement, availability) and the real limit (filters hiding learned spells)")
+	check(by.recipes.text:find("does not read your recipes", 1, true) and by.recipes.text:find("skill", 1, true), "Professions: skills are read, recipes are NOT")
+	check(by.pets.text:find("does not read pet information", 1, true) and by.pets.status == "not known yet", "Pets: nothing is read, said plainly")
+	check(by.flight.text:find("built-in data", 1, true) and by.flight.text:find("cannot tell which flight paths your character has already discovered", 1, true), "Flight paths: known to exist (data), but personal discovery is not detectable")
+	check(#K.Commands() >= 6 and K.Commands()[1][1] == "/codex", "the command list starts with /codex")
 end
 
 section("phase 3: World and Appendices pages")
@@ -289,7 +298,7 @@ do
 	check(ns.UI.main.world.title.__text == "Around you: Fixture Valley" and ns.UI.main.world.rows[1].__text:find("Open one", 1, true), "the World page draws it")
 	ns.UI.Open("appendices")
 	local app = ns.UI.main.app
-	for _, key in ipairs({ "quests", "knowledge", "help", "party" }) do check(app.menu[key] ~= nil, "Appendices lists " .. key) end
+	for _, key in ipairs({ "quests", "knowledge", "guide", "help", "party" }) do check(app.menu[key] ~= nil, "Appendices lists " .. key) end
 	check(app.menu.settings == nil, "settings are not in Appendices any more: they are the Codex Options tab")
 	click(app.menu.quests)
 	app.qBox.__text = "Open"
@@ -297,12 +306,12 @@ do
 	check(app.qRows[1].name.__text:find("Open", 1, true) and app.qRows[1].state.__text:find("Available", 1, true), "searching a quest shows where you stand with it")
 	click(app.back)
 	click(app.menu.knowledge)
-	check(app.kRows[1].name.__text == "Trainers" and app.kRows[1].text.__text:find("cannot yet see", 1, true), "Knowledge says what Codex cannot see yet")
+	check(app.kRows[1].name.__text:find("^Trainers") and not app.kRows[1].text.__text:find("cannot yet see", 1, true), "Knowledge describes what Codex can and cannot see (0.7.8: no longer the old blanket \"cannot yet\")")
 	click(app.back)
 	ns.Prefs.FinishSetup()
 	ns.UI.Open("options")
 	local st = ns.UI.main.settingsPanel
-	check(st.frame.__shown and st.w.title.__text == "Settings" and st.w.nav ~= nil and st.w.party ~= nil, "the settings are the Codex Options tab")
+	check(st.frame.__shown and st.w.title.__text == "Codex Options" and st.w.nav ~= nil and st.w.party ~= nil, "the settings are the Codex Options tab")
 	check(#leaks(W) == 0, "no technical words anywhere")
 end
 

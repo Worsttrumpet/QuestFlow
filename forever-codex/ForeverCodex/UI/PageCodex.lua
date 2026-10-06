@@ -20,7 +20,7 @@ local addonName, ns = ...
 local W = ns.Widgets
 local UI = ns.UI
 
-local FULL = UI.COMPACT_WIDTH - 16  -- page width
+local FULL = UI.COMPACT_WIDTH - 16  -- page width (follows the window: refresh() sets it from UI.main.width, so every card reflows when the player resizes)
 local GAP, PAD = W.GAP, W.PAD
 local TOP = 22                      -- below the character line
 local NOW_MIN = 56                  -- a card never gets smaller than this
@@ -47,7 +47,7 @@ local function build(page)
 	W.Place(c.slots, page, FULL - 70, -2, 70)
 
 	-- NOW: the strongest card
-	c.nowBox = W.Card(page, FULL, NOW_MIN, W.STYLE_NOW)
+	c.nowBox = W.Card(page, FULL, NOW_MIN, "primary")
 	-- a way out of a recommendation that is wrong or unavailable: skips it (the same as /codex skip; /codex unskip brings it back)
 	c.nowSkip = W.Button(c.nowBox, 40, 16, "Skip", function()
 		local a = ns.State.SkipCurrent()
@@ -57,32 +57,31 @@ local function build(page)
 	-- Report: opens the feedback form about THIS recommendation (category and context already chosen)
 	c.nowReport = W.Button(c.nowBox, 46, 16, "Report", function() if ns.UI.OpenFeedback then ns.UI.OpenFeedback({ category = "wrong", from = "NOW" }) end end)
 	c.nowReport:SetPoint("TOPRIGHT", c.nowBox, "TOPRIGHT", -PAD - 40, -PAD + 3)
-	c.nowLabel = W.Label(c.nowBox, "NOW", W.STYLE_NOW.label)
-	c.nowLabel:SetPoint("TOPLEFT", c.nowBox, "TOPLEFT", c.nowBox.insetX, -PAD)
+	c.nowLabel = W.CardLabel(c.nowBox, "NOW")
 	c.nowKindIcon = W.Icon(c.nowBox, 16)                -- "!" for a pickup, "?" for a hand-in; nothing for objectives
-	c.nowTitle = W.Line(c.nowBox, 16, W.WARM_GOLD, "LEFT", true)
+	W.Font(c.nowLabel, 12)
+	c.nowTitle = W.Line(c.nowBox, 18, W.WARM_GOLD, "LEFT", true)
 	c.nowWho = W.Line(c.nowBox, 12, W.TEXT, "LEFT")
 	c.nowDetail = W.Line(c.nowBox, 11, W.DIM, "LEFT", true)
 	c.nowRows = {}
 	for i = 1, MAX_ROWS do c.nowRows[i] = W.ProgressRow(c.nowBox) end
 	c.nowMore = W.Line(c.nowBox, 11, W.DIM, "LEFT")
 	c.nowInfo = W.Line(c.nowBox, 11, W.SOFT_GREEN, "LEFT")
+	c.nowWhy = W.Line(c.nowBox, 11, W.DIM, "LEFT", true)             -- "Why: ..." one short reason, secondary to the action
 	c.nowNav = W.Line(c.nowBox, 11, W.DIM, "LEFT", true)             -- "no arrow: ..." / "straight line only" (Navigation safety)
 	c.nowDivider = W.Divider(c.nowBox)
 	c.thenFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")
 	c.thenWhereFS = W.Line(c.nowBox, 11, W.DIM, "LEFT")      -- "496 yd - Nazgrel" under the THEN line
 
 	-- TIMED QUEST: the game's own countdown for quests that have one, soonest first; present only while one is active. Updated every second by the tracker while it is open.
-	c.tmBox = W.Card(page, FULL, 40, W.STYLE_DUNGEON)
-	c.tmLabel = W.Label(c.tmBox, "TIMED QUEST", W.STYLE_DUNGEON.label)
-	c.tmLabel:SetPoint("TOPLEFT", c.tmBox, "TOPLEFT", c.tmBox.insetX, -PAD + 2)
+	c.tmBox = W.Card(page, FULL, 40, "urgent")
+	c.tmLabel = W.CardLabel(c.tmBox, "TIMED QUEST")
 	c.tmRows = {}
 	for i = 1, 3 do c.tmRows[i] = { head = W.Line(c.tmBox, 12, W.TEXT, "LEFT"), time = W.Line(c.tmBox, 13, W.WARM_GOLD, "LEFT") } end
 
 	-- NEW QUEST ITEM: a quest-starting item in the bags (present only when there is one that is actionable)
-	c.qiBox = W.Card(page, FULL, 60, W.STYLE_NEW)
-	c.qiLabel = W.Label(c.qiBox, "NEW QUEST ITEM", W.STYLE_NEW.label)
-	c.qiLabel:SetPoint("TOPLEFT", c.qiBox, "TOPLEFT", c.qiBox.insetX, -PAD + 2)
+	c.qiBox = W.Card(page, FULL, 60, "discovery")
+	c.qiLabel = W.CardLabel(c.qiBox, "NEW QUEST ITEM")
 	c.qiRows = {}
 	for i = 1, 2 do
 		c.qiRows[i] = { head = W.Line(c.qiBox, 13, W.WARM_GOLD, "LEFT"), body = W.Line(c.qiBox, 11, W.TEXT, "LEFT", true) }
@@ -90,9 +89,8 @@ local function build(page)
 	c.qiMore = W.Line(c.qiBox, 11, W.DIM, "LEFT")
 
 	-- ALSO COMPLETE THIS: supporting, cooler and smaller; present only when there is something to say
-	c.alsoBox = W.Card(page, FULL, 40, W.STYLE_NEAR)
-	c.alsoLabel = W.Label(c.alsoBox, "ALSO COMPLETE THIS", W.STYLE_NEAR.label)
-	c.alsoLabel:SetPoint("TOPLEFT", c.alsoBox, "TOPLEFT", c.alsoBox.insetX, -PAD + 2)
+	c.alsoBox = W.Card(page, FULL, 40, "optional")
+	c.alsoLabel = W.CardLabel(c.alsoBox, "ALSO COMPLETE THIS")
 	c.alsoHeads, c.alsoRows = {}, {}
 	for i = 1, 4 do c.alsoHeads[i] = W.Line(c.alsoBox, 12, W.TEXT, "LEFT") end
 	for i = 1, MAX_ROWS do c.alsoRows[i] = W.ProgressRow(c.alsoBox) end
@@ -102,9 +100,8 @@ local function build(page)
 	c.alsoMore = W.Line(c.alsoBox, 11, W.DIM, "LEFT")
 
 	-- READY TO TURN IN: finished quests, a quiet green card; present only when there are some
-	c.readyBox = W.Card(page, FULL, 40, W.STYLE_READY)
-	c.readyLabel = W.Label(c.readyBox, "READY TO TURN IN", W.STYLE_READY.label)
-	c.readyLabel:SetPoint("TOPLEFT", c.readyBox, "TOPLEFT", c.readyBox.insetX, -PAD + 2)
+	c.readyBox = W.Card(page, FULL, 40, "ready")
+	c.readyLabel = W.CardLabel(c.readyBox, "READY TO TURN IN")
 	c.readyRows, c.readyIcons, c.readySubs = {}, {}, {}
 	for i = 1, READY_ROWS do
 		c.readyRows[i] = W.Line(c.readyBox, 12, W.TEXT, "LEFT")
@@ -114,18 +111,16 @@ local function build(page)
 	c.readyMore = W.Line(c.readyBox, 11, W.DIM, "LEFT")
 
 	-- DUNGEON QUESTS: quests the game tags as dungeon / raid, a red card, grouped by dungeon; present only when there are some
-	c.dgBox = W.Card(page, FULL, 40, W.STYLE_DUNGEON)
-	c.dgLabel = W.Label(c.dgBox, "DUNGEON QUESTS", W.STYLE_DUNGEON.label)
-	c.dgLabel:SetPoint("TOPLEFT", c.dgBox, "TOPLEFT", c.dgBox.insetX, -PAD + 2)
+	c.dgBox = W.Card(page, FULL, 40, "dungeon")
+	c.dgLabel = W.CardLabel(c.dgBox, "DUNGEON QUESTS")
 	c.dgHeads, c.dgRows = {}, {}
-	for i = 1, DG_GROUPS do c.dgHeads[i] = W.Line(c.dgBox, 12, W.STYLE_DUNGEON.label, "LEFT") end
+	for i = 1, DG_GROUPS do c.dgHeads[i] = W.Line(c.dgBox, 12, ns.Theme.Color("dungeon"), "LEFT") end
 	for i = 1, DG_ROWS do c.dgRows[i] = W.Line(c.dgBox, 12, W.TEXT, "LEFT") end
 	c.dgMore = W.Line(c.dgBox, 11, W.DIM, "LEFT")
 
 	-- SPELL TRAINING: class spells the trainer offered that the character can now learn; present only while there are some. Informational: no Learn button.
-	c.stBox = W.Card(page, FULL, 40, W.STYLE_NEAR)
-	c.stLabel = W.Label(c.stBox, "SPELL TRAINING", W.STYLE_NEAR.label)
-	c.stLabel:SetPoint("TOPLEFT", c.stBox, "TOPLEFT", c.stBox.insetX, -PAD + 2)
+	c.stBox = W.Card(page, FULL, 40, "training")
+	c.stLabel = W.CardLabel(c.stBox, "SPELL TRAINING")
 	c.stRows = {}
 	for i = 1, ST_ROWS do
 		local row = { line = W.Line(c.stBox, 12, W.TEXT, "LEFT") }
@@ -137,10 +132,15 @@ local function build(page)
 	c.stMore = W.Line(c.stBox, 11, W.DIM, "LEFT")
 	c.stTotal = W.Line(c.stBox, 12, W.WARM_GOLD, "LEFT")
 
+	-- PET TRAINING: only for pet classes and only when a pet source has something to say (Relevance.lua / PetTraining.lua); otherwise the card does not exist and nothing reflows
+	c.ptBox = W.Card(page, FULL, 40, "training")
+	c.ptLabel = W.CardLabel(c.ptBox, "PET TRAINING")
+	c.ptRows = {}
+	for i = 1, (ns.PetTraining and ns.PetTraining.MAX_ROWS or 6) do c.ptRows[i] = { head = W.Line(c.ptBox, 12, W.TEXT, "LEFT", true), body = W.Line(c.ptBox, 11, W.DIM, "LEFT", true) } end
+
 	-- PROFESSIONS: status and reminders (skill/cap, a secondary not learned, a free primary slot, a trainer-offered rank-up); present only when there is something to say
-	c.pfBox = W.Card(page, FULL, 40, W.STYLE_NEAR)
-	c.pfLabel = W.Label(c.pfBox, "PROFESSIONS", W.STYLE_NEAR.label)
-	c.pfLabel:SetPoint("TOPLEFT", c.pfBox, "TOPLEFT", c.pfBox.insetX, -PAD + 2)
+	c.pfBox = W.Card(page, FULL, 40, "profession")
+	c.pfLabel = W.CardLabel(c.pfBox, "PROFESSIONS")
 	c.pfRows = {}
 	for i = 1, PF_ROWS do
 		local row = { line = W.Line(c.pfBox, 12, W.TEXT, "LEFT") }
@@ -149,13 +149,18 @@ local function build(page)
 	end
 
 	-- NEW FOR YOU: secondary, fits its content; present only while active
-	c.nfyBox = W.Card(page, FULL, 80, W.STYLE_NEW)
-	c.nfyLabel = W.Label(c.nfyBox, "NEW FOR YOU", W.STYLE_NEW.label)
-	c.nfyLabel:SetPoint("TOPLEFT", c.nfyBox, "TOPLEFT", c.nfyBox.insetX, -c.nfyBox.insetY)
+	c.nfyBox = W.Card(page, FULL, 80, "discovery")
+	c.nfyLabel = W.CardLabel(c.nfyBox, "NEW FOR YOU")
 	c.nfyLevel = W.Line(c.nfyBox, 10, W.DIM, "LEFT")
 	c.nfyRows = {}
 	for i = 1, 3 do c.nfyRows[i] = W.Line(c.nfyBox, 12, W.TEXT, "LEFT", true) end
 
+	-- a theme change repaints the cards themselves (W.Restyle); the few texts coloured from a role are repainted here
+	W.OnRestyle = function()
+		for _, fs in ipairs(c.dgHeads) do W.SetColor(fs, ns.Theme.Color("dungeon")) end
+		W.SetColor(c.nowTitle, ns.Theme.Color("primary"))
+		if UI.Refresh then UI.Refresh() end
+	end
 	c.partyHead = W.Line(page, 11, W.WARM_GOLD, "LEFT")
 	c.partyRows = {}
 	for i = 1, 2 do c.partyRows[i] = { head = W.Line(page, 11, W.TEXT, "LEFT") } end
@@ -199,7 +204,7 @@ local function drawNow(c, card)
 		c.nowDetail:SetText(card.empty.lines[2] or "")
 		c.nowInfo:SetText("")
 	end
-	W.SetColor(c.nowTitle, n and W.WARM_GOLD or W.DIM)
+	W.SetColor(c.nowTitle, n and ns.Theme.Color("primary") or W.DIM)
 	if n then c.nowReport:Show() else c.nowReport:Hide() end
 	if n and not n.guidance then c.nowSkip:Show() else c.nowSkip:Hide() end       -- (guidance is not a planner recommendation: there is nothing to skip)
 	c.thenFS:SetText(card.thenLine and ("Then: " .. card.thenLine) or "")
@@ -219,6 +224,8 @@ local function drawNow(c, card)
 	c.nowMore:SetText(left > 0 and string.format("+ %d more", left) or "")
 	st:Add(c.nowMore, 2)
 	st:Add(c.nowInfo, 3)
+	c.nowWhy:SetText(n and n.whyPlayer and ("Why: " .. n.whyPlayer) or "")
+	st:Add(c.nowWhy, 3)
 	c.nowNav:SetText(n and n.navNote or "")
 	st:Add(c.nowNav, 3)
 	if W.TextOf(c.thenFS) ~= "" then
@@ -237,14 +244,20 @@ local function drawNow(c, card)
 	return math.max(NOW_MIN, math.floor(st.y + PAD + 0.5))
 end
 
-local TIMER_COLOR = { OK = W.TEXT, WARN = W.WARM_GOLD, CRITICAL = W.ALERT, EXPIRED = W.DIM }
-
---- Writes the timer rows' text and colours (called by the full draw and, every second, by the tracker's own update).
+--- Writes the timer rows' text and colours and lets the card follow the most urgent timer (called by the full draw and, every second, by the tracker's own update). The card is the
+-- "urgent" role: it gets louder only as the deadline nears (UI/Theme.lua Urgency), and a time that is nearly up also says so in words, not only in colour.
 local function paintTimers(c, list)
+	local first = list[1]
+	local level = first and first.level or "OK"
+	local style, _ = ns.Theme.Urgency(level)
+	c.tmLevel = level
+	c.tmBox.styleOverride = function() return (ns.Theme.Urgency(c.tmLevel)) end
+	W.SetCardStyle(c.tmBox, style)
+	c.tmLabel:SetText(level == "CRITICAL" and "TIMED QUEST - HURRY" or (level == "EXPIRED" and "TIMED QUEST - OUT OF TIME" or "TIMED QUEST"))
 	for i, row in ipairs(c.tmRows) do
 		local t = list[i]
 		row.time:SetText(t and t.text or "")
-		if t then W.SetColor(row.time, TIMER_COLOR[t.level] or W.TEXT) end
+		if t then local _, col = ns.Theme.Urgency(t.level); W.SetColor(row.time, col) end
 	end
 end
 
@@ -481,6 +494,23 @@ local function drawSpells(c, sp)
 	return math.floor(st.y + PAD - 2 + 0.5)
 end
 
+--- PET TRAINING. Returns the card height, or nil when there is nothing to show (the card is then hidden entirely).
+local function drawPets(c, pets)
+	if not (pets and pets.rows and #pets.rows > 0) then return nil end
+	local box = c.ptBox
+	local inner = FULL - box.insetX - PAD
+	local st = W.Stack(box, inner)
+	st:Skip(16)
+	for i, row in ipairs(c.ptRows) do
+		local r = pets.rows[i]
+		row.head:SetText(r and r.text or "")
+		row.body:SetText(r and r.detail or "")
+		st:Add(row.head, 1)
+		st:Add(row.body, 4)
+	end
+	return math.floor(st.y + PAD - 2 + 0.5)
+end
+
 --- PROFESSIONS. Returns the card height, or nil when there is nothing to show (the card is then hidden entirely).
 local function drawProfessions(c, pf)
 	if not pf or #pf.rows == 0 then
@@ -533,6 +563,10 @@ local function refresh()
 	local c = UI.main.codex
 	local ctx, plan = ns.State.ctx, ns.State.plan
 	if not ctx then return end
+	FULL = (UI.main.width or UI.COMPACT_WIDTH) - 16                    -- the page follows the window width (the player can resize it)
+	c.header:SetWidth(FULL - 72)
+	c.slots:ClearAllPoints()
+	W.Place(c.slots, c.page, FULL - 70, -2, 70)
 	c.header:SetText(ns.Presenter.Header(ctx))
 	local nfy = ns.NewForYou.Active()
 	UI.main.nfyShown = nfy ~= nil
@@ -604,6 +638,15 @@ local function refresh()
 		c.stBox:Hide()
 	end
 
+	local ptH = drawPets(c, card.pets)
+	if ptH then
+		c.ptBox:Show()
+		placeCard(c, c.ptBox, bottom + GAP - 2, FULL, ptH)
+		bottom = bottom + GAP - 2 + ptH
+	else
+		c.ptBox:Hide()
+	end
+
 	local pfH = drawProfessions(c, card.professions)
 	if pfH then
 		c.pfBox:Show()
@@ -642,7 +685,7 @@ local function refresh()
 		for _, row in ipairs(c.partyRows) do row.head:SetText("") end
 	end
 	-- the window fits the page: the page starts 36 px below the window top, with a little room under the last line
-	if UI.FitSize then UI.FitSize(UI.COMPACT_WIDTH, 36 + y + 8) end
+	if UI.FitSize then UI.FitSize(UI.main.width or UI.COMPACT_WIDTH, 36 + y + 8) end
 end
 
 UI.RegisterPage("codex", "Codex", function(parent)
@@ -671,7 +714,7 @@ UI.RegisterPage("codex", "Codex", function(parent)
 		else
 			holder:Hide()
 			welcome:Show()
-			if UI.FitSize then UI.FitSize(UI.COMPACT_WIDTH, 36 + 76) end
+			if UI.FitSize then UI.FitSize(UI.main.width or UI.COMPACT_WIDTH, 36 + 76) end
 		end
 	end
 	return page

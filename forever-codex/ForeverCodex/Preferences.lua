@@ -83,6 +83,10 @@ function P.Root() return root() end
 function P.Char() return ensureChar(charKey) end
 function P.UI() return root().ui end
 
+--- The chosen look of the player window (see UI/Theme.lua): a theme key, or nil for the default. Account-wide (it is how the player wants Codex to look, not a character choice).
+function P.ThemeKey() return root().ui.theme end
+function P.SetThemeKey(k) root().ui.theme = type(k) == "string" and k or nil end
+
 -- ---------------------------------------------------------------- character IDENTITY (0.7.5)
 --
 -- "Name-Realm" is NOT a character identity: deleting a character and creating another with the same name gave the new one the old one's skips, journey, turn-in count and dialog stamps

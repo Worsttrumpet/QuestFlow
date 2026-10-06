@@ -218,10 +218,29 @@ local function describe(a, plan, ctx, icon)
 		if Pl.Locate(a) and (as.reason or as.straight) then it.navNote, it.navReason = as.text, as.reason end
 		if as.inArea then it.dist, it.whereShort = "In the objective area", "In the objective area" end
 	end
+	it.whyPlayer = Pr.WhyPlayer(a, it, plan)
 	local why = ns.PlanAdapter.Sentences(plan, a)
 	it.why = why[1]
 	if why[1] == "Best available option" then it.why = nil end
 	return it
+end
+
+--- ONE short, player-facing reason for a recommendation, or nil: why is Codex suggesting this? Built from facts the planner already established (its reason codes, the quest's own timer,
+-- what a hand-in opens, the objective area), never from scores, and never invented. The window shows it under the action as "Why".
+function Pr.WhyPlayer(a, it, plan)
+	if not a then return nil end
+	local codes = {}
+	for _, r in ipairs(plan and plan.diag and plan.diag.reasons and plan.diag.reasons[a.id] or {}) do codes[r.code] = r end
+	if a.timer and type(a.timer.remaining) == "number" and a.timer.remaining <= 600 then return "This quest is timed and running out of time." end
+	if a.kind == "TURN_IN" and it and it.unlocks and #it.unlocks > 0 then return "Handing it in opens " .. table.concat(it.unlocks, " and ") .. "." end
+	if it and it.dist == "In the objective area" then return "You are already in the area for this objective." end
+	if codes.PLAYER_ADDED then return "You chose this one." end
+	if codes.CHAIN_UNLOCK then return "It unlocks a follow-up quest nearby." end
+	if codes.LOCAL_PROGRESS then return "Keeps your current quests moving where you are." end
+	if codes.ON_THE_WAY then return "It is right on your way." end
+	if codes.SAME_STOP then return "Several things can be done at this stop." end
+	if codes.BEST_SEQUENCE then return (codes.BEST_SEQUENCE.stops and codes.BEST_SEQUENCE.stops > 1) and "The best first step of a short route." or "The best use of your time right now." end
+	return nil
 end
 
 Pr.Describe = describe
@@ -293,6 +312,14 @@ function Pr.Offers(plan)
 	return out
 end
 
+--- A feature card behind the relevance gate: nil when the feature is not relevant to this character (the card is then ABSENT, never a "not applicable" card), else whatever the feature's own
+-- Card(ctx) returns (nil when it has nothing to say). See Relevance.lua.
+function Pr.Feature(key, ctx, cardFn)
+	if type(cardFn) ~= "function" then return nil end
+	if not (ns.Relevance and ns.Relevance.Applies(key, ctx)) then return nil end
+	return cardFn(ctx)
+end
+
 function Pr.Card(plan, ctx)
 	local card = { reminders = {} }
 	card.questItems = Pr.QuestItems(plan)
@@ -321,27 +348,31 @@ function Pr.Card(plan, ctx)
 			end
 			card.slots = Pr.Slots(ctx)
 			card.dungeons = ns.Dungeons and ns.Dungeons.List(ctx) or {}
-			card.spells = ns.SpellTraining and ns.SpellTraining.Card(ctx) or nil
-			card.professions = ns.Professions and ns.Professions.Card(ctx) or nil
+			card.spells = Pr.Feature("spellTraining", ctx, ns.SpellTraining and ns.SpellTraining.Card)
+		card.pets = Pr.Feature("petTraining", ctx, ns.PetTraining and ns.PetTraining.Card)
+			card.professions = Pr.Feature("professions", ctx, ns.Professions and ns.Professions.Card)
 			return card
 		end
 		local lines = {}
-		if #card.reminders > 0 then
+		if not plan then
+			lines[1] = "Codex is still reading your character and quest log."
+		elseif #card.reminders > 0 then
 			lines[1] = "You have quests Codex cannot place on the map yet."
 		else
-			lines[1] = "Explore, or accept a quest, and Codex will pick it up from there."
+			lines[1] = "Codex has no higher-priority action for you right now. Explore or pick up a quest and it will take it from there."
 		end
 		local pn = plan and plan.diag and plan.diag.possible and plan.diag.possible.n or 0
 		if pn > 0 then lines[#lines + 1] = string.format("%d pickup%s Codex knows of %s far away and not confirmed by the game; /codex report lists %s.", pn, pn == 1 and "" or "s", pn == 1 and "is" or "are", pn == 1 and "it" or "them") end
 		for _, w in ipairs(plan and plan.warnings or {}) do
 			if #lines < 3 and not w:find("^Not available on this client") then lines[#lines + 1] = w end
 		end
-		card.empty = { title = "Nothing to recommend right now", lines = lines }
+		card.empty = { title = plan and "Nothing urgent right now" or "Gathering information...", lines = lines }
 		card.also, card.ready = {}, ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
 		card.slots = Pr.Slots(ctx)
 		card.dungeons = ns.Dungeons and ns.Dungeons.List(ctx) or {}
-		card.spells = ns.SpellTraining and ns.SpellTraining.Card(ctx) or nil
-		card.professions = ns.Professions and ns.Professions.Card(ctx) or nil
+		card.spells = Pr.Feature("spellTraining", ctx, ns.SpellTraining and ns.SpellTraining.Card)
+			card.pets = Pr.Feature("petTraining", ctx, ns.PetTraining and ns.PetTraining.Card)
+		card.professions = Pr.Feature("professions", ctx, ns.Professions and ns.Professions.Card)
 		return card
 	end
 	card.now = describe(plan.now, plan, ctx, "star")
@@ -352,8 +383,9 @@ function Pr.Card(plan, ctx)
 	card.ready = ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}
 	card.slots = Pr.Slots(ctx)
 	card.dungeons = ns.Dungeons and ns.Dungeons.List(ctx) or {}
-	card.professions = ns.Professions and ns.Professions.Card(ctx) or nil    -- PROFESSIONS: status and reminders only, never an input to the plan
-	card.spells = ns.SpellTraining and ns.SpellTraining.Card(ctx) or nil     -- SPELL TRAINING: a persistent, informational section below DUNGEON QUESTS; never an input to the plan
+	card.professions = Pr.Feature("professions", ctx, ns.Professions and ns.Professions.Card)    -- PROFESSIONS: status and reminders only, never an input to the plan
+	card.spells = Pr.Feature("spellTraining", ctx, ns.SpellTraining and ns.SpellTraining.Card)     -- SPELL TRAINING: a persistent, informational section below DUNGEON QUESTS; never an input to the plan
+	card.pets = Pr.Feature("petTraining", ctx, ns.PetTraining and ns.PetTraining.Card)               -- PET TRAINING: only for pet classes, and only when a pet source has something to say
 	if plan.alsoDo then
 		card.alsoDo = describe(plan.alsoDo, plan, ctx, plan.alsoDo.type == "FLIGHT" and "triangle" or "diamond")
 	end

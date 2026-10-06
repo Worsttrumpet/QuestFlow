@@ -1,6 +1,7 @@
--- UI page "Appendices": reference and settings, kept compact: one list, one page at a time.
---   Quests (search and see where you stand)  Knowledge (trainers, recipes, pets, flight paths: what Codex can and cannot see)
---   Settings  Help Improve Codex  Party
+-- UI page "Appendices": reference, kept compact: one list, one page at a time.
+--   Quests (search and see where you stand)   What Codex knows (trainers, professions, pets, flight paths: what Codex can and cannot see today)
+--   Commands and guide (the few slash commands worth knowing, and what each card's marker means)   Help Improve Codex   Party
+-- (Settings live on the Codex Options and Themes tabs.)
 
 local addonName, ns = ...
 local W = ns.Widgets
@@ -8,7 +9,7 @@ local UI = ns.UI
 
 local WIDTH = UI.WIDTH - 24
 local RESULTS = 6
-local ENTRIES = { { "quests", "Quests" }, { "knowledge", "Knowledge" }, { "help", "Help Improve Codex" }, { "party", "Party" } }
+local ENTRIES = { { "quests", "Quests" }, { "knowledge", "What Codex knows" }, { "guide", "Commands and card guide" }, { "help", "Help Improve Codex" }, { "party", "Party" } }
 
 local function lineAt(parent, y, color, wrap, x, width)
 	local fs = W.Text(parent, color)
@@ -56,18 +57,52 @@ local function refreshQuests(w)
 	w.qHint:SetText(#text < 2 and "Type part of a quest name" or (#found == 0 and "No quest matches that." or ""))
 end
 
+local K_ROW = 74
 local function buildKnowledge(f, w)
+	w.kIntro = lineAt(f, -30, W.GREY, true)
+	w.kIntro:SetText("What Codex can and cannot see about your character today.")
 	w.kRows = {}
 	for i = 1, 4 do
-		w.kRows[i] = { name = lineAt(f, -30 - (i - 1) * 46, W.WHITE), text = lineAt(f, -30 - (i - 1) * 46 - 16, W.GREY, true) }
+		local y = -54 - (i - 1) * K_ROW
+		w.kRows[i] = { name = lineAt(f, y, W.WHITE), text = lineAt(f, y - 16, W.GREY, true) }
+		w.kRows[i].text:SetHeight(K_ROW - 22)
 	end
 end
 
 local function refreshKnowledge(w)
 	for i, s in ipairs(ns.Knowledge.Systems()) do
-		w.kRows[i].name:SetText(s.label)
+		w.kRows[i].name:SetText(s.label .. (s.status and ("  -  " .. s.status) or ""))
 		w.kRows[i].text:SetText(s.text)
 	end
+end
+
+-- COMMANDS AND CARD GUIDE: the commands worth knowing, and what each card's marker letter means (the same letters in every theme)
+local LEGEND_ORDER = { "primary", "optional", "urgent", "ready", "discovery", "training", "profession", "dungeon", "world", "progression" }
+local function buildGuide(f, w)
+	w.gCmdHead = W.Section(f, "COMMANDS", 0, -30, WIDTH)
+	w.gCmds = {}
+	for i = 1, 8 do
+		w.gCmds[i] = { cmd = lineAt(f, -52 - (i - 1) * 17, W.WARM_GOLD, false, 0, 150), text = lineAt(f, -52 - (i - 1) * 17, W.TEXT, false, 154, WIDTH - 158) }
+	end
+	local ly = -52 - 8 * 17 - 14
+	w.gLegendHead = W.Section(f, "WHAT THE MARKERS MEAN", 0, ly, WIDTH)
+	w.gLegend = {}
+	for i, role in ipairs(LEGEND_ORDER) do
+		local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+		local x, y = col * (WIDTH / 2), ly - 24 - row * 19
+		local m = W.Marker(f, role, 13)
+		m:SetPoint("TOPLEFT", f, "TOPLEFT", x, y)
+		local fs = lineAt(f, y - 1, W.TEXT, false, x + 20, WIDTH / 2 - 24)
+		fs:SetText(ns.Theme.NAME[role] or role)
+		w.gLegend[i] = { marker = m, role = role }
+	end
+end
+
+local function refreshGuide(w)
+	for i, c in ipairs(ns.Knowledge.Commands()) do
+		if w.gCmds[i] then w.gCmds[i].cmd:SetText(c[1]); w.gCmds[i].text:SetText(c[2]) end
+	end
+	for _, e in ipairs(w.gLegend) do e.marker:Set(e.role) end             -- (a theme change re-tints them)
 end
 
 local function buildHelp(f, w)
@@ -114,8 +149,8 @@ end
 
 local function refreshParty(w)
 	local ctx = ns.State.ctx
-	local label = ({ off = "Off", ui = "Party card in the window" })[ns.Prefs.PartyNotify()]
-	w.pMode:SetText("Party news: " .. tostring(label) .. "   (change it in Settings)")
+	local label = ({ off = "Off", ui = "Show a party card" })[ns.Prefs.PartyNotify()]
+	w.pMode:SetText("Party news: " .. tostring(label) .. "   (change it in Codex Options)")
 	local v = ns.Party.View(ctx)
 	w.pNote:SetText(v.note or (ctx.group and ctx.group.inGroup and "" or "You are not in a party."))
 	for i, row in ipairs(w.pRows) do
@@ -129,7 +164,7 @@ UI.RegisterPage("appendices", "Appendices", function(parent)
 	local w = { sub = "menu", subs = {} }
 	UI.main.app = w
 	w.menuTitle = lineAt(parent, -2, W.GOLD)
-	w.menuTitle:SetText("Reference and settings")
+	w.menuTitle:SetText("Reference")
 	w.menu = {}
 	for i, e in ipairs(ENTRIES) do
 		w.menu[e[1]] = W.Button(parent, 200, 24, e[2], function() w.sub = e[1]; UI.pages.appendices.Refresh() end)
@@ -147,18 +182,20 @@ UI.RegisterPage("appendices", "Appendices", function(parent)
 	end
 	sub("quests", buildQuests)
 	sub("knowledge", buildKnowledge)
+	sub("guide", buildGuide)
 	sub("help", buildHelp)
 	sub("party", buildParty)
 	return { Refresh = function()
 		local ctx = ns.State.ctx
 		if not ctx then return end
 		local menu = w.sub == "menu"
-		if menu then w.menuTitle:SetText("Reference and settings") else w.menuTitle:SetText("") end
+		if menu then w.menuTitle:SetText("Reference") else w.menuTitle:SetText("") end
 		for _, b in pairs(w.menu) do if menu then b:Show() else b:Hide() end end
 		if menu then w.back:Hide() else w.back:Show() end
 		for key, f in pairs(w.subs) do if key == w.sub then f:Show() else f:Hide() end end
 		if w.sub == "quests" then refreshQuests(w)
 		elseif w.sub == "knowledge" then refreshKnowledge(w)
+		elseif w.sub == "guide" then refreshGuide(w)
 		elseif w.sub == "help" then refreshHelp(w)
 		elseif w.sub == "party" then refreshParty(w)
 		end

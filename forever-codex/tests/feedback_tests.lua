@@ -96,7 +96,7 @@ section("feedback: with no recommendation the report still works")
 do
 	local ns = world({})
 	local res = create(ns, { category = "suggestion", text = "Show me where the trainer is.", from = "WINDOW" })
-	check(res.report.window.empty == "Nothing to recommend right now" and res.report.window.now == nil and res.report.text ~= "", "an empty card is reported as empty")
+	check(res.report.window.empty == "Nothing urgent right now" and res.report.window.now == nil and res.report.text ~= "", "an empty card is reported as empty")
 	check(res.id:match("^FC%-%x+%-%d+$") ~= nil, "report id format  [" .. res.id .. "]")
 	local ns2 = boot({ char = { level = 5 }, synthetic = true, login = false })
 	local res2 = ns2.Feedback.Create({ category = "other", text = "before login" })

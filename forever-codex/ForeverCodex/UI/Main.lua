@@ -19,6 +19,7 @@ ns.UI = UI
 
 UI.WIDTH, UI.HEIGHT = 520, 430       -- the full-size window (Setup, World, Journey, Appendices)
 UI.COMPACT_WIDTH = 330               -- the Codex page: a right-side tracker about as wide as the game's own (readable, not a panel)
+UI.WIDTH_MIN, UI.WIDTH_MAX = 300, 520   -- the player can resize the Codex window between these (the height always fits the content: nothing is clipped, nothing needs scrolling)
 UI.HEIGHT_MIN = 150          -- the Codex page shrinks the window to its content, never below this; other pages use UI.HEIGHT
 UI.pageDefs = {}            -- registration order = tab order
 UI.pages = {}               -- key -> { frame, refresh }
@@ -27,6 +28,12 @@ UI.main = {}                -- named widgets (for tests and the pages)
 
 -- anything not defined here (ProvenanceText, ShowReport, ...) is the developer window's
 setmetatable(UI, { __index = function(_, k) return ns.DevUI and ns.DevUI[k] end })
+
+--- The width the player may give the Codex window, rounded and kept inside [WIDTH_MIN, WIDTH_MAX] (anything that is not a number is the default width).
+function UI.ClampWidth(w)
+	if type(w) ~= "number" or w ~= w then return UI.COMPACT_WIDTH end
+	return math.floor(math.min(UI.WIDTH_MAX, math.max(UI.WIDTH_MIN, w)) + 0.5)
+end
 
 --- Pages register themselves: key, tab label, build(parentFrame) -> pageTable, where pageTable.Refresh() draws.
 function UI.RegisterPage(key, label, build)
@@ -78,7 +85,40 @@ function UI.FitSize(w, h)
 end
 function UI.FitHeight(h) UI.FitSize(nil, h) end
 
-local function savePosition(frame)
+--- Gives the Codex window a new width (clamped), reflows the cards and refits the height. Returns the width actually used.
+function UI.SetWidth(w)
+	w = UI.ClampWidth(w)
+	if UI.frame then
+		UI.FitSize(w, UI.main.height or UI.HEIGHT)
+		UI.main.width = w
+		UI.Refresh()
+	else
+		UI.main.width = w
+	end
+	return w
+end
+
+--- One step of a drag on the grip: the width follows the mouse (only when it really changed).
+function UI.TickResize()
+	local s = UI.main.sizing
+	if not s then return end
+	if type(GetCursorPosition) ~= "function" then return end
+	local okP, x = pcall(GetCursorPosition)
+	if not okP or type(x) ~= "number" then return end
+	local okS, sc = pcall(UI.frame.GetEffectiveScale, UI.frame)
+	if not okS or type(sc) ~= "number" or sc <= 0 then sc = 1 end
+	local w = UI.ClampWidth(s.w + (x / sc - s.x))
+	if w ~= UI.main.width then UI.SetWidth(w) end
+end
+
+local savePosition
+function UI.EndResize()
+	if not UI.main.sizing then return end
+	UI.main.sizing = nil
+	if UI.frame then savePosition(UI.frame) end
+end
+
+savePosition = function(frame)
 	local ok, point, _, rel, x, y = pcall(frame.GetPoint, frame, 1)
 	if ok and type(point) == "string" and type(x) == "number" and type(y) == "number" then
 		P.SetWindowPos({ point = point, rel = rel or point, x = x, y = y, h = UI.main.height, w = UI.main.width })
@@ -115,7 +155,7 @@ end
 --   Appendices. Right click on the minimap button, the tracker's "Options" button, or /codex options.
 -- The pages themselves (UI/Page*.lua) are unchanged: each is built once into whichever window owns it.
 
-local OPTION_TABS = { "options", "world", "journey", "appendices" }
+local OPTION_TABS = { "options", "themes", "world", "journey", "appendices" }
 local function isOptionsPage(key) for _, k in ipairs(OPTION_TABS) do if k == key then return true end end return false end
 
 --- The shared look of both windows: a 1 px muted-gold border (an outer texture with the fill inset on top).
@@ -176,9 +216,36 @@ local function buildTracker()
 	UI.main.feedbackButton = W.Button(frame, 62, 20, "Feedback", function() if UI.OpenFeedback then UI.OpenFeedback({ from = "WINDOW" }) end end)
 	UI.main.feedbackButton:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -32, -7)
 	buildPage(defOf("codex"), frame)
+	-- RESIZE GRIP (bottom right): drag to change the WIDTH. Codex measures the mouse itself (no engine resize), clamps to [WIDTH_MIN, WIDTH_MAX], reflows every card and saves the width with the
+	-- window position. The height is not the player's to set: it always fits the content, so nothing is ever clipped.
+	local grip = CreateFrame("Button", nil, frame)
+	grip:SetSize(16, 16)
+	grip:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -2, 2)
+	grip:EnableMouse(true)
+	grip.text = W.Line(grip, 11, W.DIM, "RIGHT")
+	grip.text:SetPoint("BOTTOMRIGHT", grip, "BOTTOMRIGHT", -1, 1)
+	grip.text:SetText("//")
+	local function cursorX()
+		if type(GetCursorPosition) ~= "function" then return nil end
+		local okP, x = pcall(GetCursorPosition)
+		if not okP or type(x) ~= "number" then return nil end
+		local okS, sc = pcall(frame.GetEffectiveScale, frame)
+		if not okS or type(sc) ~= "number" or sc <= 0 then sc = 1 end
+		return x / sc
+	end
+	grip:SetScript("OnMouseDown", function(_, button)
+		if button and button ~= "LeftButton" then return end
+		local x = cursorX()
+		if x then UI.main.sizing = { x = x, w = UI.main.width or UI.COMPACT_WIDTH } end
+	end)
+	grip:SetScript("OnMouseUp", function() UI.EndResize() end)
+	grip:SetScript("OnEnter", function(self) W.ShowTooltip(self, "ANCHOR_LEFT", { title = "Resize", rows = { { "Drag", "Change the window width" } } }) end)
+	grip:SetScript("OnLeave", function() local tip = rawget(_G, "GameTooltip"); if tip then ns.Safe(tip.Hide, tip) end end)
+	UI.main.grip = grip
 	-- NEW FOR YOU lasts exactly one minute and then disappears by itself: a light check keeps the card honest while the window is open
 	local sinceCheck = 0
 	frame:SetScript("OnUpdate", function(_, dt)
+		if UI.main.sizing then UI.TickResize() end                       -- (every frame while the grip is held: the card edge follows the mouse)
 		sinceCheck = sinceCheck + (dt or 0)
 		if sinceCheck < 0.5 then return end
 		sinceCheck = 0
@@ -202,7 +269,7 @@ end
 -- game pictures and templates are used (the ones Questie's and other addons' options windows are made of, so they exist on this client).
 -- Every piece is feature-checked: if the dialog or button template cannot be made, the flat look of the tracker is used instead.
 
-local OPTIONS_W, OPTIONS_H = 560, 520
+local OPTIONS_W, OPTIONS_H = 560, 560
 UI.OPTIONS_W, UI.OPTIONS_H = OPTIONS_W, OPTIONS_H
 local DIALOG_BACKDROP = {
 	bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -299,7 +366,7 @@ local function buildOptions()
 	for _, key in ipairs(OPTION_TABS) do
 		local def = defOf(key)
 		if def then
-			local width = key == "options" and 130 or (key == "appendices" and 110 or 90)
+			local width = key == "options" and 130 or (key == "appendices" and 110 or 84)
 			local tab = makeTab(frame, def.label, width, function() UI.ShowPage(key) end)
 			tab:SetPoint("BOTTOMLEFT", pane, "TOPLEFT", x, -3)
 			UI.main.tabs[key] = tab
@@ -402,6 +469,35 @@ end
 function UI.Open(key)
 	ns.State.Recompute()
 	showPage((key == "codex" or isOptionsPage(key)) and key or "codex")
+end
+
+--- Puts the Codex window back at its default size and place and forgets the saved ones.
+function UI.ResetWindow()
+	P.SetWindowPos(nil)
+	if not UI.frame then UI.main.width = UI.COMPACT_WIDTH return end
+	UI.main.width = UI.COMPACT_WIDTH
+	UI.frame:ClearAllPoints()
+	UI.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -240)
+	UI.main.height = nil
+	UI.FitSize(UI.COMPACT_WIDTH, UI.HEIGHT)
+	UI.Refresh()
+	savePosition(UI.frame)
+end
+
+--- Called by Boot at login, after the character's choices are loaded and the first plan is made: builds the window and shows what the player should see, with no click needed. A character
+-- that has not finished setup gets the setup panel; one that has gets the tracker (unless the player closed it last time). The minimap button only opens / closes it afterwards.
+-- Returns "setup", "tracker" or "hidden" (for tests and the report).
+function UI.Init()
+	ensureTracker()
+	if not P.SetupDone() then
+		showPage("options")
+		return "setup"
+	end
+	if P.TrackerShown() then
+		showPage("codex")
+		return "tracker"
+	end
+	return "hidden"
 end
 
 function UI._Build()

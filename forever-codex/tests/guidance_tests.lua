@@ -97,5 +97,5 @@ section("guidance: nothing in the log is still an honest empty card")
 do
 	local ns = world({}, {})
 	local c = card(ns)
-	check(c.now == nil and c.guidance == nil and c.empty and c.empty.title == "Nothing to recommend right now", "no quests, nothing to say")
+	check(c.now == nil and c.guidance == nil and c.empty and c.empty.title == "Nothing urgent right now", "no quests, nothing to say")
 end

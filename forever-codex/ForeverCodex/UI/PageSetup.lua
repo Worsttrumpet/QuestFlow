@@ -1,6 +1,8 @@
--- UI: the setup panel. Shown once ("Here's your character"), then reachable later as Appendices > Settings.
--- Setup picks the route zone, the route style and the systems Codex should consider; Settings adds navigation,
--- party notifications and Hardcore. After setup the main window shows none of this: it shows the decision.
+-- UI: first-time setup and the Codex Options. One layout for both: SECTIONS (a small gold header and a thin rule), CHECK ROWS (a check box, a label and one dim line saying what it changes) and
+-- DROPDOWNS (the current choice is always visible on the button; a short list opens under it). Appearance settings (the arrow, the look of Codex, the game's own tracker) live on the Themes tab.
+--
+--   setup (first run)   "Welcome to Forever Codex": where to level, how to play, what else to look out for, Start. Nothing else: everything else is in Codex Options later.
+--   settings            YOUR ROUTE (where to level, how to play), WHAT CODEX DOES (waypoint, extras, Hardcore, party news), and Run setup again.
 
 local addonName, ns = ...
 local R = ns.Registry
@@ -9,80 +11,41 @@ local W = ns.Widgets
 local UI = ns.UI
 
 local WIDTH = UI.WIDTH - 24
-local PARTY_LABEL = { off = "Off", ui = "Party card in the window" }
+local PARTY_OPTIONS = { { key = "ui", label = "Show a party card" }, { key = "off", label = "Off" } }
+local LABEL_W, DROP_X, DROP_W = 112, 120, 210
 
 local function recompute() ns.State.Recompute() end
 
-local function zoneKeys()
-	local keys = { "auto" }
-	for _, z in ipairs(R.Zones()) do keys[#keys + 1] = z.key end
-	return keys
-end
-
-local function activeStyles()
-	local out = {}
-	for _, s in ipairs(R.Strategies()) do if s.active ~= false then out[#out + 1] = s.key end end
+local function zoneOptions()
+	local out = { { key = "auto", label = "Wherever I am" } }
+	for _, z in ipairs(R.Zones()) do out[#out + 1] = { key = z.key, label = z.label or z.key } end
 	return out
 end
 
-local function step(list, current, dir)
-	local idx = 1
-	for i, k in ipairs(list) do if k == current then idx = i end end
-	idx = idx + dir
-	if idx < 1 then idx = #list elseif idx > #list then idx = 1 end
-	return list[idx]
+local function styleOptions()
+	local out = {}
+	for _, s in ipairs(R.Strategies()) do if s.active ~= false then out[#out + 1] = { key = s.key, label = s.label or s.key } end end
+	return out
 end
 
-local function zoneLabel(key)
-	if key == "auto" then return "Wherever I am" end
-	local z = R.ZoneByKey(key)
-	return z and z.label or key
-end
+local STYLE_HELP = {
+	efficient = "Fewer detours: quests that fit your level and keep the walking short.",
+	completionist = "Everything the zone offers, nearest first. Low-level quests are not hidden.",
+	questing = "Quest steps and the travel between them only. No flight or other extras.",
+}
+local ZONE_HELP = "Codex plans quests in this zone. \"Wherever I am\" follows you from zone to zone."
 
-local function styleLabel(key)
-	local s = R.Strategy(key)
-	return s and s.label or key
-end
-
-local function picker(frame, y, label, onStep)
-	local fs = W.Text(frame, W.GREY)
-	W.Place(fs, frame, 0, y, 110)
+--- A labelled dropdown row: label on the left, the dropdown, then a dim line of help under it. Returns the dropdown (d.help is the help line).
+local function dropdownRow(f, y, label, onSelect)
+	local fs = W.Line(f, 12, W.GREY, "LEFT")
 	fs:SetText(label)
-	local prev = W.Button(frame, 22, 20, "<", function() onStep(-1) end)
-	prev:SetPoint("TOPLEFT", frame, "TOPLEFT", 112, y + 4)
-	local value = W.Text(frame, W.WHITE)
-	W.Place(value, frame, 140, y, 170)
-	local nxt = W.Button(frame, 22, 20, ">", function() onStep(1) end)
-	nxt:SetPoint("TOPLEFT", frame, "TOPLEFT", 312, y + 4)
-	return value, prev, nxt
-end
-
---- A check box with its label on the right (the standard check-box pictures of the game; no template): b:SetOn(on, label).
-local function toggle(frame, y, onClick)
-	local b = CreateFrame("Button", nil, frame)
-	b:SetSize(WIDTH, 24)
-	b:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y + 5)
-	b.box = b:CreateTexture(nil, "ARTWORK")
-	b.box:SetSize(24, 24)
-	b.box:SetPoint("LEFT", b, "LEFT", 0, 0)
-	ns.Safe(b.box.SetTexture, b.box, "Interface\\Buttons\\UI-CheckBox-Up")
-	b.checkTex = b:CreateTexture(nil, "OVERLAY")
-	b.checkTex:SetSize(24, 24)
-	b.checkTex:SetPoint("LEFT", b, "LEFT", 0, 0)
-	ns.Safe(b.checkTex.SetTexture, b.checkTex, "Interface\\Buttons\\UI-CheckBox-Check")
-	b.checkTex:Hide()
-	ns.Safe(b.SetHighlightTexture, b, "Interface\\Buttons\\UI-CheckBox-Highlight", "ADD")
-	b.text = W.Text(b, W.WHITE)
-	b.text:SetPoint("LEFT", b, "LEFT", 28, 0)
-	ns.Safe(b.text.SetJustifyH, b.text, "LEFT")
-	b.enabled = true
-	b:SetScript("OnClick", function(self) if self.enabled and onClick then onClick(self) end end)
-	function b:SetOn(on, label)
-		self.on = on and true or false
-		self.text:SetText(label or "")
-		if self.on then self.checkTex:Show() else self.checkTex:Hide() end
-	end
-	return b
+	fs:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y - 4)
+	fs:SetWidth(LABEL_W)
+	local d = W.Dropdown(f, DROP_X, y, DROP_W, onSelect)
+	d.help = W.Line(f, 11, W.DIM, "LEFT", true)
+	d.help:SetPoint("TOPLEFT", f, "TOPLEFT", DROP_X, y - 25)
+	d.help:SetWidth(WIDTH - DROP_X - 8)
+	return d
 end
 
 --- Builds the panel into `parent`. mode: "setup" (first run) or "settings". Returns { frame, Refresh, w }.
@@ -93,39 +56,48 @@ function UI.BuildSetup(parent, mode)
 	local w = {}
 	local isSetup = mode == "setup"
 	local y = -2
-	w.title = W.Text(f, W.GOLD)
-	W.Place(w.title, f, 0, y, WIDTH)
-	w.title:SetText(isSetup and "Here's your character." or "Settings")
+	w.title = W.Line(f, 14, W.WARM_GOLD, "LEFT")
+	w.title:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+	w.title:SetWidth(WIDTH)
+	w.title:SetText(isSetup and "Welcome to Forever Codex" or "Codex Options")
 	y = y - 20
-	w.char = W.Text(f, W.WHITE)
-	W.Place(w.char, f, 0, y, WIDTH)
-	y = y - 30
-	w.zone = picker(f, y, "Where to level", function(dir)
-		P.SetRouteZone(step(zoneKeys(), P.GetRouteZone(), dir))
-		recompute()
-	end)
+	if isSetup then
+		w.intro = W.Line(f, 12, W.TEXT, "LEFT", true)
+		w.intro:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+		w.intro:SetWidth(WIDTH)
+		w.intro:SetText("Codex is ready to help guide your adventure. It tells you what to do next as you play, and you stay in control. Two quick choices to start (you can change them later in Codex Options):")
+		y = y - 44
+	end
+	w.char = W.Line(f, 12, W.DIM, "LEFT")
+	w.char:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+	w.char:SetWidth(WIDTH)
 	y = y - 26
-	w.style = picker(f, y, "How to play", function(dir)
-		P.SetStyle(step(activeStyles(), P.GetStyle(), dir))
-		recompute()
-	end)
-	y = y - 30
-	w.sysHead = W.Text(f, W.GREY)
-	W.Place(w.sysHead, f, 0, y, WIDTH)
-	w.sysHead:SetText("Let Codex also look out for")
-	y = y - 20
+
+	w.routeHead = W.Section(f, "YOUR ROUTE", 0, y, WIDTH)
+	y = y - 24
+	w.zone = dropdownRow(f, y, "Where to level", function(key) P.SetRouteZone(key); recompute() end)
+	y = y - W.ROW_H_DROP
+	w.style = dropdownRow(f, y, "How to play", function(key) P.SetStyle(key); recompute() end)
+	y = y - W.ROW_H_DROP - 2
+
+	-- the systems Codex can consider (only those that exist: planned ones are not offered)
 	w.sys = {}
+	local sysShown = false
 	for _, s in ipairs(R.Systems()) do
 		if not s.planned then
-			local b = toggle(f, y, function()
-				P.ToggleSystem(s.key)
-				recompute()
-			end)
-			b.sysKey, b.sysLabel = s.key, s.label
+			if not sysShown then
+				w.sysHead = W.Section(f, isSetup and "ALSO LOOK OUT FOR" or "WHAT CODEX DOES", 0, y, WIDTH)
+				y = y - 24
+				sysShown = true
+			end
+			local b = W.CheckRow(f, 0, y, WIDTH, function() P.ToggleSystem(s.key); recompute() end)
+			b.sysKey, b.sysLabel, b.sysDesc = s.key, s.label, s.desc
+			b.text = b.label
 			w.sys[#w.sys + 1] = b
-			y = y - 22
+			y = y - W.ROW_H_CHECK
 		end
 	end
+
 	if isSetup then
 		w.start = W.Button(f, 120, 24, "Start", function()
 			P.FinishSetup()
@@ -134,43 +106,42 @@ function UI.BuildSetup(parent, mode)
 		end)
 		w.start:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y - 14)
 	else
-		y = y - 6
-		w.nav = toggle(f, y, function() P.SetNavigation(not P.NavigationOn()); recompute() end)
-		y = y - 22
-		w.arrow = toggle(f, y, function() P.SetArrow(not P.ArrowOn()) end)
-		y = y - 26
-		local function cycle(list, current, dir) local keys = {} for _, e in ipairs(list) do keys[#keys + 1] = e.key end return step(keys, current, dir) end
-		w.arrowStyle = picker(f, y, "Arrow style", function(dir) P.SetArrowStyle(cycle(ns.Arrow.STYLES, ns.Arrow.Style().key, dir)); ns.Arrow.ApplyStyle(); UI.Refresh() end)
-		y = y - 26
-		w.arrowColor = picker(f, y, "Arrow colour", function(dir) P.SetArrowColor(cycle(ns.Arrow.COLORS, ns.Arrow.Color().key, dir)); ns.Arrow.ApplyStyle(); UI.Refresh() end)
-		y = y - 30
-		w.blizz = toggle(f, y, function() P.SetHideBlizzardTracker(not P.HideBlizzardTracker()); ns.BlizzardTracker.Apply() end)
-		y = y - 22
-		w.worldMap = toggle(f, y, function() P.SetWorldMapButton(not P.WorldMapButtonOn()); ns.WorldMapButton.Apply() end)
-		y = y - 22
-		w.hardcore = toggle(f, y, function() P.SetHardcore(not P.IsHardcore()); recompute() end)
-		y = y - 26
-		w.party = picker(f, y, "Party news", function(dir) P.SetPartyNotify(step(P.PARTY_MODES, P.PartyNotify(), dir)) end)
-		y = y - 30
+		if not sysShown then
+			w.sysHead = W.Section(f, "WHAT CODEX DOES", 0, y, WIDTH)
+			y = y - 24
+		end
+		w.nav = W.CheckRow(f, 0, y, WIDTH, function() P.SetNavigation(not P.NavigationOn()); recompute() end)
+		w.nav.text = w.nav.label
+		y = y - W.ROW_H_CHECK
+		w.hardcore = W.CheckRow(f, 0, y, WIDTH, function() P.SetHardcore(not P.IsHardcore()); recompute() end)
+		w.hardcore.text = w.hardcore.label
+		y = y - W.ROW_H_CHECK
+		w.party = dropdownRow(f, y, "Party news", function(key) P.SetPartyNotify(key) end)
+		y = y - W.ROW_H_DROP - 4
 		w.again = W.Button(f, 150, 22, "Run setup again", function() P.ReopenSetup(); UI.ShowPage("codex") end)
 		w.again:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+		w.againHelp = W.Line(f, 11, W.DIM, "LEFT")
+		w.againHelp:SetPoint("LEFT", w.again, "RIGHT", 10, 0)
+		w.againHelp:SetText("Shows the welcome choices again.")
 	end
 
 	local function refresh()
 		local ctx = ns.State.ctx
 		w.char:SetText(ctx and ns.Presenter.Header(ctx) or "")
-		w.zone:SetText(zoneLabel(P.GetRouteZone()))
-		w.style:SetText(styleLabel(P.GetStyle()))
-		for _, b in ipairs(w.sys) do b:SetOn(P.IsSystemOn(b.sysKey), b.sysLabel) end
+		w.zone:SetOptions(zoneOptions())
+		w.zone:SetValue(P.GetRouteZone())
+		w.zone.help:SetText(ZONE_HELP)
+		w.style:SetOptions(styleOptions())
+		w.style:SetValue(P.GetStyle())
+		local st = R.Strategy(P.GetStyle())
+		w.style.help:SetText(STYLE_HELP[P.GetStyle()] or (st and st.desc) or "")
+		for _, b in ipairs(w.sys) do b:SetOn(P.IsSystemOn(b.sysKey), b.sysLabel, b.sysDesc) end
 		if not isSetup then
-			w.nav:SetOn(P.NavigationOn(), "Waypoint follows what Codex recommends")
-			w.arrow:SetOn(P.ArrowOn(), "Small direction arrow")
-			w.arrowStyle:SetText(ns.Arrow.Style().label)
-			w.arrowColor:SetText(ns.Arrow.Color().label)
-			w.blizz:SetOn(P.HideBlizzardTracker(), "Hide the game's quest tracker")
-			w.worldMap:SetOn(P.WorldMapButtonOn(), "Codex button on the world map")
-			w.hardcore:SetOn(P.IsHardcore(), "This is a Hardcore character")
-			w.party:SetText(PARTY_LABEL[P.PartyNotify()] or P.PartyNotify())
+			w.nav:SetOn(P.NavigationOn(), "Move the map waypoint for me", "Codex points the game's waypoint at your current target. A waypoint you set yourself is left alone.")
+			w.hardcore:SetOn(P.IsHardcore(), "Hardcore character", "Codex will never suggest a shortcut that needs you to die.")
+			w.party:SetOptions(PARTY_OPTIONS)
+			w.party:SetValue(P.PartyNotify())
+			w.party.help:SetText(P.PartyNotify() == "off" and "Nothing about your party is shown." or "A card shows what your party members have finished.")
 		end
 	end
 	local self = { frame = f, Refresh = refresh, w = w }

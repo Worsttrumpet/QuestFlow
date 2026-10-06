@@ -951,6 +951,8 @@ do
 	check(ns.State.computeCount == before, "not before the short delay")
 	ns.State.Tick(0.5)
 	check(ns.State.computeCount == before + 1, "a burst of 25 events costs exactly one recompute")
+	if ns.UI.options then ns.UI.options:Hide() end                       -- (a first-run character sees its setup panel at login: close it, this is about a CLOSED window)
+	if ns.UI.frame then ns.UI.frame:Hide() end
 	ns.State.Tick(5)
 	check(ns.State.computeCount == before + 1, "an idle, closed window does not recompute")
 	W.char.level = 26
@@ -1362,7 +1364,7 @@ do
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
 	H.fake = dofile(dir .. "/fake_questiedb.lua")
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua", "spell_lifecycle_tests.lua", "spell_purchase_tests.lua", "timer_tests.lua", "area_tests.lua", "planner_flow_tests.lua", "quest_source_tests.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua", "spell_lifecycle_tests.lua", "spell_purchase_tests.lua", "ui_roles_tests.lua", "timer_tests.lua", "area_tests.lua", "planner_flow_tests.lua", "quest_source_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

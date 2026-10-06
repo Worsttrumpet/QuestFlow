@@ -97,9 +97,10 @@ do
 	local texts = {}
 	for _, f in ipairs(W.frames) do for _, fs in ipairs(f.__regions or {}) do if fs.__text then texts[#texts + 1] = fs.__text end end end
 	local all = table.concat(texts, "\n")
-	check(not all:find("Keeps you progressing", 1, true) and not all:find("Best use of your time", 1, true) and not all:find("Why", 1, true), "no 'why' text is drawn in the window")
-	check(ns.Presenter.Card(ns.State.plan, ns.State.ctx).now.why == "Keeps you progressing where you are", "the reason is still computed (for /codex report)")
-	check(c.nowWhy == nil, "the page has no 'why' line at all")
+	check(c.nowWhy.__text == "Why: Keeps your current quests moving where you are.", "the window draws ONE short 'Why:' line under the action (0.7.8)  [" .. tostring(c.nowWhy.__text) .. "]")
+	check(not all:find("Keeps you progressing", 1, true) and not all:find("Best use of your time", 1, true), "and it is the player-facing wording, not the planner's report sentence")
+	check(ns.Presenter.Card(ns.State.plan, ns.State.ctx).now.why == "Keeps you progressing where you are", "the planner's own reason is still computed (for /codex report)")
+	check(c.nowWhy ~= nil and ns.Presenter.Card(ns.State.plan, ns.State.ctx).now.whyPlayer ~= nil, "the page has a why line and the card carries the player-facing reason")
 	local text
 	rawset(ns.UI, "ShowReport", function(t) text = t end)
 	H.slash("report")
@@ -235,7 +236,8 @@ do
 	ns.State.Recompute()
 	ns.UI.Open("codex")
 	local c = ns.UI.main.codex
-	check(c.nowTitle.__font == nil and text(c.nowTitle) ~= "" and c.nowBox.__h >= 56, "without the font file the text keeps its normal size and the card still lays out")
+	local probe = ns.Widgets.Line(ns.UI.frame, 16, ns.Widgets.WHITE, "LEFT")       -- (the tracker is built at login now, before the font went missing: a NEW line shows what happens without it)
+	check(probe.__font == nil and text(c.nowTitle) ~= "" and c.nowBox.__h >= 56, "without the font file the text keeps its normal size and the card still lays out")
 	check(ns.Widgets.Font(c.nowTitle, 16) == nil, "W.Font reports that it could not size it")
 	check(#ns.errors == 0, "no errors")
 	-- the stub records its own bookkeeping in fields named __x; a real FontString has none, so the real code must never read them
@@ -539,10 +541,12 @@ do
 	local UI, mm = ns.UI, ns.MinimapButton.button
 	check(mm.__scripts.OnClick ~= nil, "(setup) the button has a click handler")
 	UI.frame:Hide()
+	if UI.options then UI.options:Hide() end
 	mm.__scripts.OnClick(mm, "LeftButton")
-	check(UI.frame.__shown and UI.options == nil, "left click shows the tracker (and does not open the options)")
+	check(UI.frame.__shown and (UI.options == nil or not UI.options.__shown), "left click shows the tracker (and does not open the options)")
 	mm.__scripts.OnClick(mm, "LeftButton")
 	check(not UI.frame.__shown, "and hides it again")
+	if UI.options then UI.options:Hide() end                                  -- (a first-run character's setup panel opened at login)
 	mm.__scripts.OnClick(mm, "RightButton")
 	check(UI.options and UI.options.__shown and UI.optionsKey == "options", "right click opens the options window")
 	mm.__scripts.OnClick(mm, "RightButton")
@@ -634,7 +638,7 @@ do
 	check(ns3.UI.frame.__shown and ns3.Prefs.TrackerShown(), "left click on the minimap button shows it again")
 	-- before setup is finished the tracker is not forced open
 	local fresh = boot({ char = { level = 6 }, synthetic = true })
-	check(fresh.UI.frame == nil and fresh.UI.options == nil, "a brand-new character is not shown a window until it asks for one")
+	check(fresh.UI.options and fresh.UI.options.__shown and fresh.UI.optionsKey == "options" and (fresh.UI.frame == nil or not fresh.UI.frame.__shown), "a brand-new character is shown the setup panel by itself at login (no minimap click needed); the tracker waits for Start")
 	check(#ns.errors == 0 and #ns2.errors == 0 and #ns3.errors == 0, "no errors")
 end
 
@@ -663,9 +667,11 @@ do
 	ns.Prefs.SetArrowStyle("nonsense"); ns.Prefs.SetArrowColor("nonsense")
 	check(A.Style().key == "head" and A.Color().key == "gold", "an unknown saved choice falls back to the default")
 	-- the picker in the options changes and saves it
-	ns.UI.Open("options")
-	local w = ns.UI.main.settingsPanel.w
-	check(w.arrowStyle ~= nil and w.arrowColor ~= nil, "the settings page has the two pickers")
+	ns.UI.Open("themes")
+	local w = ns.UI.main.themes
+	check(w.arrowStyle ~= nil and w.arrowColor ~= nil, "the Themes page has the two arrow dropdowns")
+	w.arrowColor.rows[3].__scripts.OnClick(w.arrowColor.rows[3])
+	check(ns.Prefs.ArrowColor() == "green" and ns.Arrow.Color().key == "green", "choosing a colour in the dropdown saves it and applies it")
 	check(#ns.errors == 0, "no errors")
 end
 
@@ -718,7 +724,7 @@ do
 	-- check boxes
 	UI.ShowPage("options")
 	local panel = UI.main.settingsPanel
-	check(panel.w.nav.checkTex ~= nil and panel.w.nav.text.__text == "Waypoint follows what Codex recommends", "settings are check boxes with plain labels (no [x] text)")
+	check(panel.w.nav.checkTex ~= nil and panel.w.nav.text.__text == "Move the map waypoint for me", "settings are check boxes with plain labels (no [x] text)")
 	check(panel.w.nav.on == ns.Prefs.NavigationOn(), "and the box follows the setting")
 	panel.w.nav.__scripts.OnClick(panel.w.nav)
 	check(panel.w.nav.on == ns.Prefs.NavigationOn() and panel.w.nav.on == false, "clicking flips it")
@@ -843,7 +849,8 @@ do
 	for _, it in ipairs(card.also or {}) do check(it.quest ~= 503 and it.quest ~= 505, "dungeon quests are not listed as ALSO COMPLETE THIS") end
 	check(c.dgBox.__shown ~= false and c.dgLabel.__text == "DUNGEON QUESTS", "the window draws a DUNGEON QUESTS card")
 	check(c.dgBox.__color ~= nil or true, "(card colour is the red style)")
-	check(ns.Widgets.STYLE_DUNGEON.accent[1] > ns.Widgets.STYLE_DUNGEON.accent[2] + 0.4, "the card style is red")
+	check(c.dgBox.role == "dungeon" and ns.Theme.Style("dungeon").marker == "D", "the card is the 'dungeon' role (its own colour AND a D marker: colour is not the only signal)")
+	check(ns.Theme.Style("dungeon").accent[1] ~= ns.Theme.Style("urgent").accent[1] or ns.Theme.Style("dungeon").accent[2] ~= ns.Theme.Style("urgent").accent[2], "and it no longer looks like the timed-quest card")
 	local all = {}
 	for _, r in ipairs(c.dgRows) do all[#all + 1] = r.__text or "" end
 	local flat = table.concat(all, "\n")
