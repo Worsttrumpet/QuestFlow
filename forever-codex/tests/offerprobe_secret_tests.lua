@@ -67,6 +67,7 @@ for _, withApi in ipairs({ false, true }) do
 		check(ns.Planner.OfferState({ kind = "ACCEPT", quest = 1 }) == "UNKNOWN" and ns.State.plan.now and ns.State.plan.now.id == "Q:1:ACCEPT", "the pickup is still UNKNOWN (never AVAILABLE, never held back) and stays NOW")
 		local text = table.concat(ns.OfferProbe.ReportLines(), "\n")
 		check(#text > 0 and not text:find(SECRET, 1, true), "the report builds and does not contain the value")
+		check(text:find("unreadable (secret) values this save: NPC names or GUIDs 1", 1, true) ~= nil, "and the report COUNTS the unreadable NPC (so a dungeon report shows it happened)")
 		removeSecrets()
 	end
 

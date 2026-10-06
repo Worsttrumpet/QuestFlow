@@ -8,7 +8,8 @@
 -- WHAT IT READS (nothing is assumed; each call is made through pcall, only if it exists, and tallied PROVEN / UNPROVEN / FAILED / ABSENT):
 --   GOSSIP_SHOW      C_GossipInfo.GetAvailableQuests / GetActiveQuests / GetOptions (PROVEN on Forever, build 70205: every answer carried quest ids; the older
 --                    GetNumGossip* / GetGossip* functions and GetAvailableQuestID are proven ABSENT and are no longer called)
---   QUEST_GREETING   GetNumAvailableQuests / GetAvailableTitle, GetNumActiveQuests / GetActiveTitle (the event has not fired on Forever: recorded, never used as evidence)
+--   QUEST_GREETING   GetNumAvailableQuests / GetAvailableTitle, GetNumActiveQuests / GetActiveTitle (PROVEN on Forever, 0.8.1 report: the event fires and the counts and TITLES answer, with NO quest ids:
+--                    so it is recorded and never used as listing evidence, because a title is not an id)
 --   QUEST_DETAIL     GetQuestID, GetTitleText: the quest whose offer dialog is open (an explicit offer)
 --   the NPC          UnitName("npc") and the creature id parsed from UnitGUID("npc"); the raw GUID is never stored
 --
@@ -262,7 +263,7 @@ local function gossipAnswers()
 	return out
 end
 
--- QUEST_GREETING has not fired on Forever yet (its payload is unproven): its titles are recorded as observations only and are never used as listing evidence.
+-- QUEST_GREETING fires on Forever (0.8.1 report, an NPC with a greeting frame) and answers counts and titles but NO quest ids: its titles are recorded as observations only and are never used as listing evidence.
 local function greetingAnswers()
 	local out = {}
 	for _, spec in ipairs({ { "available", "GetNumAvailableQuests", "GetAvailableTitle" }, { "active", "GetNumActiveQuests", "GetActiveTitle" } }) do
@@ -614,6 +615,9 @@ function O.ReportLines()
 	for _ in pairs(s.npcs) do nn = nn + 1 end
 	L[#L + 1] = string.format("  dialogs observed: %d saved (cap %d) | quests with positive evidence: %d (cap %d) | NPC contexts: %d (cap %d) | listed entries %d (with a quest id %d, title only %d) | empty answers %d",
 		#s.obs, O.MAX_OBS, nq, O.MAX_QUESTS, nn, O.MAX_NPCS, s.stats.entries or 0, s.stats.entriesWithId or 0, s.stats.entriesTitleOnly or 0, s.stats.emptyAnswers or 0)
+	-- values the client would not let addons read (secret values, 0.8.1): counted so a report says whether it happened. They are UNKNOWN, never empty and never offers.
+	L[#L + 1] = string.format("  unreadable (secret) values this save: NPC names or GUIDs %d | whole lists %d | API samples %s",
+		s.stats.npcUnreadable or 0, s.stats.unreadableAnswers or 0, (function() local n = 0 for _, e in pairs(s.proof or {}) do n = n + (e.secret or 0) end return tostring(n) end)())
 	if #s.obs == 0 then
 		L[#L + 1] = "  no NPC dialog observed yet: open an NPC's window (one that offers quests, and one that offers none)"
 		return L
