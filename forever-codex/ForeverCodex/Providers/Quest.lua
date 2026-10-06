@@ -364,14 +364,16 @@ function Q.Generate(ctx, env)
 			else
 				out[#out + 1] = progressAction(view, entry, pinned, ctx)
 			end
+		elseif skipped["Q:" .. id] == true then
+			-- A SKIP WINS over "added" (0.8.0): the player's latest explicit choice is what counts, and the only way back is /codex unskip or adding it again (which clears the skip).
+			-- This check used to come AFTER the pinned branch, so a quest the player had added and then skipped stayed in the route as PLAYER_ADDED.
+			bump(stats, "skipped")
 		elseif pinned then
 			if not ctx.isCompleted(id) then
 				out[#out + 1] = acceptAction(view, true, ctx)
 			else
 				bump(stats, "completed")
 			end
-		elseif skipped["Q:" .. id] == true then
-			bump(stats, "skipped")
 		else
 			local ok, why = Q.Eligibility(view, ctx, strategy)
 			if not ok then

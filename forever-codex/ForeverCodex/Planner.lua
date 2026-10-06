@@ -251,7 +251,7 @@ end
 
 --- Can the Planner sequence this action at all? Returns true, or false + a reason key (for diagnostics).
 local function usable(a)
-	if a.skip and a.skip.logical and not a.pinned then return false, "skipped" end
+	if a.skip and a.skip.logical then return false, "skipped" end       -- a skip wins over "added": a skipped action is never sequenced
 	if a.contract == nil or a.optional then return true end
 	if a.state == "UNKNOWN" and a.stateWhy == "LOG_UNAVAILABLE" then return true end
 	-- a quest the player ADDED is the player's call: the data's requirements (ATT, unverified on Forever) do not veto it

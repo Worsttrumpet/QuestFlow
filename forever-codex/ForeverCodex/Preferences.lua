@@ -307,8 +307,22 @@ function P.HereRadius() return P.Char().hereRadius end
 --- Skip keys are strings such as "Q:907" (a quest) or "FP:25" (a flight node).
 function P.Skip(key)
 	if type(key) ~= "string" then return false end
-	P.Char().skipped[key] = true
+	local c = P.Char()
+	c.skipped[key] = true
+	-- skipping a quest the player had ADDED is a later, explicit choice: it takes the quest out of "added" (the mirror of P.Add clearing a skip), so it cannot stay pinned in the route
+	local id = tonumber(key:match("^QT?:(%d+)"))
+	if id then c.added[id] = nil end
 	return true
+end
+
+--- Resolves a save in which the same quest is both ADDED and SKIPPED (a skip used to leave it pinned): the skip wins, as it would have if the player's choices had been applied in order. Returns how many were fixed.
+function P.NormalizeOverrides()
+	local c = P.Char()
+	local n = 0
+	for id in pairs(c.added) do
+		if c.skipped["Q:" .. id] == true or c.skipped["QT:" .. id] == true then c.added[id] = nil n = n + 1 end
+	end
+	return n
 end
 
 function P.Unskip(key) P.Char().skipped[key] = nil end

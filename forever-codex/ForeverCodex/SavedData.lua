@@ -108,6 +108,7 @@ function SD.PrepareLogin(force)
 	P.SetCharKey(SD.DetectCharKey())
 	SD.Migrate()
 	SD.ActivatePartitions()
+	P.NormalizeOverrides()                                 -- a quest both added and skipped (saved by a build that let the skip lose): the skip wins
 end
 
 --- The key a freshly created partition table must carry (modules call this when they create their store).

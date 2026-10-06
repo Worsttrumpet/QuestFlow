@@ -232,7 +232,7 @@ function E.Candidates(ctx)
 			bump(env.stats, "hardcore")
 		elseif strategy.allow and not strategy.allow[a.type] then
 			bump(env.stats, "style")
-		elseif prefs.skipped[a.skipKey] and not a.pinned then
+		elseif prefs.skipped[a.skipKey] then                 -- (a skip wins over "added": a skipped action is never a candidate)
 			bump(env.stats, "skipped")
 		elseif env.questLog.full and a.type == "QUEST" and a.kind == "ACCEPT" then
 			bump(env.stats, "logFull")                    -- a full quest log cannot take another quest: never recommend one
