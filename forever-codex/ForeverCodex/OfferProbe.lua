@@ -2,8 +2,23 @@
 --
 -- WHY. Codex knows that a quest exists and where it was recorded (QuestieDB / ATT / Codex's observed pack). None of that proves THIS character is
 -- offered it: at Yorana Windyreed, Codex recommended two pickups and her window offered nothing. This probe records what the client itself reports
--- when a dialog opens, so the difference between "known to exist" and "offered to this character just now" can be seen, and (later, if the probe
--- proves useful) used. It uses no planner input and gives the planner no output: no candidate, score, skip, filter or actionability changes.
+-- when a dialog opens, so the difference between "known to exist" and "offered to this character just now" is visible AND used.
+--
+-- WHO USES IT (since 0.6.x; the evidence is a decision input, not only a diagnostic). The Planner reads it through O.OfferEvidence (Planner.lua Pl.OfferState):
+--   * a pickup whose giver was asked at the character's CURRENT progression and did not offer it is HELD BACK (never a candidate, never a stop) until the evidence goes stale or the client offers it;
+--   * a pickup with no client evidence is UNKNOWN: it is discounted a little and, when far, is only a POSSIBLE pickup (never NOW); UNKNOWN is never read as "unavailable";
+--   * client evidence that the quest was offered lifts that distance limit and the discount;
+--   * a quest no pack knows, offered by the client, becomes an "offered here" action with no location (Providers/Quest.lua, O.FreshOffers).
+-- What it never does: turn "not observed" into "does not exist", write a class / race / prerequisite rule, or invent a location. QuestieDB / ATT stay supporting data: a direct,
+-- current client observation outranks them.
+--
+-- THE RULES (0.8.5), all of them about how far a piece of evidence may be trusted:
+--   * POSITIVE evidence is kept as history and is not aged by progress alone. It is routing-grade (OBSERVED) only while nothing newer contradicts it.
+--   * A NEWER listing from the quest's giver that omits the quest overrides the older positive: NOT_OFFERED while that listing is current (read at the character's present progression);
+--     when that listing goes stale the result is UNKNOWN. The old positive never comes back to life on its own (OBSERVED again needs a new observation that lists the quest).
+--   * Positive evidence counts for the quest's GIVER only when the NPC that produced it is that giver: the same creature id, or the same name when an id is missing on either side. Two
+--     known creature ids that differ never match, even with an identical name. Evidence from a different NPC is kept for diagnostics, reads as UNKNOWN (never NOT_OFFERED: we do not know
+--     what it means) and is explained by O.Explain.
 --
 -- WHAT IT READS (nothing is assumed; each call is made through pcall, only if it exists, and tallied PROVEN / UNPROVEN / FAILED / ABSENT):
 --   GOSSIP_SHOW      C_GossipInfo.GetAvailableQuests / GetActiveQuests / GetOptions (PROVEN on Forever, build 70205: every answer carried quest ids; the older
@@ -439,16 +454,28 @@ function O.FreshOffers(ctx)
 	return out
 end
 
---- The latest listing recorded for an NPC (by creature id, else by exact name), or nil.
+local function plainName(n)
+	if type(n) ~= "string" or n == "" then return nil end
+	return (n:gsub("%s*<.*>%s*$", ""):lower())             -- (quest data may carry the guild line: "High Priest Rohan <Priest Trainer>")
+end
+
+--- How two NPCs relate, as the data names them: "ID" (the same creature id), "NAME" (the same name, and an id is missing on at least one side), "MISMATCH" (two known creature ids
+-- that differ, even when the names are identical; or, with no ids to compare, two different names), or nil (nothing to compare: no id on both sides and no name on both).
+function O.Relate(aId, aName, bId, bName)
+	if aId and bId then return aId == bId and "ID" or "MISMATCH" end
+	local an, bn = plainName(aName), plainName(bName)
+	if an and bn then return an == bn and "NAME" or "MISMATCH" end
+	return nil
+end
+
+--- The latest listing recorded for an NPC, matched by creature id; by name ONLY when an id is missing on at least one side (two different known ids never match, whatever the names), or nil.
 function O.NpcContext(npcId, npcName)
 	local s = store()
 	if not s then return nil end
 	local best
-	local function consider(r) if r and (not best or (r.last or 0) > (best.last or 0)) then best = r end end
-	if npcId then consider(s.npcs["id:" .. npcId]) end
-	if npcName then
-		consider(s.npcs["name:" .. npcName])
-		for _, r in pairs(s.npcs) do if r.name == npcName then consider(r) end end      -- the same NPC seen once with an id and once without
+	for _, r in pairs(s.npcs) do
+		local rel = O.Relate(npcId, npcName, r.id, r.name)
+		if (rel == "ID" or rel == "NAME") and (not best or (r.last or 0) > (best.last or 0)) then best = r end
 	end
 	return best
 end
@@ -473,14 +500,21 @@ function O.OfferEvidence(qid, giverNpcId, giverName)
 	end
 	local negative = ctxKind == "EMPTY_AT_NPC" or ctxKind == "NOT_LISTED_AT_NPC"
 	local q = O.QuestEvidence(qid)
-	if q then
-		-- positive evidence is kept whatever the NPC lists later (it may have been accepted or completed since); a NEWER contrary listing is reported beside it.
-		-- Only a newer contrary listing read at the CURRENT progression contradicts it (a quest listed before and now omitted with nothing changed).
+	-- a positive observation is about the quest's GIVER only when the NPC that produced it is that giver (nothing to compare = no reason to doubt it)
+	local rel = q and O.Relate(giverNpcId, giverName, q.npcId, q.npcName) or nil
+	if q and rel ~= "MISMATCH" then
+		-- positive evidence is kept as history whatever happens later. A NEWER listing from the giver that omits the quest overrides it: NOT_OFFERED while that listing is current
+		-- (read at the character's present progression), UNKNOWN once it is stale. The old positive never resurrects itself when the negative ages out.
 		local newer = negative and (av.seq or 0) > (q.seq or 0) and ctxKind or nil
+		if newer and not current then
+			return { kind = "SUPERSEDED", via = q.via, npc = q.npcName, last = q.last, n = q.n, by = q.by, newer = newer, stale = true }
+		end
 		return { kind = "OBSERVED", via = q.via, npc = q.npcName, last = q.last, n = q.n, by = q.by, newer = newer, contradicted = (newer ~= nil and current) or nil }
 	end
 	if ctxKind == "LISTED_AT_NPC" then return { kind = "OBSERVED", via = "AVAILABLE_LIST", npc = ctx.name, last = ctxAt, n = 1, by = { AVAILABLE_LIST = 1 } } end
 	if negative then return { kind = ctxKind, npc = ctx.name, last = ctxAt, stale = not current or nil } end
+	-- the quest was offered, but by a DIFFERENT known NPC than the one its data names: kept for the report, never routing evidence and never a negative (what it means is unknown)
+	if q then return { kind = "OBSERVED_ELSEWHERE", via = q.via, npc = q.npcName, npcId = q.npcId, last = q.last, n = q.n, by = q.by, expectedNpc = giverName, expectedId = giverNpcId } end
 	return nil
 end
 
@@ -507,7 +541,11 @@ function O.Explain(qid, giverNpcId, giverName)
 			noStamp = av.prog == nil, fresh = av.prog ~= nil and av.prog == stamp }
 	end
 	local q = O.QuestEvidence(qid)
-	if q then out.positive = { via = q.via, npcName = q.npcName, npcId = q.npcId, last = q.last, n = q.n, prog = q.prog, by = q.by } end
+	if q then
+		out.positive = { via = q.via, npcName = q.npcName, npcId = q.npcId, last = q.last, n = q.n, prog = q.prog, by = q.by,
+			-- how the NPC that produced it relates to the giver the quest data names: ID | NAME | MISMATCH | nil (nothing comparable)
+			relation = O.Relate(giverNpcId, giverName, q.npcId, q.npcName) }
+	end
 	return out
 end
 

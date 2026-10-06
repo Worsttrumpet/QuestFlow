@@ -328,12 +328,18 @@ function D.PickupEvidenceLines(a, role)
 	local act = Pl.Actionability(a)
 	local meaning = state == "OBSERVED" and "the client has offered it to this character"
 		or state == "NOT_OFFERED" and "held back: the giver was asked at the current progression and did not offer it"
+		or (act == "UNKNOWN" and f.ex and f.ex.positive) and "an earlier offer exists but it is not current evidence for this giver (see below): availability is not proven either way"
 		or "availability is not proven either way"
 	L[#L + 1] = string.format("    actionability: %s | planner offer state: %s (%s)", tostring(act), tostring(state), meaning)
 	-- positive client evidence
 	local pos = ex and ex.positive
 	if pos then
 		L[#L + 1] = string.format("    positive client offer: yes | %s | seen at %s | %d time(s), last %s | progression when seen: %s", tostring(pos.via), npcText(pos.npcId, pos.npcName), pos.n or 1, ageOf(pos.last), tostring(pos.prog or "not stored"))
+		if pos.relation == "MISMATCH" then
+			L[#L + 1] = string.format("    NOT USED as routing evidence: it was seen at a DIFFERENT NPC than the one the quest data names (%s); the history is kept, availability from the data's giver is UNKNOWN (not negative)", npcText(f.gnpc, f.gname))
+		elseif ex.evidence and ex.evidence.kind == "SUPERSEDED" then
+			L[#L + 1] = "    NOT USED as current evidence: a newer dialog from the giver omitted this quest, and that dialog has since gone stale (progress): UNKNOWN until the quest is offered or the giver is asked again; the earlier offer is history"
+		end
 	else
 		L[#L + 1] = "    positive client offer: none (no quest dialog or available list for this quest has been recorded)"
 	end

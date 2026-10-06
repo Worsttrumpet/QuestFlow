@@ -1094,8 +1094,10 @@ do
 	_G.GetTitleText = function() return "At Talaanis" end
 	O.OnEvent("QUEST_DETAIL")
 	local seen = Pl.OfferEvidence(pickup(203))
-	check(seen and seen.kind == "OBSERVED" and seen.via == "QUEST_DETAIL" and seen.npc == "Fendaal Windstone", "a quest opened at ANOTHER NPC is OBSERVED there (the empty dialog at its giver does not invalidate it)")
-	check(Pl.Actionability(pickup(203)) == "OBSERVED", "and its actionability is OBSERVED")
+	-- 0.8.5: seen at a DIFFERENT NPC than the quest's data giver: kept as history, but not routing evidence for the giver (UNKNOWN, never a negative)
+	-- (here the giver's own empty dialog is also on file: that is the GIVER's contextual negative, not something the other NPC's observation turned into)
+	check(seen and seen.kind == "EMPTY_AT_NPC" and O.QuestEvidence(203) and O.QuestEvidence(203).npcName == "Fendaal Windstone", "a quest opened at ANOTHER NPC is kept as history there, but is not evidence about its giver; the giver's own empty dialog is what counts")
+	check(Pl.Actionability(pickup(203)) == "UNKNOWN", "and its actionability is UNKNOWN, not OBSERVED")
 
 	-- 1: QUEST_DETAIL creates positive actionability; 7: a positive observation upgrades a contextual negative
 	check(Pl.Actionability(pickup(201)) == "UNKNOWN" and Pl.OfferEvidence(pickup(201)).kind == "EMPTY_AT_NPC", "before: contextual negative only")
@@ -1113,7 +1115,7 @@ do
 	gossip({ { questID = 303, title = "Elsewhere" }, { questID = 304, title = "Another" } }, {})
 	check(Pl.OfferEvidence({ kind = "ACCEPT", quest = 303 }).kind == "OBSERVED" and Pl.OfferEvidence({ kind = "ACCEPT", quest = 303 }).via == "AVAILABLE_LIST", "a quest id inside a client available list is OBSERVED via AVAILABLE_LIST")
 	local nl = Pl.OfferEvidence(pickup(203))
-	check(nl.kind == "OBSERVED", "a quest already observed stays OBSERVED even if a later list at its giver omits it (positive evidence is never erased)")
+	check(nl.kind == "NOT_LISTED_AT_NPC" and O.QuestEvidence(203) ~= nil, "a later complete list at its giver that omits it is the giver's own contextual negative; the offer seen elsewhere stays on file (history is never erased)")
 	-- a quest from that giver that was never observed and is not in the complete list: contextual negative
 	check(Pl.OfferEvidence(pickup(206)).kind == "NOT_LISTED_AT_NPC", "a complete id list that omits the quest is NOT_LISTED_AT_NPC (contextual)")
 	check(Pl.Actionability(pickup(206)) == "UNKNOWN", "...and still UNKNOWN")
@@ -1355,7 +1357,9 @@ do
 	-- ...and that contradiction in turn goes stale with the next progress
 	ns.Journey.OnQuestTurnedIn(998, 100)
 	ns.State.Recompute()
-	check(Pl.OfferState(pickup(301)) == "OBSERVED", "5: once progress changes again the contradiction is stale and the earlier positive stands")
+	-- 0.8.5: ...and the old positive does NOT come back: a stale negative leaves UNKNOWN, never OBSERVED (the offer is history until it is observed again)
+	local st6, ev6 = Pl.OfferState(pickup(301))
+	check(st6 == "UNKNOWN" and ev6 and ev6.kind == "SUPERSEDED" and ev6.stale and Pl.Actionability(pickup(301)) == "UNKNOWN", "5: once progress changes again the contradiction is stale: UNKNOWN, the old positive does not resurrect")
 
 	-- an empty dialog (nothing offered) is the same kind of contextual negative, with the same expiry
 	reset()
@@ -1622,12 +1626,13 @@ do
 	check(has(t0, "prerequisites in the data: none known") and has(t0, "not evidence that there is none"), "the missing prerequisite data is stated, without claiming there is none")
 	check(has(t0, "quest giver in quest data: 'Valennia Stormfist' (creature 253844)"), "the giver id the data names is shown")
 
-	-- a fresh EMPTY dialog with the OTHER Valennia (a different creature id, the same name): used by name, and the report says so
-	stubNpc("Valennia Stormfist", 252383)
+	-- a fresh EMPTY dialog at the giver itself (the same creature id): matched by id. (0.8.5: an identical NAME with a DIFFERENT creature id is no longer a match: see
+	-- availability_evidence_tests.lua)
+	stubNpc("Valennia Stormfist", 253844)
 	gossip({})
 	local t1 = text(pickup(93065, "Prepare for Battle", "Valennia Stormfist"))
 	check(has(t1, "negative client evidence: EMPTY_AT_NPC at Valennia Stormfist") and has(t1, "FRESH: read at the current progression " .. stampBefore), "2: a fresh empty listing is reported as FRESH negative evidence at the current stamp")
-	check(has(t1, "matched BY NAME ONLY") and has(t1, "DIFFERENT creature ids") and has(t1, "(creature 252383)") and has(t1, "(creature 253844)"), "4: the by-name match and the two different creature ids are both visible")
+	check(has(t1, "matched by creature id") and has(t1, "(creature 253844)") and not has(t1, "matched BY NAME ONLY"), "4: the match is by creature id and says so")
 	check(has(t1, "current " .. stampBefore .. " | that NPC dialog was read at " .. stampBefore .. " | they MATCH: fresh"), "B: the current stamp, the dialog's stamp and the match are shown")
 	check(has(t1, "planner offer state: NOT_OFFERED"), "(consistent with the planner: a fresh negative holds it)")
 

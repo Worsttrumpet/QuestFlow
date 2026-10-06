@@ -181,16 +181,16 @@ end
 --- What the CLIENT has said about a pickup being offered, reduced to the three states the planner uses (the evidence itself is OfferProbe's):
 --   "OBSERVED"     the client offered it to this character (a quest dialog opened, or an NPC's available list carried its id) and nothing newer contradicts that
 --   "NOT_OFFERED"  the quest giver's dialog, read at the character's CURRENT progression, did not offer it (an empty list, or a complete list without it)
---   "UNKNOWN"      no client evidence, or evidence that progress has made stale (a negative read before a level / turn-in / finished quest)
+--   "UNKNOWN"      no client evidence, or evidence that progress has made stale (a negative read before a level / turn-in / finished quest), or an offer that a newer
+--                  (now stale) listing from the giver withdrew (the old positive does not come back), or an offer seen at a DIFFERENT NPC than the quest's giver
 -- Database knowledge (where it starts, its prerequisites, its level) stays what it was: supporting evidence that makes a pickup ELIGIBLE, never proof that it is offered.
 function Pl.OfferState(a)
 	if not a or a.kind ~= "ACCEPT" or not a.quest then return "UNKNOWN", nil end
+	local ev = Pl.OfferEvidence(a)
 	if Pl.Actionability(a) == "OBSERVED" then
-		local ev = Pl.OfferEvidence(a)
 		if ev and ev.contradicted then return "NOT_OFFERED", ev end
 		return "OBSERVED", ev
 	end
-	local ev = Pl.OfferEvidence(a)
 	if ev and (ev.kind == "EMPTY_AT_NPC" or ev.kind == "NOT_LISTED_AT_NPC") and not ev.stale then return "NOT_OFFERED", ev end
 	return "UNKNOWN", ev
 end
@@ -692,11 +692,15 @@ Pl.HELD_CAP = 20             -- held-back pickups listed in diag.held.list (the 
 function Pl.Actionability(a)
 	if not a or a.kind ~= "ACCEPT" or not a.quest then return "NOT_APPLICABLE" end
 	if ns.State and ns.State.ctx and ns.State.ctx.log and ns.State.ctx.log[a.quest] then return "IN_LOG" end
+	-- the offered-quests probe (OfferProbe) has the say when it holds evidence for this quest: an offer withdrawn by a newer (stale) listing, or made by a different NPC than the quest's
+	-- giver, is history, not proof that the giver offers it (0.8.5)
+	local ev = Pl.OfferEvidence(a)
+	if ev and (ev.kind == "SUPERSEDED" or ev.kind == "OBSERVED_ELSEWHERE") then return "UNKNOWN" end
 	local items = type(ForeverCodexDB) == "table" and ForeverCodexDB.items or nil
 	local seen = type(items) == "table" and type(items.rewards) == "table" and items.rewards[a.quest] or nil
 	if type(seen) == "table" and seen.at == "QUEST_DETAIL" then return "OBSERVED" end
 	-- the offered-quests probe (OfferProbe): the open offer dialog, or an available-quest list that carried the id
-	if ns.OfferProbe and ns.OfferProbe.QuestEvidence(a.quest) then return "OBSERVED" end
+	if ev and ev.kind == "OBSERVED" then return "OBSERVED" end
 	return "UNKNOWN"
 end
 
