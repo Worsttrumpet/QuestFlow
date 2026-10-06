@@ -90,6 +90,56 @@ function O.Resolve(name)
 	return type(v) == "function" and v or nil
 end
 
+-- ---------------------------------------------------------------- secret values (0.8.1)
+--
+-- Real-client finding (0.8.0, a dungeon run): `OfferProbe.lua:119: attempt to index a secret string value (execution tainted by 'ForeverCodex')`. This client can hand an addon a SECRET value
+-- (a string, number or table it will not let addon code read, compare, index or concatenate) for some unit data, and the line that built the report's "sample of what came back" called
+-- `tostring(v):sub(1, 60)` on UnitName("npc"). The same would have happened further down (`pack[1] ~= ""`, `:sub(1, 40)`, `guid:match(...)`). Nothing about the NPC or the dialog is assumed
+-- when a value is unreadable: it is treated as NOT GIVEN, so a listing that cannot be read is never EMPTY (no negative evidence), never LISTED, never an offer; it is recorded as UNREADABLE for the report.
+-- Every value that comes back from the client now goes through these readers, which (a) ask issecretvalue() when the client has it and (b) do the real operation inside pcall, so a secret raises
+-- INSIDE the guard instead of in the probe.
+
+local function isSecret(v)
+	local f = _G.issecretvalue
+	if type(f) == "function" then
+		local ok, r = pcall(f, v)
+		if ok and r == true then return true end
+	end
+	return false
+end
+
+--- A readable, trimmed string, or nil (not a string, empty, secret, or anything that raises).
+local function text(v, max)
+	if type(v) ~= "string" or isSecret(v) then return nil end
+	local ok, r = pcall(function() if v == "" then return nil end return v:sub(1, max or 60) end)
+	return ok and r or nil
+end
+
+--- A readable number, or nil.
+local function num(v)
+	if type(v) ~= "number" or isSecret(v) then return nil end
+	local ok, r = pcall(function() return v + 0 end)
+	return ok and r or nil
+end
+
+--- Whether `v` is nil, without ever raising (comparing a secret value can raise).
+local function isNil(v)
+	local ok, r = pcall(function() return v == nil end)
+	return ok and r or false
+end
+
+--- A short description of what came back, for the report. Never raises, never returns a secret.
+local function sampleOf(v)
+	if type(v) == "table" then
+		if isSecret(v) then return "table (secret)" end
+		local ok, n = pcall(function() return #v end)
+		return ok and ("table(" .. tostring(n) .. ")") or "table (unreadable)"
+	end
+	local t = text(type(v) == "string" and v or (pcall(tostring, v) and select(2, pcall(tostring, v)) or nil), 60)
+	if t then return t end
+	return type(v) .. " (unreadable)"
+end
+
 --- Calls one client function through pcall and tallies the outcome. Returns ok, packed results ({ n = count, ... }) or false, message.
 local function call(name, ...)
 	local fn = O.Resolve(name)
@@ -108,7 +158,7 @@ local function call(name, ...)
 	end
 	local pack = { n = #res - 1 }
 	for i = 2, #res do pack[i - 1] = res[i] end
-	if pack.n == 0 or pack[1] == nil then
+	if pack.n == 0 or isNil(pack[1]) then
 		if e then e.none = (e.none or 0) + 1 end
 	else
 		if e then
@@ -116,26 +166,31 @@ local function call(name, ...)
 			e.b = build()
 			local v = pack[1]
 			-- a sample of what came back, for the report; NEVER for a GUID (only the creature id parsed from it is kept)
-			if name == "UnitGUID" then e.s = "string" else e.s = (type(v) == "table" and ("table(" .. #v .. ")") or tostring(v)):sub(1, 60) end
+			if name == "UnitGUID" then e.s = "string" else e.s = sampleOf(v) end
+			if type(v) ~= "table" and (isSecret(v) or e.s:find("(unreadable)", 1, true)) then e.secret = (e.secret or 0) + 1 end
 		end
 	end
 	return true, pack
 end
 
---- The creature id from a GUID, or nil. The GUID itself is never returned or stored.
+--- The creature id from a GUID, or nil. The GUID itself is never returned or stored. A secret or unreadable GUID gives nil.
 local function creatureId(guid)
-	if type(guid) ~= "string" then return nil end
-	local kind, npc = guid:match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-")
+	if type(guid) ~= "string" or isSecret(guid) then return nil end
+	local ok, kind, npc = pcall(function() return guid:match("^(%a+)%-%d+%-%d+%-%d+%-%d+%-(%d+)%-") end)
+	if not ok then return nil end
 	if (kind == "Creature" or kind == "Vehicle") and npc then return tonumber(npc) end
 	return nil
 end
 
+--- Who the dialog is with: { name, id } from UnitName / UnitGUID of "npc", or nil. Second result: true when the client DID answer but the value could not be read (a secret value), so the dialog is
+-- recorded without an NPC identity (and therefore supplies no per-NPC evidence at all) rather than guessing one.
 local function npcInfo()
 	local ok, pack = call("UnitName", "npc")
-	local name = ok and type(pack[1]) == "string" and pack[1] ~= "" and pack[1]:sub(1, 40) or nil
+	local name = ok and text(pack[1], 40) or nil
 	local okG, g = call("UnitGUID", "npc")
 	local id = okG and creatureId(g[1]) or nil
-	if not name and not id then return nil end
+	local unreadable = (ok and not name and not isNil(pack[1])) or (okG and not id and not isNil(g[1]) and type(g[1]) == "string" and (isSecret(g[1]) or false)) or nil
+	if not name and not id then return nil, unreadable end
 	return { name = name, id = id }
 end
 
@@ -147,28 +202,50 @@ local function sortedKeys(t)
 end
 
 --- One modern-style answer: a table of entries ({ questID, title, questLevel, ... }). kind: "available" | "active" | "options".
+-- Every field is read through the secret-safe readers. A list that cannot be read at all is state UNREADABLE (not EMPTY, not LISTED: it supports neither a positive nor a negative conclusion); an entry
+-- whose quest id and title are both unreadable is left out, which also makes the listing "incomplete" (it can then contradict nothing).
 local function answerFromTable(kind, api, pack, ok)
 	if not ok then return { kind = kind, api = api, state = pack == "absent" and "ABSENT" or "ERROR" } end
 	local list = pack[1]
 	if type(list) ~= "table" then return { kind = kind, api = api, state = "NO_DATA" } end
-	local a = { kind = kind, api = api, n = #list, entries = {} }
-	if #list == 0 then a.state = "EMPTY" else a.state = "LISTED" end
-	for i = 1, math.min(#list, O.MAX_ENTRIES) do
-		local e = list[i]
-		if type(e) == "table" then
-			if i == 1 then a.shape = table.concat(sortedKeys(e), ","):sub(1, 140) end
-			a.entries[#a.entries + 1] = { id = type(e.questID) == "number" and e.questID or nil, title = type(e.title) == "string" and e.title:sub(1, 50) or nil,
-				level = type(e.questLevel) == "number" and e.questLevel or nil, repeatable = e.repeatable == true or nil, complete = e.isComplete == true or nil }
+	if isSecret(list) then return { kind = kind, api = api, state = "UNREADABLE" } end
+	local okParse, a = pcall(function()
+		local count = #list
+		local r = { kind = kind, api = api, n = count, entries = {} }
+		if count == 0 then r.state = "EMPTY" else r.state = "LISTED" end
+		for i = 1, math.min(count, O.MAX_ENTRIES) do
+			local e = list[i]
+			if type(e) == "table" and not isSecret(e) then
+				if i == 1 then
+					local okK, shape = pcall(function() return table.concat(sortedKeys(e), ","):sub(1, 140) end)
+					if okK then r.shape = shape end
+				end
+				local id = num(e.questID)
+				local title = text(e.title, 50)
+				local okR, rep = pcall(function() return e.repeatable == true or nil end)
+				local okC, comp = pcall(function() return e.isComplete == true or nil end)
+				if id or title or kind == "options" then
+					r.entries[#r.entries + 1] = { id = id, title = title, level = num(e.questLevel), repeatable = okR and rep or nil, complete = okC and comp or nil }
+				else
+					r.unreadableEntries = (r.unreadableEntries or 0) + 1
+				end
+			else
+				r.unreadableEntries = (r.unreadableEntries or 0) + 1
+			end
 		end
-	end
+		return r
+	end)
+	if not okParse then return { kind = kind, api = api, state = "UNREADABLE" } end
 	return a
 end
 
 --- A count call (GetNumAvailableQuests, QUEST_GREETING): EMPTY when it answers 0, LISTED for a positive number, NO_DATA when it answers nothing.
 local function answerFromCount(kind, api, pack, ok)
 	if not ok then return { kind = kind, api = api, state = pack == "absent" and "ABSENT" or "ERROR" } end
-	local n = pack[1]
-	if type(n) ~= "number" then return { kind = kind, api = api, state = "NO_DATA" } end
+	local raw = pack[1]
+	if type(raw) ~= "number" then return { kind = kind, api = api, state = "NO_DATA" } end
+	local n = num(raw)
+	if not n then return { kind = kind, api = api, state = "UNREADABLE" } end
 	return { kind = kind, api = api, state = n == 0 and "EMPTY" or "LISTED", n = n, entries = {} }
 end
 
@@ -195,7 +272,7 @@ local function greetingAnswers()
 			for i = 1, math.min(a.n, O.MAX_ENTRIES) do
 				local e = {}
 				local okT, t = call(spec[3], i)
-				if okT and type(t[1]) == "string" then e.title = t[1]:sub(1, 50) end
+				if okT then e.title = text(t[1], 50) end
 				a.entries[#a.entries + 1] = e
 			end
 		end
@@ -208,8 +285,9 @@ local function detailAnswers()
 	local ok, q = call("GetQuestID")
 	local okT, t = call("GetTitleText")
 	local a = { kind = "offered", api = "GetQuestID", entries = {} }
-	local id = ok and type(q[1]) == "number" and q[1] > 0 and q[1] or nil
-	local title = okT and type(t[1]) == "string" and t[1] ~= "" and t[1]:sub(1, 50) or nil
+	local qn = ok and num(q[1]) or nil
+	local id = qn and qn > 0 and qn or nil
+	local title = okT and text(t[1], 50) or nil
 	if id or title then
 		a.state, a.n = "LISTED", 1
 		a.entries[1] = { id = id, title = title }
@@ -436,7 +514,8 @@ end
 function O.Observe(via, answers)
 	local s = store()
 	if not s then return nil end
-	local npc = npcInfo()
+	local npc, npcUnreadable = npcInfo()
+	if npcUnreadable then bump("npcUnreadable") end
 	local sig = signature(via, npc, answers)
 	if sig == lastSig and lastObs and s.obs[#s.obs] == lastObs then
 		lastObs.n = (lastObs.n or 1) + 1
@@ -444,7 +523,7 @@ function O.Observe(via, answers)
 		index(s, via, npc, answers)
 		return lastObs
 	end
-	local obs = { src = "CODEX_OBSERVED", via = via, at = wall(), last = wall(), build = build(), npc = npc, answers = answers, n = 1 }
+	local obs = { src = "CODEX_OBSERVED", via = via, at = wall(), last = wall(), build = build(), npc = npc, npcUnreadable = npcUnreadable or nil, answers = answers, n = 1 }
 	s.obs[#s.obs + 1] = obs
 	while #s.obs > O.MAX_OBS do table.remove(s.obs, 1) end
 	lastSig, lastObs = sig, obs
@@ -452,6 +531,7 @@ function O.Observe(via, answers)
 	for _, a in ipairs(answers) do
 		if a.kind == "available" or a.kind == "offered" then
 			if a.state == "EMPTY" then bump("emptyAnswers") end
+			if a.state == "UNREADABLE" then bump("unreadableAnswers") end
 			for _, e in ipairs(a.entries or {}) do
 				bump("entries")
 				if e.id then bump("entriesWithId") else bump("entriesTitleOnly") end
@@ -493,6 +573,7 @@ local function answerText(a)
 	if a.state == "ABSENT" then return a.api .. ": API absent" end
 	if a.state == "ERROR" then return a.api .. ": call raised an error" end
 	if a.state == "NO_DATA" then return a.api .. ": returned nothing (not the same as an empty list)" end
+	if a.state == "UNREADABLE" then return a.api .. ": the client answered with a value addons cannot read (a secret value): UNKNOWN, not empty and not listed" end
 	if a.state == "EMPTY" then return a.api .. ": answered, none listed" end
 	local list = {}
 	for _, e in ipairs(a.entries or {}) do

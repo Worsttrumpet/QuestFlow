@@ -71,6 +71,29 @@ function reader.character()
 	return c
 end
 
+--- Whether the player is inside an instance (a dungeon, raid, battleground or arena), from the client's own IsInInstance / GetInstanceInfo. Neither has been probed on Forever, so both are feature-checked and
+-- every value is read inside pcall (a value the client will not let addons read is simply not recorded): `known` is false when no answer arrived, and an unknown state is never treated as "inside" or "outside".
+-- { known, inInstance, kind ("party" | "raid" | "pvp" | "arena" | "none"), name, id }. Nothing else in Codex plans from this: the arrow is withheld inside an instance (Navigation) and the report shows it.
+function reader.instance()
+	local i = { known = false }
+	if type(IsInInstance) == "function" then
+		local ok, inInst, kind = pcall(IsInInstance)
+		if ok then
+			local okB, flag = pcall(function() return inInst == true or inInst == 1 end)
+			if okB then i.known, i.inInstance = true, flag and true or false end
+			if type(kind) == "string" then local okK, k = pcall(function() return kind:sub(1, 20) end) if okK then i.kind = k end end
+		end
+	end
+	if type(GetInstanceInfo) == "function" then
+		local ok, name, _, _, _, _, _, _, id = pcall(GetInstanceInfo)
+		if ok then
+			if type(name) == "string" then local okN, n = pcall(function() return name:sub(1, 60) end) if okN then i.name = n end end
+			if type(id) == "number" then local okI, v = pcall(function() return id + 0 end) if okI then i.id = v end end
+		end
+	end
+	return i
+end
+
 function reader.location()
 	local l = { available = false }
 	local zone = try(GetZoneText)
@@ -213,6 +236,7 @@ function Ctx.Build(r)
 	c.raceKey = raceKey(c.raceToken)
 	ctx.char = c
 	ctx.loc = r.location()
+	ctx.instance = r.instance()
 	ctx.log, ctx.logCount, ctx.logAvailable = r.questLog()
 	ctx.questPoints = (r.questPoints and ctx.loc and ctx.loc.map) and r.questPoints(ctx.loc.map) or {}
 	ctx.group = r.group()

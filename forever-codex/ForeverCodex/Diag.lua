@@ -73,6 +73,7 @@ function D.Snapshot()
 	if ctx then
 		snap.character = { name = ctx.char.name, realm = ctx.char.realm, class = ctx.char.classToken, race = ctx.char.raceToken,
 			raceKey = ctx.char.raceKey, faction = ctx.char.faction, level = ctx.char.level, missing = ctx.char.missing }
+		snap.instance = ctx.instance
 		snap.location = { map = ctx.loc.map, x = ctx.loc.x, y = ctx.loc.y, zone = ctx.loc.zone, subzone = ctx.loc.subzone,
 			available = ctx.loc.available, world = ctx.loc.world ~= nil }
 		snap.group = { size = ctx.group.size, inGroup = ctx.group.inGroup }
@@ -139,6 +140,7 @@ function D.Lines(s)
 		L[#L + 1] = string.format("Location: %s / %s | map %s at %s, %s | position available: %s | world coords: %s", tostring(l.zone),
 			tostring(l.subzone), tostring(l.map), l.x and string.format("%.1f", l.x * 100) or "?", l.y and string.format("%.1f", l.y * 100) or "?",
 			tostring(l.available), tostring(l.world))
+		for _, line in ipairs(D.InstanceLines(s.instance, l)) do L[#L + 1] = line end
 	end
 	local ch = s.choices
 	local on = {}
@@ -583,6 +585,33 @@ end
 
 --- The playtest report: what the window shows, why the planner chose it, the quest log, and the full diagnostics, as plain lines to copy.
 -- It re-runs the planner on the CURRENT context with the trace on (the same inputs as the live plan: it changes nothing and the live plan is kept).
+--- INSTANCE / POSITION evidence for the report (read-only): what the client says about being inside an instance and which position APIs answered, so a dungeon report settles what Forever exposes
+-- there. Only types and yes / no are printed for coordinates (nothing is interpreted). `inst` is ctx.instance; `l` is the snapshot's location.
+function D.InstanceLines(inst, l)
+	local function has(fn) return type(fn) == "function" and "present" or "ABSENT" end
+	local out = {}
+	inst = inst or {}
+	out[#out + 1] = string.format("Instance: IsInInstance %s -> %s%s | GetInstanceInfo %s -> %s%s",
+		has(_G.IsInInstance), inst.known and tostring(inst.inInstance) or "no answer", inst.kind and (" (type " .. inst.kind .. ")") or "",
+		has(_G.GetInstanceInfo), inst.name and ("name '" .. inst.name .. "'") or "no name", inst.id and (", id " .. tostring(inst.id)) or "")
+	local up = "ABSENT"
+	if type(_G.UnitPosition) == "function" then
+		local ok, a, b, c, d = pcall(_G.UnitPosition, "player")
+		if not ok then up = "present, raised an error"
+		else
+			local function t(v) local okT, ty = pcall(type, v) return okT and ty or "?" end
+			up = string.format("present -> returns (%s, %s, %s, %s)%s", t(a), t(b), t(c), t(d), t(d) == "number" and (" instance/continent id " .. tostring(d)) or "")
+		end
+	end
+	local mapApi = (type(_G.C_Map) == "table" and type(_G.C_Map.GetBestMapForUnit) == "function") and "present" or "ABSENT"
+	out[#out + 1] = string.format("  position APIs: C_Map.GetBestMapForUnit %s -> map %s | map position %s | world coords %s | UnitPosition %s",
+		mapApi, tostring(l and l.map), (l and l.available) and "yes" or "NO", (l and l.world) and "yes" or "NO", up)
+	if inst.inInstance == true then
+		out[#out + 1] = "  inside an instance: Codex withholds the arrow and the waypoint (the outdoor map position is not where you stand); planning is unchanged"
+	end
+	return out
+end
+
 function D.PlaytestLines(snap, lines)
 	local L = {}
 	local ctx, plan = ns.State and ns.State.ctx, ns.State and ns.State.plan
@@ -856,7 +885,7 @@ function D.PlaytestLines(snap, lines)
 			if tg then tagged = tagged + 1 end
 			if ns.Dungeons and ns.Dungeons.IsDungeon(ctx, id) then dungeon = dungeon + 1 end
 		end
-		add(string.format("quest tags (game, unverified on Forever): API %s | %d of %d logged quests came back tagged | %d dungeon-style | area-name API %s", api, tagged, #ids, dungeon, (type(C_Map) == "table" and type(C_Map.GetAreaInfo) == "function") and "present" or "absent"))
+		add(string.format("quest tags (the game's own; PROVEN on Forever for Elite = 1 and Dungeon = 81 on logged quests, 0.4.2): API %s | %d of %d logged quests tagged (0 is normal when none of them is Elite, Dungeon or Raid) | %d dungeon-style | area-name API %s", api, tagged, #ids, dungeon, (type(C_Map) == "table" and type(C_Map.GetAreaInfo) == "function") and "present" or "absent"))
 	end
 	if ns.QuestItems then
 		local okQ, qlines = pcall(ns.QuestItems.ReportLines)
