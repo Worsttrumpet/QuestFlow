@@ -211,6 +211,7 @@ function D.Lines(s)
 			L[#L + 1] = "  NOW none: " .. tostring(d.reason or "nothing eligible")
 		end
 		for _, w in ipairs(d.warnings or {}) do L[#L + 1] = "  planner warning: " .. w end
+		if d.dungeonDeferred and d.dungeonDeferred.n > 0 then L[#L + 1] = string.format("  dungeon objectives not NOW (you are not inside their dungeon; still listed under DUNGEON QUESTS): %d", d.dungeonDeferred.n) end
 		if d.held and d.held.n > 0 then L[#L + 1] = string.format("  held back (recently not offered by their giver, still known): %d pickup(s) | detail in OPPORTUNITIES", d.held.n) end
 	end
 	if s.plan then

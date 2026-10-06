@@ -406,6 +406,9 @@ local function gather(S, c)
 			end
 			return
 		end
+		-- A DUNGEON objective is not what to do NOW from outside that dungeon: it stays a known candidate (counted, listed in DUNGEON QUESTS, usable as an on-the-way extra) but never competes with
+		-- open-world progress for NOW. Inside the dungeon it is an ordinary action. The tag is the game's own (Dungeons.IsDungeon); nothing here detects a dungeon any other way.
+		local outsideDungeon = a.kind == "OBJECTIVE" and a.quest and ns.Dungeons and ns.Dungeons.IsDungeon(ctx, a.quest) and not ns.Dungeons.PlayerInside(ctx, a.quest)
 		local possible, pd = Pl.PossibleOnly(a, pos, S)
 		local val, comps = valueOf(a, pos, ctx, env, par)
 		local timerInfo
@@ -432,6 +435,12 @@ local function gather(S, c)
 			if #diag.possible.list < Pl.HELD_CAP then
 				diag.possible.list[#diag.possible.list + 1] = { id = a.id, quest = a.quest, title = a.title, why = possible, dist = pd, giver = a.giver }
 			end
+			extras[#extras + 1] = it
+		elseif outsideDungeon then
+			it.outsideDungeon = true
+			diag.dungeonDeferred = diag.dungeonDeferred or { n = 0, list = {} }
+			diag.dungeonDeferred.n = diag.dungeonDeferred.n + 1
+			if #diag.dungeonDeferred.list < Pl.HELD_CAP then diag.dungeonDeferred.list[#diag.dungeonDeferred.list + 1] = { id = a.id, quest = a.quest, title = a.title } end
 			extras[#extras + 1] = it
 		elseif a.optional or a.hereOnly then extras[#extras + 1] = it else items[#items + 1] = it end
 	end
