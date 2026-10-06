@@ -1,7 +1,7 @@
 -- ForeverCodex.Providers.Quest: turns quest data + your quest log into QUEST actions.
 --
 --   not in your log, available to you  -> ACCEPT   (at the giver's location)
---   in your log, objectives complete   -> TURN_IN  (assumed at the giver: ATT has no turn-in NPC field)
+--   in your log, objectives complete   -> TURN_IN  (at the turn-in NPC when the data names one; at the giver only when the data says they are the same NPC; else no location)
 --   in your log, objectives incomplete -> OBJECTIVE
 --
 -- Eligibility uses ONLY facts the data actually has. ATT's `lvl` is a REQUIRED level (stored as `req`), never a
@@ -95,10 +95,13 @@ end
 -- things and are often in different places (a recruiter in one city sends you to an officer in another):
 --   "known"     QuestieDB names a turn-in NPC that is not the giver and says where it stands: route to THAT place
 --   "unplaced"  the turn-in NPC is known and is not the giver, but its position is not: no location at all (the giver's spot would be wrong)
---   "assumed"   no turn-in data, or the turn-in NPC is the giver: the giver's location, as before (an assumption, trusted less)
+--   "assumed"   the data says the turn-in NPC IS the giver: the giver's location (QuestieDB's own record, unverified on Forever; trusted a little less)
+--   "unknown"   there is no turn-in data (ATT has no turn-in field; QuestieDB may not name a creature finisher): NO location. A known giver position is evidence of where the
+--               quest was given, not of where it is handed in, so it is never borrowed for the hand-in (Q264: the giver stood in Thunder Bluff, the hand-in was in Silverpine).
+--               The game's own quest-map point, when it shows one, is still used (progressAction).
 local function turnInPlace(view)
 	local ti = view and view.turnIn                        -- (a quest in the log that no pack knows has no view at all)
-	if type(ti) ~= "table" or not (ti.npc or ti.name) then return "assumed" end
+	if type(ti) ~= "table" or not (ti.npc or ti.name) then return "unknown" end
 	if ti.atGiver or (ti.atGiver == nil and ti.npc and view.giverNpc and ti.npc == view.giverNpc) then return "assumed" end
 	local name = ti.name or ("NPC #" .. tostring(ti.npc))
 	if type(ti.map) == "number" and type(ti.x) == "number" and type(ti.y) == "number" then
@@ -184,7 +187,11 @@ local function questTargets(a, view, t)
 		elseif kind == "unplaced" then
 			return { K.FromLegacyTarget(nil, "TURN_IN", { entity = { kind = "npc", id = place.npc, name = place.name, prov = view.prov and view.prov.turnIn or nil } }) }
 		end
-		-- no turn-in data (or the turn-in NPC is the giver): the turn-in is ASSUMED to be at the giver, so it is at best approximate
+		if kind == "unknown" then
+			-- nothing says who takes the quest back: no location, and no NPC (the giver is not named as the hand-in)
+			return { K.FromLegacyTarget(nil, "TURN_IN", { entity = { kind = "unknown" } }) }
+		end
+		-- the data says the turn-in NPC is the giver: that spot is the hand-in, approximate and unverified
 		return { K.FromLegacyTarget(t, "TURN_IN", { entity = giverEntity(view), assumed = true, status = t and "approx" or nil, kind = "assumed_giver" }) }
 	end
 	-- OBJECTIVE: every known objective coordinate, as ONE area target. ATT's coordinate list is not indexed by
@@ -263,10 +270,14 @@ local function progressAction(view, entry, pinned, ctx)
 			for _, l in ipairs(provenanceLines(view, false)) do lines[#lines + 1] = l end
 			lines[#lines + 1] = "Where " .. place.name .. " stands is not in Codex data yet."
 			who = place.name
+		elseif kind == "unknown" then
+			lines[1] = "Objectives complete. Hand the quest in."
+			lines[#lines + 1] = "Who takes this quest back is not in Codex data, so there is no hand-in location (the quest giver's spot is not assumed)."
+			who = nil
 		else
 			lines[1] = "Objectives complete. Turn in to " .. label
 			for _, l in ipairs(provenanceLines(view)) do lines[#lines + 1] = l end
-			lines[#lines + 1] = "Turn-in location is assumed to be the giver's (no turn-in data)."
+			lines[#lines + 1] = "The turn-in NPC is the quest giver (QuestieDB, unverified on Forever)."
 			t = target(view, label)
 		end
 	else

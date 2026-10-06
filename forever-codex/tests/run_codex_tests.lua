@@ -221,7 +221,12 @@ end
 --- Registers a synthetic quest pack (ATT layer) for deterministic engine scenarios.
 local function attPack(ns, recs, zones)
 	local map = {}
-	for _, r in ipairs(recs) do map[r.id] = r end
+	for _, r in ipairs(recs) do
+		-- 0.8.4: a hand-in is routed only when the data says where it is. A synthetic fixture quest is handed in to the NPC it was taken from (the shape QuestieDB gives with atGiver) unless
+		-- the fixture says otherwise: turnIn = { ... } its own turn-in, or turnIn = false for NO turn-in data (the case that must give no hand-in location)
+		if r.turnIn == nil then r.turnIn = { npc = 100000 + r.id, atGiver = true } elseif r.turnIn == false then r.turnIn = nil end
+		map[r.id] = r
+	end
 	ns.Registry.ClearPacks("quests")
 	ForeverCodex.RegisterPack("quests", "att:test", {
 		meta = { src = "att", verified = false, priority = 10, label = "test ATT", restrictions = true },   -- (a fixture stands for a pack that carries class / race restriction data)
@@ -527,13 +532,15 @@ do
 	ns.State.SetPlanner(false)   -- Phase 2: the next checks pin the LEGACY greedy engine (the Planner may defer a turn-in or leave an unlocated quest out of the route; contract_tests.lua covers that)
 	W.log = { { questID = 907, title = "Enraged Thunder Lizards", complete = true } }
 	local plan = recompute(ns)
-	local ti = firstQuest(plan)
-	check(ti.kind == "TURN_IN" and ti.quest == 907, "a completed quest in the log becomes the first quest action (turn in)")
-	check(plan.next.type == "TRAVEL" and plan.next.forId == ti.id or plan.next.id == ti.id, "NEXT is the turn-in, or the travel to reach it")
-	check(ti.target ~= nil and ti.src == "att" and ti.verified == false, "its location is ATT's and stays unverified")
-	local assumed = false
-	for _, l in ipairs(ti.lines) do if l:find("assumed") then assumed = true end end
-	check(assumed, "the turn-in text says the turn-in location is an assumption")
+	local ti
+	for _, a in ipairs(plan.sequence) do if a.quest == 907 and a.kind == "TURN_IN" then ti = a end end
+	check(ti ~= nil, "a completed quest in the log is still a turn-in action in the plan")
+	ti = ti or { lines = {} }
+	-- 0.8.4: ATT has no turn-in NPC, so the giver's spot is NOT borrowed as the hand-in place: the turn-in has no location (it is still a reminder the player can act on)
+	check(ti.target == nil and ti.noLocation == true and ti.verified == false, "ATT names no turn-in NPC: the hand-in has NO location (the giver's spot is not assumed)")
+	local says = false
+	for _, l in ipairs(ti.lines) do if l:find("not in Codex data", 1, true) and l:find("not assumed", 1, true) then says = true end end
+	check(says, "the turn-in text says why: who takes the quest back is not in Codex data")
 	W.log = { { questID = 907, title = "Enraged Thunder Lizards", complete = false } }
 	plan = recompute(ns)
 	local inProg = false
@@ -1326,7 +1333,7 @@ do
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
 	H.fake = dofile(dir .. "/fake_questiedb.lua")
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua", "spell_lifecycle_tests.lua", "spell_purchase_tests.lua", "ui_roles_tests.lua", "saved_data_tests.lua", "recompute_tests.lua", "skip_tests.lua", "offerprobe_secret_tests.lua", "instance_tests.lua", "quest_detail_tests.lua", "timer_tests.lua", "area_tests.lua", "planner_flow_tests.lua", "quest_source_tests.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua", "spell_lifecycle_tests.lua", "spell_purchase_tests.lua", "ui_roles_tests.lua", "saved_data_tests.lua", "recompute_tests.lua", "skip_tests.lua", "offerprobe_secret_tests.lua", "instance_tests.lua", "quest_detail_tests.lua", "turnin_evidence_tests.lua", "timer_tests.lua", "area_tests.lua", "planner_flow_tests.lua", "quest_source_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

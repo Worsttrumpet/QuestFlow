@@ -903,8 +903,8 @@ local function clarityWorld(withTurnInData, withObjective)
 	local recs = {
 		{ id = 1, name = "Work Quest", map = 9001, x = x1, y = y1, req = 1, level = 9, giverName = "Work Giver", objCoords = { { map = 9001, x = x1, y = y1 } } },
 		{ id = 2, name = "Far Hand-in", map = 9001, x = xt, y = yt, req = 1, level = 9, giverName = "Original Giver",
-			turnIn = withTurnInData and { npc = 77, name = "Riaani Nightwind", map = 9001, x = xt, y = yt } or nil },
-		{ id = 3, name = "Giver Only", map = 9001, x = xt, y = yt + 0.2, req = 1, level = 9, giverName = "Only A Giver" },
+			turnIn = withTurnInData and { npc = 77, name = "Riaani Nightwind", map = 9001, x = xt, y = yt } or false },
+		{ id = 3, name = "Giver Only", map = 9001, x = xt, y = yt + 0.2, req = 1, level = 9, giverName = "Only A Giver", turnIn = false },
 		{ id = 4, name = "Follow Up", map = 9001, x = at(2500, 900), y = 0.5, req = 1, level = 9, giverName = "Next Giver", prereq = { 2 } },
 		{ id = 5, name = "Pickup Beside", map = 9001, x = xp, y = yp, req = 1, level = 9, giverName = "Aamelia Windfield" },
 		{ id = 6, name = "Pickup Onward", map = 9001, x = xq, y = yq, req = 1, level = 9, giverName = "Nazgrel" },
@@ -945,7 +945,8 @@ do
 	for i, r in ipairs(c.readyRows) do if r.__shown ~= false and r.__text ~= "" then rows[#rows + 1] = r.__text .. " | " .. tostring(c.readySubs[i].__text) end end
 	local flat = table.concat(rows, "\n")
 	check(flat:find("Far Hand-in | 1,800 yd - Riaani Nightwind - opens 1 more quest", 1, true) ~= nil, "the card draws the name, then (dim) distance - NPC - follow-ups  [" .. flat:gsub("\n", " / ") .. "]")
-	check(flat:find("Giver Only | 1,800 yd", 1, true) ~= nil and not flat:find("Only A Giver", 1, true), "and nothing invented where the NPC is unknown")
+	-- 0.8.4: no turn-in data means no hand-in place either: no distance is drawn (the giver's spot is not borrowed), and no NPC
+	check(flat:find("Giver Only | ", 1, true) ~= nil and not flat:find("Giver Only | 1,800", 1, true) and not flat:find("Only A Giver", 1, true) and byQ[3].distText == nil and byQ[3].placed == false, "and nothing invented where the NPC is unknown: no distance, no NPC")
 	check(not flat:find("[\128-\255]"), "plain ASCII")
 	-- ALSO: a pickup beside NOW is named for what it is, with distance, who and why
 	check(card.also[1] and card.also[1].kind == "action" and card.also[1].verb == "ACCEPT" and card.also[1].npc == "Aamelia Windfield", "ALSO row: a pickup carries its NPC")

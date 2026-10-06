@@ -402,7 +402,7 @@ do
 	complete(93002)
 	local p2 = ns.State.Recompute()
 	local t2 = turnInOf(p2, 93002)
-	check(t2 and math.abs(t2.target.x - 0.6) < 1e-9 and t2.targets[1].assumed == true and table.concat(t2.lines, "\n"):find("assumed", 1, true), "giver = turn-in NPC: the giver's spot, still marked as an assumption")
+	check(t2 and math.abs(t2.target.x - 0.6) < 1e-9 and t2.targets[1].assumed == true and table.concat(t2.lines, "\n"):find("turn-in NPC is the quest giver (QuestieDB, unverified on Forever)", 1, true), "giver = turn-in NPC: the giver's spot, still marked as approximate and QuestieDB's claim")
 
 	-- a known turn-in NPC with no position: no location at all, never the giver's
 	complete(93003)

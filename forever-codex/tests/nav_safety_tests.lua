@@ -87,7 +87,7 @@ do
 		local ns = boot({ char = { level = 10 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Fixture" } })
 		H.attPack(ns, {}, { { key = "zone-a", label = "Zone A", map = 9001, quests = 0 } })
 		ForeverCodex.RegisterPack("quests", "observed:t", { meta = { src = "observed", verified = true, priority = 100 }, zones = {}, quests = {
-			[600] = { id = 600, name = "Observed Turn-in", level = 2, objectives = { "" }, giverNpc = 1, giverName = "Somebody", pos = { map = 9001, x = x, y = 0.5 } } } })
+			[600] = { id = 600, name = "Observed Turn-in", level = 2, objectives = { "" }, giverNpc = 1, giverName = "Somebody", turnIn = { npc = 1, atGiver = true }, pos = { map = 9001, x = x, y = 0.5 } } } })
 		ns.Prefs.FinishSetup(); ns.Prefs.SetNavigation(true); ns.Navigation._Reset()
 		H.world().log = { { questID = 600, title = "Observed Turn-in", complete = true } }
 		ns.State.Recompute()

@@ -373,7 +373,7 @@ do
 	-- the player stands at the west edge with a pickup next to them; a finished quest is 900 yd east.
 	local function world(withFollowUp)
 		local ns = boot({ char = { level = 12 }, synthetic = true, loc = { map = 9001, x = 0.05, y = 0.5 } })
-		local recs = { { id = 101, name = "Chain start", map = 9001, x = 0.95, y = 0.5 }, { id = 104, name = "A pickup nearby", map = 9001, x = 0.10, y = 0.5 } }
+		local recs = { { id = 101, name = "Chain start", map = 9001, x = 0.95, y = 0.5, turnIn = { npc = 1, name = "Chain giver", atGiver = true } }, { id = 104, name = "A pickup nearby", map = 9001, x = 0.10, y = 0.5 } }
 		if withFollowUp then recs[#recs + 1] = { id = 102, name = "Chain follow-up", map = 9001, x = 0.96, y = 0.5, prereq = { 101 } } end   -- offered right where 101 is turned in
 		H.attPack(ns, recs, nil)
 		H.world().log = { { questID = 101, title = "Chain start", complete = true } }

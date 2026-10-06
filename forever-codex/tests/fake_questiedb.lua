@@ -147,7 +147,7 @@ function F.fromRegistry(ns, mode)
 				if loc then npc.spawns = { [loc.map] = { { loc.x * 100, loc.y * 100 } } }; maps[loc.map] = true end
 				fake.addNpc(npcId, npc)
 				q.startedBy = { { npcId } }
-				q.finishedBy = { { npcId } }
+				if v.turnIn then q.finishedBy = { { npcId } } end      -- (0.8.4) a finisher only where the source record has turn-in data: no turn-in data in the source means none here
 			end
 			fake.addQuest(id, q)
 		end

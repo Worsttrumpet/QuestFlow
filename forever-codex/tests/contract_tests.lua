@@ -477,7 +477,7 @@ section("contract: targets (location status, roles)")
 do
 	local ns = synthetic(12)
 	H.attPack(ns, {
-		{ id = 51, name = "Roles", map = 9001, x = 0.12, y = 0.1, giverNpc = 700, giverName = "Giver", objCoords = { { map = 9001, x = 0.3, y = 0.3 }, { map = 9001, x = 0.31, y = 0.33 } } },
+		{ id = 51, name = "Roles", map = 9001, x = 0.12, y = 0.1, giverNpc = 700, giverName = "Giver", turnIn = false, objCoords = { { map = 9001, x = 0.3, y = 0.3 }, { map = 9001, x = 0.31, y = 0.33 } } },
 		{ id = 52, name = "No objective area", map = 9001, x = 0.14, y = 0.1 },
 	}, nil)
 	ForeverCodex.RegisterPack("quests", "observed:test", {
@@ -516,15 +516,15 @@ do
 	u = ip and ip.targets[1]
 	check(u and u.role == "OBJECTIVE" and u.where.status == "unknown" and u.where.points == nil, "unknown location: status unknown, no points")
 	check(u.entity.kind == "unknown" and u.prov.src == "unknown", "and unknown entity and provenance, nothing invented")
-	-- ready: TURN_IN target is ASSUMED to be the giver
+	-- ready: with no turn-in data (0.8.4) the giver's spot is NOT the hand-in place: the TURN_IN target is unknown and carries no coordinates, and no giver entity
 	W.log[1].complete = true
 	all = allActions(ns)
 	local ti = byId(all, "Q:51:TURN_IN")
 	local t = ti.targets[1]
-	check(t.role == "TURN_IN" and t.assumed == true and t.where.status == "approx" and t.where.kind == "assumed_giver", "turn-in is the giver's location, ASSUMED and only approximate")
-	check(t.entity.id == 700, "carrying the giver entity it was assumed from")
-	check(ti.evidence ~= "observed", "an assumed turn-in never yields 'observed' evidence")
-	check(ti.target.x == 0.12, "the legacy turn-in target is unchanged")
+	check(t.role == "TURN_IN" and t.where.status == "unknown" and t.where.points == nil and t.assumed ~= true, "no turn-in data: the hand-in location is UNKNOWN, not the giver's")
+	check(t.entity.kind == "unknown", "and the giver is not named as the turn-in NPC")
+	check(ti.evidence ~= "observed", "an unknown turn-in never yields 'observed' evidence")
+	check(ti.target == nil and ti.noLocation == true, "the legacy target is gone: a reminder, never routed")
 	check(#problems(all) == 0, "all validate")
 end
 
