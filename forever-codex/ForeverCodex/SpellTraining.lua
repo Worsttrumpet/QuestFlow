@@ -273,7 +273,116 @@ end
 --- Boot calls this at TRAINER_SHOW and TRAINER_UPDATE (a purchase fires an update, which is how a spell learned at the window is noticed at once).
 function S.OnTrainerEvent()
 	local ctx = ns.State and ns.State.ctx
-	return S.Record(S.ReadTrainer(), ctx)
+	local n = S.Record(S.ReadTrainer(), ctx)
+	S.Settle(ctx)                                  -- (a purchase's money change can arrive with the update that follows it)
+	return n
+end
+
+-- ---------------------------------------------------------------- purchases (0.7.7)
+-- Forever gives no spellbook API and no spell id in the trainer rows, and a window whose "Already Known" filter is off simply stops listing a learned spell, so a trainer read alone cannot say
+-- that a purchase worked (0.7.6 left Rockbiter Weapon listed). The primary signal is therefore the player's own action plus the client's own learn event: a post-hook on BuyTrainerService
+-- remembers WHICH available row was bought, and the next learn event (LEARNED_SPELL_IN_TAB, or SPELLS_CHANGED with the price paid) confirms it. A purchase that is refused (not enough money)
+-- fires no learn event and is dropped after PENDING_SECS. The trainer's own "used" row and the absence rule in Record stay as the fallback. Nothing here is persisted: a pending purchase is
+-- session memory tied to the character that made it.
+
+local groupOf
+local PENDING_SECS, PENDING_MAX = 20, 5
+S.pending = {}
+S.stats = { bought = 0, confirmed = 0, expired = 0 }
+S.hook = "not installed"
+
+local function clock()
+	if type(_G.GetTime) == "function" then local ok, t = pcall(_G.GetTime) if ok and type(t) == "number" then return t end end
+	return wall()
+end
+local function money()
+	if type(_G.GetMoney) == "function" then local ok, m = pcall(_G.GetMoney) if ok and type(m) == "number" then return m end end
+	return nil
+end
+
+--- Ranks are bought in order, so buying a rank means every lower rank of the same spell is known: mark them learned so they never come back.
+local function retireLower(st, e)
+	local ord = e.rankNum or e.levelReq
+	if not ord then return end
+	local g = groupOf(e)
+	for _, o in pairs(st.entries) do
+		local ordO = o.rankNum or o.levelReq
+		if o ~= e and not o.learned and ordO and ordO < ord and groupOf(o) == g then o.learned, o.learnedBy = true, "a higher rank of it was bought" end
+	end
+end
+
+local function confirm(p, ctx)
+	local st = store(ctx)
+	local e = matchEntry(st, p)
+	if not e then
+		e = { id = p.id, name = p.name, rank = p.rank, rankNum = rankNumber(p.rank), cost = p.cost, levelReq = p.levelReq, cat = "available" }
+		st.entries[keyOf(p.id, p.name, p.rank, p.levelReq)] = e
+	end
+	e.learned, e.learnedBy = true, "bought at the trainer (purchase and learn event)"
+	retireLower(st, e)
+	S.stats.confirmed = S.stats.confirmed + 1
+end
+
+--- The post-hook body: BuyTrainerService(index) was called. Remembers the service at that index when it is an AVAILABLE class-trainer row. Returns true when a purchase was remembered.
+function S.OnPurchase(index)
+	if type(index) ~= "number" then return false end
+	local read = S.ReadTrainer()
+	if not read.ok or read.tradeskill == true then return false end
+	local row
+	for _, s in ipairs(read.services) do if s.index == index then row = s break end end
+	if not row or row.category ~= "available" then return false end
+	for _, p in ipairs(S.pending) do if p.name == row.name and p.rank == row.rank and p.levelReq == row.levelReq then return false end end      -- a double click is one purchase
+	S.pending[#S.pending + 1] = { name = row.name, rank = row.rank, cost = row.cost, levelReq = row.levelReq, id = row.id, at = clock(), money = money(), char = ns.Prefs.CharKey() }
+	while #S.pending > PENDING_MAX do table.remove(S.pending, 1) end
+	S.stats.bought = S.stats.bought + 1
+	return true
+end
+
+--- Resolves pending purchases. `event` is the event that just fired (LEARNED_SPELL_IN_TAB confirms the oldest purchase whose price was paid; SPELLS_CHANGED confirms purchases whose price was paid),
+-- or nil to just re-check (the money may update after the learn event) and drop expired purchases. Returns the number confirmed.
+function S.Settle(ctx, event)
+	if #S.pending == 0 then return 0 end
+	ctx = ctx or (ns.State and ns.State.ctx)
+	local now, me, m = clock(), ns.Prefs.CharKey(), money()
+	local function paid(p) return p.money == nil or m == nil or p.cost == nil or m <= p.money - p.cost end
+	if event == "SPELLS_CHANGED" or event == "LEARNED_SPELL_IN_TAB" then
+		for _, p in ipairs(S.pending) do p.sawChange = true end
+	end
+	if event == "LEARNED_SPELL_IN_TAB" then
+		for _, p in ipairs(S.pending) do if p.char == me and not p.sawLearn and paid(p) then p.sawLearn = true break end end
+	end
+	local keep, n = {}, 0
+	for _, p in ipairs(S.pending) do
+		if p.char ~= me then
+			S.stats.expired = S.stats.expired + 1                                  -- another character's purchase never lands on this one
+		elseif now - p.at > PENDING_SECS then
+			S.stats.expired = S.stats.expired + 1
+		elseif p.sawLearn or (p.sawChange and paid(p)) then
+			confirm(p, ctx); n = n + 1
+		else
+			keep[#keep + 1] = p
+		end
+	end
+	S.pending = keep
+	return n
+end
+
+--- Installs the BuyTrainerService post-hook once. Never raises; S.hook says what happened (the report shows it, so a client whose Train button does not go through it is visible).
+function S.InstallHook()
+	if S.hook == "hooked" then return true end
+	if type(_G.hooksecurefunc) ~= "function" then S.hook = "hooksecurefunc absent" return false end
+	if type(_G.BuyTrainerService) ~= "function" then S.hook = "BuyTrainerService absent" return false end
+	local ok, err = pcall(_G.hooksecurefunc, "BuyTrainerService", function(index)
+		local okH, e = pcall(S.OnPurchase, index)
+		if not okH then ns.RecordError("spell purchase hook", e) end
+	end)
+	S.hook = ok and "hooked" or ("hook refused: " .. tostring(err))
+	return ok
+end
+
+--- Boot calls this for LEARNED_SPELL_IN_TAB and SPELLS_CHANGED.
+function S.OnLearnEvent(event)
+	return S.Settle(ns.State and ns.State.ctx, event)
 end
 
 -- ---------------------------------------------------------------- known spells
@@ -315,7 +424,7 @@ end
 -- ---------------------------------------------------------------- the list
 
 --- Ranks are only compared with ranks of the same kind: by rank text when the entry has it, by level requirement when it has none (the two are not on one scale).
-local function groupOf(e) return e.name .. (e.rankNum and "#rank" or "#level") end
+groupOf = function(e) return e.name .. (e.rankNum and "#rank" or "#level") end
 
 local function displayName(e)
 	return e.name .. (e.rank and (" " .. e.rank) or "")
@@ -327,6 +436,7 @@ function S.List(ctx)
 	local st = store(ctx)
 	local lvl = ctx and ctx.char and ctx.char.level
 	if type(lvl) ~= "number" then return nil end
+	S.Settle(ctx)                                 -- a purchase confirmed late (price paid after the learn event) or expired
 	seedFromCatalog(st, ctx)                      -- level-gated spells seen on this account's earlier trainer visits appear on level-up, with no visit
 	local book = { idx = nil }
 	do
@@ -459,6 +569,7 @@ function S.ReportLines(ctx)
 	else
 		L[#L + 1] = "  no trainer window has been read this session"
 	end
+	L[#L + 1] = string.format("  purchase hook (BuyTrainerService): %s | purchases seen %d, matched by a learn event %d, expired with no learn event %d, waiting %d", S.hook, S.stats.bought, S.stats.confirmed, S.stats.expired, #S.pending)
 	L[#L + 1] = string.format("  stored for this character: %d spell(s), %d marked Don't Want to Learn", nE, nD)
 	do
 		local cat, class = catalogStore(), classOf(ctx)

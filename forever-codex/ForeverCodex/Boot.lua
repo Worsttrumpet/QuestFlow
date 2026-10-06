@@ -52,6 +52,7 @@ local function onLogin()
 	local okI, idRes = pcall(P.CheckIdentity, identitySnapshot())
 	if not okI then ns.RecordError("identity", idRes)
 	elseif idRes.result == "RESET" then ns.Say("This looks like a new character with a name Codex has seen before (" .. idRes.reason .. "): its old skips, journey and training state were cleared.") end
+	if ns.SpellTraining then ns.Safe(ns.SpellTraining.InstallHook) end      -- a post-hook on BuyTrainerService: how a trainer purchase is noticed (see SpellTraining)
 	-- quest knowledge from the optional QuestieDB addon; when it is not usable, say why once (Codex still works on its own small data)
 	if ns.QuestieBridge then
 		ns.Safe(ns.QuestieBridge.Init)
@@ -91,6 +92,9 @@ local function onEvent(_, event, arg1, arg2, arg3, arg4)
 		elseif event == "TRAINER_SHOW" or event == "TRAINER_UPDATE" then
 			if ns.SpellTraining then ns.SpellTraining.OnTrainerEvent() end
 			if ns.Professions then ns.Professions.OnTrainerEvent() end
+			ns.State.MarkDirty(event)
+		elseif event == "LEARNED_SPELL_IN_TAB" or event == "SPELLS_CHANGED" then
+			if ns.SpellTraining then ns.SpellTraining.OnLearnEvent(event) end
 			ns.State.MarkDirty(event)
 		elseif event == "USER_WAYPOINT_UPDATED" then
 			ns.Navigation.OnWaypointEvent()

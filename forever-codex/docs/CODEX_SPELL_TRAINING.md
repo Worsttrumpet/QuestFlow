@@ -47,3 +47,17 @@ Codex learns that a spell was trained only from the trainer window itself (`TRAI
 
 0.7.4: a spell the trainer shows as already known reports level requirement 0 on Forever (and the trainer window shows its rank text, e.g. "Aspect of the Hawk (Rank 2) - Already known"), so a stored entry is matched to a "used" row by name and cost (or spell id), not by key.
 `/codex spells`, `/codex professions` and `/codex feedback status|list` now open the copyable report window (Ctrl+C) instead of printing to chat.
+
+## 0.7.7: learned state from the purchase itself
+**Real-client finding (0.7.6, Tauren Shaman):** Rockbiter Weapon stayed listed after it was bought. With the trainer's "Already Known" filter off, a learned spell is no longer listed, so the window after the
+purchase held no row to read ("latest read was empty"), and neither the `used` row nor the absence rule (which needs a stored spell to appear in the window) had anything to act on. With the filter on, the row came back as
+`used` and the spell left correctly. A trainer read alone therefore cannot say that a purchase worked.
+
+**What 0.7.7 does:** `SpellTraining.InstallHook` puts a post-hook (`hooksecurefunc`) on `BuyTrainerService`. When it fires, the AVAILABLE class-trainer row at that index is remembered as a pending purchase (session memory only,
+tied to the character that made it). The client's own learn event confirms it: `LEARNED_SPELL_IN_TAB` (the oldest pending purchase whose price was taken), or `SPELLS_CHANGED` when the price was also taken (`GetMoney` fell by the cost).
+A confirmed purchase marks that entry learned (`learnedBy` says how) and marks every lower rank of the same spell learned too (ranks are bought in order; with no rank text the level requirement orders them).
+A refused purchase (not enough money) fires no learn event and is dropped after 20 s. The trainer's `used` row and the absence rule are unchanged and remain the fallback. No spell id is invented and no spell data is added.
+
+**Limitations (not proven on Forever):** `BuyTrainerService` and `hooksecurefunc` being the path of the Train button on this client is UNVERIFIED; `/codex spells` prints the hook state and the counters (purchases seen, matched by a learn event, expired with no
+learn event). If the hook state says "BuyTrainerService absent", or purchases seen stays 0 after buying, the button uses another path and only the fallback applies. Two purchases within seconds, one of them refused, can attach a learn event to the wrong
+one (the price check narrows this). Money that changes for another reason (a vendor sale) in the same few seconds as an unrelated spell change could confirm a refused purchase; that needs a refused buy plus both coincidences.
