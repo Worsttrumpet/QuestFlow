@@ -1,0 +1,271 @@
+-- UI: REWARD OVERLAY. Small annotations drawn directly ON the game's own quest reward choices (no Codex window, nothing to move): each choice gets a strip with the advisor's
+-- tags and its short stat text, the choice the advisor recommends gets a gold border and the word RECOMMENDED, and one line says CODEX: RECOMMENDED - CHOICE n, or
+-- CODEX: NO CLEAR PICK. Hovering a choice adds the advisor's full reason to the game's own item tooltip.
+--
+--   ADVISOR DECIDES, THIS FILE DISPLAYS. Everything shown comes from ns.Advisor.Display() (RewardAdvisor.lua). This file reads no item facts, compares no stats, judges no usability,
+--   and never picks a reward: it cannot click, accept or choose anything, and it never replaces or re-parents the game's reward buttons (the strips are children that take no mouse input).
+--
+--   WHERE IT ATTACHES (NOT PROVEN on Forever: the reward frame's structure was never inspected): the choice buttons are looked up by the names the game's quest-info frame
+--   gives them in the Classic family of clients, CANDIDATES below, and a button is used only when it is shown and, if it says which choice it is (GetID), says the right one. A choice
+--   whose button is not found is simply not annotated (and the report says so: /codex report, REWARD OVERLAY). Nothing is guessed about a frame that is not there.
+--
+--   WHEN: it refreshes on the events that change a reward dialog (QUEST_COMPLETE, QUEST_ITEM_UPDATE, late item data, an equipment change) and hides as soon as the dialog is
+--   no longer open (a light check, three times a second, only while it is showing).
+
+local addonName, ns = ...
+
+local RO = {}
+ns.RewardOverlay = RO
+
+RO.EVENTS = { "QUEST_COMPLETE", "QUEST_ITEM_UPDATE", "GET_ITEM_INFO_RECEIVED", "PLAYER_EQUIPMENT_CHANGED" }
+-- the names a choice button may have, by choice number (Classic family of clients; unproven on Forever)
+RO.CANDIDATES = { "QuestInfoRewardsFrameQuestInfoItem%d", "QuestInfoItem%d" }
+
+local COLORS = {
+	green = { 0.56, 0.80, 0.52 }, yellow = { 1, 0.84, 0.36 }, red = { 0.92, 0.38, 0.32 }, blue = { 0.50, 0.72, 1.0 },
+	purple = { 0.78, 0.60, 0.92 }, gold = { 0.85, 0.72, 0.40 }, grey = { 0.70, 0.68, 0.62 },
+}
+local PICK = { 0.45, 0.95, 0.45 }
+local EDGE = { 1, 0.82, 0.20 }
+
+local state = { shown = false, display = nil, attached = {}, summary = nil, since = 0, log = nil }
+RO.state = state
+local cache = setmetatable({}, { __mode = "k" })           -- button -> its strip (created once, reused)
+
+local function safe(f, ...) local ok, a, b = pcall(f, ...); if ok then return a, b end end
+
+--- The game's choice button for choice `i`: the first candidate that exists, is shown, and (when it can say) is that choice. nil when there is none.
+function RO.FindButton(i)
+	for _, pattern in ipairs(RO.CANDIDATES) do
+		local name = string.format(pattern, i)
+		local b = rawget(_G, name)
+		if type(b) == "table" and type(b.IsShown) == "function" and safe(b.IsShown, b) then
+			local id = type(b.GetID) == "function" and safe(b.GetID, b) or nil
+			if type(id) ~= "number" or id == 0 or id == i then return b, name end
+		end
+	end
+	return nil
+end
+
+local function color(c, fam) return c[fam] or c.grey end
+
+--- The strip on a choice button (created on first use). It is a child with mouse input off, so the game's button still takes every click and hover.
+local function stripFor(btn)
+	local s = cache[btn]
+	if s then return s end
+	local f = CreateFrame("Frame", nil, btn)
+	pcall(f.EnableMouse, f, false)
+	pcall(f.SetFrameLevel, f, ((type(btn.GetFrameLevel) == "function" and safe(btn.GetFrameLevel, btn)) or 1) + 5)
+	pcall(f.SetHeight, f, 12)
+	local bg = f:CreateTexture(nil, "BACKGROUND")
+	pcall(bg.SetAllPoints, bg)
+	pcall(bg.SetColorTexture, bg, 0, 0, 0, 0.72)
+	local fs = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	pcall(fs.SetPoint, fs, "RIGHT", f, "RIGHT", -3, 0)
+	pcall(fs.SetJustifyH, fs, "RIGHT")
+	s = { frame = f, bg = bg, text = fs, edges = {} }
+	for n = 1, 4 do
+		local t = f:CreateTexture(nil, "OVERLAY")
+		pcall(t.SetColorTexture, t, EDGE[1], EDGE[2], EDGE[3], 1)
+		s.edges[n] = t
+		t:Hide()
+	end
+	cache[btn] = s
+	if type(btn.HookScript) == "function" then
+		pcall(btn.HookScript, btn, "OnEnter", function(self) RO.Tooltip(self) end)
+	end
+	return s
+end
+
+local function place(s, btn)
+	local f = s.frame
+	pcall(f.ClearAllPoints, f)
+	pcall(f.SetPoint, f, "BOTTOMLEFT", btn, "BOTTOMLEFT", 44, 2)          -- (right of the item icon, along the bottom edge)
+	pcall(f.SetPoint, f, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
+	local e = s.edges
+	local function edge(t, p1, p2, w, h)
+		pcall(t.ClearAllPoints, t)
+		pcall(t.SetPoint, t, p1, btn, p1, 0, 0)
+		pcall(t.SetPoint, t, p2, btn, p2, 0, 0)
+		if w then pcall(t.SetWidth, t, w) end
+		if h then pcall(t.SetHeight, t, h) end
+	end
+	edge(e[1], "TOPLEFT", "TOPRIGHT", nil, 2)
+	edge(e[2], "BOTTOMLEFT", "BOTTOMRIGHT", nil, 2)
+	edge(e[3], "TOPLEFT", "BOTTOMLEFT", 2, nil)
+	edge(e[4], "TOPRIGHT", "BOTTOMRIGHT", 2, nil)
+end
+
+--- The text of a strip: "[TAG] [TAG]  short stats  ?" (a RECOMMENDED choice says RECOMMENDED first). Pure; exported for the tests.
+function RO.StripText(row)
+	local parts = {}
+	if row.recommended == "pick" then parts[#parts + 1] = "RECOMMENDED"
+	elseif row.recommended == "tentative" then parts[#parts + 1] = "TENTATIVE PICK" end
+	for _, t in ipairs(row.tags) do parts[#parts + 1] = "[" .. t .. "]" end
+	local s = table.concat(parts, " ")
+	if row.short then s = s .. "  " .. row.short end
+	if row.unsure then s = s .. "  (usability unclear)" end
+	return s
+end
+
+local function summaryFont()
+	if state.summary then return state.summary end
+	local f = CreateFrame("Frame", nil, UIParent)
+	pcall(f.EnableMouse, f, false)
+	pcall(f.SetFrameStrata, f, "HIGH")
+	pcall(f.SetHeight, f, 14)
+	local bg = f:CreateTexture(nil, "BACKGROUND")
+	pcall(bg.SetAllPoints, bg)
+	pcall(bg.SetColorTexture, bg, 0, 0, 0, 0.78)
+	local fs = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+	pcall(fs.SetPoint, fs, "LEFT", f, "LEFT", 4, 0)
+	state.summary = { frame = f, text = fs }
+	return state.summary
+end
+
+local function clear()
+	for btn, s in pairs(cache) do
+		pcall(s.frame.Hide, s.frame)
+		for _, t in ipairs(s.edges) do t:Hide() end
+	end
+	if state.summary then pcall(state.summary.frame.Hide, state.summary.frame) end
+	state.shown, state.display, state.attached = false, nil, {}
+end
+
+--- The strip drawn on a button (for the tests: it must take no mouse input).
+function RO.Strip(btn) return cache[btn] end
+
+--- Hides every annotation (the dialog closed, or there is nothing to say).
+function RO.Hide() clear() end
+
+--- Draws a display table (Advisor.Display's result) on the game's choice buttons. Returns how many choices were annotated.
+function RO.Apply(d)
+	clear()
+	if not d or not d.rows or #d.rows == 0 then return 0 end
+	local first, n = nil, 0
+	local byIndex = {}
+	for _, row in ipairs(d.rows) do byIndex[row.index] = row end
+	local attached = {}
+	for _, row in ipairs(d.rows) do
+		local btn, name = RO.FindButton(row.index)
+		if btn then
+			first = first or btn
+			local s = stripFor(btn)
+			place(s, btn)
+			s.text:SetText(RO.StripText(row))
+			local c = row.recommended and PICK or color(COLORS, row.family)
+			s.text:SetTextColor(c[1], c[2], c[3])
+			pcall(s.frame.Show, s.frame)
+			for _, t in ipairs(s.edges) do if row.recommended then t:Show() else t:Hide() end end
+			attached[row.index] = { button = name, row = row }
+			s.row = row
+			n = n + 1
+		end
+	end
+	if first then
+		local sm = summaryFont()
+		pcall(sm.frame.ClearAllPoints, sm.frame)
+		pcall(sm.frame.SetPoint, sm.frame, "BOTTOMLEFT", first, "TOPLEFT", 0, 1)
+		pcall(sm.frame.SetWidth, sm.frame, 260)
+		sm.text:SetText(d.verdict.text)
+		local c = d.verdict.kind == "none" and COLORS.yellow or PICK
+		sm.text:SetTextColor(c[1], c[2], c[3])
+		pcall(sm.frame.Show, sm.frame)
+	end
+	state.shown, state.display, state.attached = n > 0, d, attached
+	return n
+end
+
+--- The advisor's full reason as extra tooltip lines on the game's own item tooltip (added after the game has filled it in).
+function RO.Tooltip(btn)
+	local s = cache[btn]
+	local row = s and s.row
+	if not (state.shown and row and rawget(_G, "GameTooltip")) then return end
+	local tip = GameTooltip
+	if type(tip.AddLine) ~= "function" then return end
+	pcall(tip.AddLine, tip, " ")
+	pcall(tip.AddLine, tip, "Codex: " .. table.concat(row.tags, " / "), 1, 0.82, 0.2)
+	pcall(tip.AddLine, tip, row.reason, 0.9, 0.9, 0.9, true)
+	for i, cv in ipairs(row.caveats or {}) do
+		if i > 3 then break end
+		pcall(tip.AddLine, tip, cv, 0.7, 0.7, 0.7, true)
+	end
+	pcall(tip.Show, tip)
+end
+
+--- Recomputes from the advisor and redraws (or hides). opts as for Advisor.Display (a test passes a fake dialog).
+function RO.Update(opts)
+	if not ns.Advisor then return 0 end
+	local ok, d = pcall(ns.Advisor.Display, opts)
+	if not ok then
+		if ns.RecordError then ns.RecordError("reward overlay", d) end
+		clear()
+		return 0
+	end
+	if not d then clear() return 0 end
+	return RO.Apply(d)
+end
+
+--- True while the game's reward dialog looks open (the evidence layer's own check).
+local function dialogOpen()
+	return ns.ItemProbe and ns.ItemProbe.DialogOpen and ns.ItemProbe.DialogOpen() or false
+end
+
+local frame = CreateFrame("Frame")
+RO.frame = frame
+RO.registered = {}
+for _, ev in ipairs(RO.EVENTS) do
+	local ok = pcall(frame.RegisterEvent, frame, ev)
+	RO.registered[ev] = ok and true or false
+end
+frame:SetScript("OnEvent", function(_, event)
+	-- (item data arrives constantly: only a dialog that is showing, or open, cares)
+	if event == "GET_ITEM_INFO_RECEIVED" or event == "PLAYER_EQUIPMENT_CHANGED" then
+		if not state.shown then return end
+	end
+	if state.shown or dialogOpen() then RO.Update() end
+end)
+frame:SetScript("OnUpdate", function(_, dt)
+	if not state.shown then return end
+	state.since = state.since + (dt or 0)
+	if state.since < 0.3 then return end
+	state.since = 0
+	if not dialogOpen() then clear() end                    -- the dialog closed (a reward taken, or walked away)
+end)
+
+--- The report lines: what the overlay could attach to (the first real-client check of the reward frame's structure).
+function RO.ReportLines()
+	local L = {}
+	local rf = rawget(_G, "QuestInfoRewardsFrame")
+	local found, tried = {}, 0
+	for i = 1, 6 do
+		local b, name = RO.FindButton(i)
+		if b then found[#found + 1] = i .. "=" .. name end
+		tried = tried + 1
+	end
+	L[#L + 1] = string.format("REWARD OVERLAY (annotations drawn on the game's own reward choices; the advisor decides, the overlay only displays): events %s | QuestFrame %s | QuestInfoRewardsFrame %s | choice buttons found now: %s",
+		(function() local r = {} for _, ev in ipairs(RO.EVENTS) do r[#r + 1] = ev .. (RO.registered[ev] and "" or "(not registered)") end return table.concat(r, ",") end)(),
+		rawget(_G, "QuestFrame") and "present" or "absent", rf and "present" or "absent", #found > 0 and table.concat(found, ", ") or "none (no reward dialog open, or the names are different on this client)")
+	if state.shown and state.display then
+		local n = 0
+		for _ in pairs(state.attached) do n = n + 1 end
+		L[#L + 1] = string.format("  showing: %d of %d choices annotated | %s", n, #state.display.rows, state.display.verdict.text)
+	else
+		L[#L + 1] = "  not showing (no reward dialog with a choice is open)"
+	end
+	if rf and type(rf.GetChildren) == "function" then
+		local ok, c = pcall(function() return { rf:GetChildren() } end)
+		if ok and type(c) == "table" then
+			local names = {}
+			for i, ch in ipairs(c) do
+				if i > 10 then names[#names + 1] = "..." break end
+				local nm = type(ch.GetName) == "function" and safe(ch.GetName, ch) or nil
+				names[#names + 1] = tostring(nm or "(unnamed)")
+			end
+			L[#L + 1] = "  QuestInfoRewardsFrame children: " .. (#names > 0 and table.concat(names, ", ") or "none")
+		end
+	end
+	return L
+end
+
+return RO

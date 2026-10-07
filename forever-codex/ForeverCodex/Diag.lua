@@ -963,6 +963,10 @@ function D.PlaytestLines(snap, lines)
 			add("REWARD ADVISOR: error: " .. tostring(alines))
 		end
 	end
+	if ns.RewardOverlay then
+		local okO, olines = pcall(ns.RewardOverlay.ReportLines)
+		if okO then for _, l in ipairs(olines) do add(l) end else add("REWARD OVERLAY: error: " .. tostring(olines)) end
+	end
 	if ns.AreaEvidence then
 		local okA, alines = pcall(ns.AreaEvidence.ReportLines)
 		if okA then for _, l in ipairs(alines) do add(l) end end

@@ -514,6 +514,9 @@ local function dialogOpen()
 	return true
 end
 
+--- True while a quest reward dialog looks open (the check the report uses; the reward overlay hides when it turns false).
+function P.DialogOpen() return dialogOpen() end
+
 local function statList(stats)
 	local keys = {}
 	for k in pairs(stats) do keys[#keys + 1] = k end

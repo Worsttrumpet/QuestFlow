@@ -17,7 +17,7 @@
 --
 -- A classification describes the ITEM. "Upgrade" is never a pick by itself. The recommendation is a separate step (below) that reads classifications only; later layers
 -- (replacement horizon, route, future use) plug in through the context argument and the registries below.
--- Read-only, independent of the planner, strategies, presenter and UI; the only consumer is /codex report (Advisor.ReportLines).
+-- Read-only and independent of the planner, strategies and presenter. Consumers: /codex report (Advisor.ReportLines) and the reward overlay (UI/RewardOverlay.lua, via Advisor.Display).
 
 local addonName, ns = ...
 
@@ -664,6 +664,66 @@ function A.Evaluate(opts)
 	end
 	ev.recommendation = A.Recommend(ev, o)
 	return ev
+end
+
+-- ---------------------------------------------------------------- what the PLAYER sees (read by UI/RewardOverlay.lua; the advisor decides, the overlay only draws this)
+
+--- One reward CHOICE as the overlay shows it. Everything here comes from the classification and the recommendation the advisor already made; nothing is decided again.
+--   index        the choice number in the reward dialog (the same number the client uses)
+--   tags         the advisor's own category words, in its presentation order (e.g. { "NOT USABLE", "VENDOR" }); a mixed trade-off whose usability is not established shows MIXED
+--   short        the stat gains and losses of the comparison, e.g. "+4 stamina, -2 agility" (nil when there is none)
+--   unsure       true when the client's usability answers are unclear or missing (shown as "usability unclear": never hidden)
+--   reason       the advisor's full reason for its main category (for the tooltip); caveats = its caveats
+--   recommended  "pick" (the advisor recommends this choice) | "tentative" (it names it, but says the evidence is incomplete) | nil
+function A.DisplayRow(it, selected, state)
+	local c = it.classification
+	local primary
+	for _, x in ipairs(c.categories) do if x.id == c.primary then primary = x end end
+	local tags, seen = {}, {}
+	for _, x in ipairs(c.categories) do if not seen[x.tag] then seen[x.tag] = true; tags[#tags + 1] = x.tag end end
+	local o = c.outcome
+	local cur = c.eligibility and c.eligibility.current and c.eligibility.current.state
+	local unsure = (cur ~= "PROVEN_YES" and cur ~= "PROVEN_NO") and c.item and c.item.state == "LOADED" or false
+	-- a trade-off is a trade-off whether or not usability is established; it is shown as MIXED, with the doubt beside it (an apparent IMPROVEMENT is not: it stays UNKNOWN)
+	if c.primary == "UNKNOWN" and unsure and o and o.kind == "mixed" then tags = { "MIXED" } end
+	local short
+	local ev = o and o.evidence
+	if ev and (o.kind == "upgrade" or o.kind == "slight" or o.kind == "mixed") then
+		local parts = {}
+		if ev.gains and #ev.gains > 0 then parts[#parts + 1] = statsText(ev.gains) end
+		if ev.losses and #ev.losses > 0 then parts[#parts + 1] = statsText(ev.losses) end
+		if #parts > 0 then short = table.concat(parts, ", ") end
+	end
+	local row = { index = it.index, name = c.item.name, tags = tags, family = primary and primary.family or "grey", short = short, unsure = unsure or nil,
+		reason = primary and primary.reason or "Nothing is known about this item yet.", caveats = c.caveats }
+	if selected and selected.kind == "choice" and selected.index == it.index then
+		row.recommended = state == "RECOMMEND" and "pick" or (state == "TENTATIVE" and "tentative" or nil)
+	end
+	return row
+end
+
+--- The reward dialog as the overlay shows it: nil unless a quest REWARD dialog (the turn-in step, QUEST_COMPLETE) is open right now with two or more choices to decide between.
+-- Returns { q, state, pick, verdict = { text, kind }, rows = { DisplayRow ... } }. The verdict says which choice (never "the best-looking one") or that Codex makes no pick.
+-- opts as for A.Evaluate (a test passes a fake dialog).
+function A.Display(opts)
+	local ev = A.Evaluate(opts)
+	if not (ev and ev.live and ev.at == "QUEST_COMPLETE") then return nil end
+	local rec = ev.recommendation or {}
+	local rows = {}
+	for _, it in ipairs(ev.items) do
+		if it.kind == "choice" then rows[#rows + 1] = A.DisplayRow(it, rec.selected, rec.state) end
+	end
+	if #rows < 2 then return nil end
+	local sel = rec.selected
+	local verdict
+	if rec.state == "RECOMMEND" and sel then
+		verdict = { kind = "pick", text = string.format("CODEX: RECOMMENDED - CHOICE %d", sel.index) }
+	elseif rec.state == "TENTATIVE" and sel then
+		verdict = { kind = "tentative", text = string.format("CODEX: TENTATIVE PICK - CHOICE %d (evidence incomplete)", sel.index) }
+	else
+		verdict = { kind = "none", text = "CODEX: NO CLEAR PICK" }
+	end
+	return { q = ev.q, state = rec.state, pick = sel and sel.index or nil, verdict = verdict, rows = rows }
 end
 
 -- ---------------------------------------------------------------- the report section
