@@ -1,7 +1,9 @@
--- UI: REWARD OVERLAY. Small annotations drawn directly ON the game's own quest reward choices (no Codex window, nothing to move): each choice gets a row of small Codex
--- ICONS (UI/CodexIcons.lua) under its button, one per classification the advisor gave it (and a ? when usability is unclear); the choice the advisor recommends also gets a gold
--- border and a star, and one line says CODEX: RECOMMENDED - CHOICE n, or CODEX: NO CLEAR PICK. Hovering a choice adds the advisor's full reason, the stat comparison and the
--- icons' meaning in words to the game's own item tooltip. (0.9.7: icons replaced the text tags.)
+-- UI: REWARD OVERLAY. Small annotations drawn directly ON the game's own quest reward choices (no Codex window, nothing to move):
+--   * each choice gets a row of small Codex ICONS (UI/CodexIcons.lua), one per classification the advisor gave it (UPGRADE, NOT AN UPGRADE, MIXED, VENDOR, NOT USABLE, UNKNOWN ...),
+--     and a VENDOR coin is followed by the sell value ("[coin] 3s 24c"), the one number the player would otherwise open Blizzard's tooltip for;
+--   * the reward the advisor RECOMMENDS gets a golden border and a star: the border is the recommendation, the icons are the classification, and they are separate things;
+--   * hovering a choice adds ONE line to the game's own item tooltip, "CODEX: <classification>": Blizzard's tooltip already has the item and its stats, Codex adds only its opinion.
+-- There is no verdict line ("NO CLEAR PICK" and the like): without a recommendation there is simply no border and no star.
 --
 --   ADVISOR DECIDES, THIS FILE DISPLAYS. Everything shown comes from ns.Advisor.Display() (RewardAdvisor.lua). This file reads no item facts, compares no stats, judges no usability,
 --   and never picks a reward: it cannot click, accept or choose anything, and it never replaces or re-parents the game's reward buttons (the strips are children that take no mouse input).
@@ -18,9 +20,7 @@ local addonName, ns = ...
 local RO = {}
 ns.RewardOverlay = RO
 
-RO.VERDICT_RISE = 22                 -- up past the game's "Choose your reward" line onto the "Rewards" heading line, whose right side is empty
 RO.INSET = 12                        -- the right-hand column of buttons runs to the edge of the game's scroll area, which clips anything drawn on it: stay this far in
-RO.VERDICT_MAX = 245                 -- the verdict shares the game's "Choose your reward" line: never wider than this (longer is cut, not spilled past the window edge)
 RO.EVENTS = { "QUEST_COMPLETE", "QUEST_ITEM_UPDATE", "GET_ITEM_INFO_RECEIVED", "PLAYER_EQUIPMENT_CHANGED" }
 -- the names a choice button may have, by choice number (Classic family of clients; unproven on Forever)
 RO.CANDIDATES = { "QuestInfoRewardsFrameQuestInfoItem%d", "QuestInfoItem%d" }
@@ -30,9 +30,11 @@ local COLORS = {
 	purple = { 0.78, 0.60, 0.92 }, gold = { 0.85, 0.72, 0.40 }, grey = { 0.70, 0.68, 0.62 },
 }
 local PICK = { 0.45, 0.95, 0.45 }
-local EDGE = { 1, 0.82, 0.20 }
+local EDGE = { 1, 0.82, 0.20 }          -- the golden recommendation border: bright gold, 3 px, drawn INSIDE the button's own edge (the right-hand column runs to the scroll area's edge, which clips anything outside)
+local EDGE_IN = { 0.55, 0.38, 0.04 }     -- a 1 px darker amber line just inside it, so the gold stands out against the parchment and the button art
+RO.BORDER = 3
 
-local state = { builtFor = nil, postHits = 0, postBuilt = 0, hoverPost = 0, tipHooks = 0, tipLines = 0, tipKept = 0, tipLost = 0, hoverT = 0, hoverFixes = 0, shown = false, display = nil, attached = {}, summary = nil, since = 0, settled = false, backoff = 0 }
+local state = { builtFor = nil, postHits = 0, postBuilt = 0, hoverPost = 0, tipHooks = 0, tipLines = 0, tipKept = 0, tipLost = 0, hoverT = 0, hoverFixes = 0, shown = false, display = nil, attached = {}, since = 0, settled = false, backoff = 0 }
 RO.state = state
 local cache = setmetatable({}, { __mode = "k" })           -- button -> its strip (created once, reused)
 
@@ -61,12 +63,16 @@ local function stripFor(btn)
 	pcall(f.EnableMouse, f, false)
 	pcall(f.SetFrameLevel, f, ((type(btn.GetFrameLevel) == "function" and safe(btn.GetFrameLevel, btn)) or 1) + 5)
 	pcall(f.SetHeight, f, ns.CodexIcons and ns.CodexIcons.BadgeSize() or 12)
-	s = { frame = f, badges = {}, edges = {} }
+	s = { frame = f, badges = {}, edges = {}, inner = {}, edgeSpec = {} }
 	for n = 1, 4 do
 		local t = f:CreateTexture(nil, "OVERLAY")
 		pcall(t.SetColorTexture, t, EDGE[1], EDGE[2], EDGE[3], 1)
 		s.edges[n] = t
 		t:Hide()
+		local u = f:CreateTexture(nil, "OVERLAY")
+		pcall(u.SetColorTexture, u, EDGE_IN[1], EDGE_IN[2], EDGE_IN[3], 1)
+		s.inner[n] = u
+		u:Hide()
 	end
 	cache[btn] = s
 	if type(btn.HookScript) == "function" then
@@ -82,18 +88,29 @@ local function place(s, btn)
 	-- BOTTOM-RIGHT corner of the button, right-aligned: the item's name wraps greedily, so its second line is the short one and the corner under it is the free part. The row is
 	-- only as wide as its badges (Draw sets the width), so it never reaches the icon. (The gap BETWEEN the rows is too small for a badge.)
 	pcall(f.SetPoint, f, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", -RO.INSET, 3)
-	local e = s.edges
-	local function edge(t, p1, p2, w, h)
-		pcall(t.ClearAllPoints, t)
-		pcall(t.SetPoint, t, p1, btn, p1, 0, 0)
-		pcall(t.SetPoint, t, p2, btn, p2, 0, 0)
-		if w then pcall(t.SetWidth, t, w) end
-		if h then pcall(t.SetHeight, t, h) end
+	-- the four sides of the golden border (outer, bright) and of the thin dark line inside it. Each side is anchored to two corners of the button and given one thickness; what was
+	-- done is kept in s.edgeSpec (the tests read it: the stub client has no layout to measure).
+	local w = RO.BORDER
+	local function ring(list, inset, thick, key)
+		-- top, bottom, left, right
+		local specs = {
+			{ "TOPLEFT", "TOPRIGHT", inset, -inset, -inset, -inset, nil, thick },
+			{ "BOTTOMLEFT", "BOTTOMRIGHT", inset, inset, -inset, inset, nil, thick },
+			{ "TOPLEFT", "BOTTOMLEFT", inset, -inset, inset, inset, thick, nil },
+			{ "TOPRIGHT", "BOTTOMRIGHT", -inset, -inset, -inset, inset, thick, nil },
+		}
+		for n, sp in ipairs(specs) do
+			local t = list[n]
+			pcall(t.ClearAllPoints, t)
+			pcall(t.SetPoint, t, sp[1], btn, sp[1], sp[3], sp[4])
+			pcall(t.SetPoint, t, sp[2], btn, sp[2], sp[5], sp[6])
+			if sp[7] then pcall(t.SetWidth, t, sp[7]) end
+			if sp[8] then pcall(t.SetHeight, t, sp[8]) end
+			s.edgeSpec[key .. n] = { p1 = sp[1], p2 = sp[2], inset = inset, w = sp[7], h = sp[8] }
+		end
 	end
-	edge(e[1], "TOPLEFT", "TOPRIGHT", nil, 2)
-	edge(e[2], "BOTTOMLEFT", "BOTTOMRIGHT", nil, 2)
-	edge(e[3], "TOPLEFT", "BOTTOMLEFT", 2, nil)
-	edge(e[4], "TOPRIGHT", "BOTTOMRIGHT", 2, nil)
+	ring(s.edges, 0, w, "outer")
+	ring(s.inner, w, 1, "inner")
 end
 
 --- The glyph ids of a row's icon row, in the advisor's order: one per classification word, a ? added when usability is unclear (unless UNKNOWN is already there). The
@@ -115,29 +132,11 @@ function RO.StarGlyph(row)
 	if row.recommended == "pick" then return "RECOMMENDED" elseif row.recommended == "tentative" then return "TENTATIVE" end
 end
 
-local function summaryFont()
-	if state.summary then return state.summary end
-	local f = CreateFrame("Frame", nil, UIParent)
-	pcall(f.EnableMouse, f, false)
-	pcall(f.SetFrameStrata, f, "HIGH")
-	pcall(f.SetHeight, f, 14)
-	local bg = f:CreateTexture(nil, "BACKGROUND")
-	pcall(bg.SetAllPoints, bg)
-	pcall(bg.SetColorTexture, bg, 0, 0, 0, 0.78)
-	local fs = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	pcall(fs.SetPoint, fs, "LEFT", f, "LEFT", 4, 0)
-	pcall(fs.SetPoint, fs, "RIGHT", f, "RIGHT", -2, 0)
-	pcall(fs.SetWordWrap, fs, false)
-	state.summary = { frame = f, text = fs }
-	return state.summary
-end
-
 local function clear()
 	for btn, s in pairs(cache) do
 		pcall(s.frame.Hide, s.frame)
-		for _, t in ipairs(s.edges) do t:Hide() end
+		for n, t in ipairs(s.edges) do t:Hide(); s.inner[n]:Hide() end
 	end
-	if state.summary then pcall(state.summary.frame.Hide, state.summary.frame) end
 	state.shown, state.display, state.attached = false, nil, {}
 end
 
@@ -152,19 +151,40 @@ function RO.Draw(s, row)
 	local I = ns.CodexIcons
 	local glyphs = RO.Glyphs(row)
 	local size = I.BadgeSize()
+	local x, gap = 0, 2
+	-- the sell value is drawn straight after the VENDOR coin ("[coin] 3s 24c"): the one number the player would otherwise have to open Blizzard's tooltip for
+	local priceText = row.vendor
+	if priceText and not s.price then
+		s.price = s.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		pcall(s.price.SetTextColor, s.price, 0.85, 0.72, 0.40)
+	end
+	local priceShown = false
 	for n, g in ipairs(glyphs) do
 		local b = s.badges[n]
 		if not b then b = I.NewBadge(s.frame); s.badges[n] = b end
 		pcall(b.frame.ClearAllPoints, b.frame)
-		pcall(b.frame.SetPoint, b.frame, "LEFT", s.frame, "LEFT", (n - 1) * (size + 2), 0)
+		pcall(b.frame.SetPoint, b.frame, "LEFT", s.frame, "LEFT", x, 0)
 		-- the colour family is the advisor's for the first (main) classification; the rest use their own category family
 		I.Paint(b, g, I.COLORS[(n == 1 and row.family) or I.FAMILY_OF[g] or "grey"] or I.COLORS.grey)
 		pcall(b.frame.Show, b.frame)
+		x = x + size + gap
+		if g == "VENDOR" and priceText and not priceShown then
+			priceShown = true
+			pcall(s.price.SetText, s.price, priceText)
+			local w = type(s.price.GetStringWidth) == "function" and safe(s.price.GetStringWidth, s.price) or nil
+			if type(w) ~= "number" or w <= 0 then w = #priceText * 5.5 end
+			pcall(s.price.ClearAllPoints, s.price)
+			pcall(s.price.SetPoint, s.price, "LEFT", s.frame, "LEFT", x, 0)
+			pcall(s.price.Show, s.price)
+			s.priceWidth = w
+			x = x + w + gap + 1
+		end
 	end
+	if s.price and not priceShown then pcall(s.price.Hide, s.price) end
 	for n = #glyphs + 1, #s.badges do pcall(s.badges[n].frame.Hide, s.badges[n].frame) end
 	local star = RO.StarGlyph(row)
-	local count = #glyphs + (star and 1 or 0)
-	pcall(s.frame.SetWidth, s.frame, math.max(size, count * (size + 2) - 2))
+	local total = x - gap + (star and (gap + size) or 0)
+	pcall(s.frame.SetWidth, s.frame, math.max(size, total))
 	if star then
 		local b = s.star
 		if not b then b = I.NewBadge(s.frame); s.star = b end
@@ -182,7 +202,6 @@ function RO.Apply(d)
 	clear()
 	if not d or not d.rows or #d.rows == 0 then return 0 end
 	local first, n = nil, 0
-	local rightmost, rightAt, topAt
 	local byIndex = {}
 	for _, row in ipairs(d.rows) do byIndex[row.index] = row end
 	local attached = {}
@@ -190,31 +209,18 @@ function RO.Apply(d)
 		local btn, name = RO.FindButton(row.index)
 		if btn then
 			first = first or btn
-			-- the right-most button of the TOP row (the first button's row; the first button when the client cannot say): the verdict sits on the header line above it
-			local top = type(btn.GetTop) == "function" and safe(btn.GetTop, btn) or nil
-			local right = type(btn.GetRight) == "function" and safe(btn.GetRight, btn) or nil
-			if first == btn then topAt = top; rightmost, rightAt = btn, right
-			elseif type(top) == "number" and type(topAt) == "number" and math.abs(top - topAt) <= 2 and type(right) == "number" and (type(rightAt) ~= "number" or right > rightAt) then rightmost, rightAt = btn, right end
 			local s = stripFor(btn)
 			place(s, btn)
 			RO.Draw(s, row)
 			pcall(s.frame.Show, s.frame)
-			for _, t in ipairs(s.edges) do if row.recommended then t:Show() else t:Hide() end end
+			-- the golden border is the recommendation (a pick or a tentative pick): the one thing here that comes from the recommendation, not from the classification
+			for n, t in ipairs(s.edges) do
+				if row.recommended then t:Show(); s.inner[n]:Show() else t:Hide(); s.inner[n]:Hide() end
+			end
 			attached[row.index] = { button = name, row = row }
 			s.row = row
 			n = n + 1
 		end
-	end
-	if first then
-		local sm = summaryFont()
-		pcall(sm.frame.ClearAllPoints, sm.frame)
-		pcall(sm.frame.SetPoint, sm.frame, "BOTTOMRIGHT", rightmost or first, "TOPRIGHT", -8, RO.VERDICT_RISE)    -- (right-aligned on the game's own "Choose your reward" line: under the last row it covered "You will also receive")
-		sm.text:SetText(d.verdict.short or d.verdict.text)
-		local sw = type(sm.text.GetStringWidth) == "function" and safe(sm.text.GetStringWidth, sm.text) or nil
-		pcall(sm.frame.SetWidth, sm.frame, math.min(RO.VERDICT_MAX, (type(sw) == "number" and sw > 0) and (sw + 10) or 150))
-		local c = d.verdict.kind == "none" and COLORS.yellow or PICK
-		sm.text:SetTextColor(c[1], c[2], c[3])
-		pcall(sm.frame.Show, sm.frame)
 	end
 	state.shown, state.display, state.attached = n > 0, d, attached
 	return n
@@ -224,15 +230,9 @@ end
 --- The advisor's words as extra lines on the game's item tooltip.
 local function addLines(row, noShow)
 	local tip = GameTooltip
+	local c = ns.CodexIcons.COLORS[row.family] or ns.CodexIcons.COLORS.grey
 	pcall(tip.AddLine, tip, " ")
-	if row.recommended then pcall(tip.AddLine, tip, ns.CodexIcons.WORD[RO.StarGlyph(row)], 1, 0.82, 0.2) end
-	pcall(tip.AddLine, tip, "Codex: " .. table.concat(row.tags, " / "), 1, 0.82, 0.2)
-	pcall(tip.AddLine, tip, row.reason, 0.9, 0.9, 0.9, true)
-	if row.short then pcall(tip.AddLine, tip, "Compared with what you wear: " .. row.short, 0.8, 0.8, 0.8, true) end
-	for i, cv in ipairs(row.caveats or {}) do
-		if i > 3 then break end
-		pcall(tip.AddLine, tip, cv, 0.7, 0.7, 0.7, true)
-	end
+	pcall(tip.AddLine, tip, "CODEX: " .. (row.headline or "UNKNOWN"), c[1], c[2], c[3])      -- the one thing Codex adds: its verdict on this reward (Blizzard's tooltip has the item)
 	if not noShow then pcall(tip.Show, tip) end
 end
 
@@ -294,7 +294,7 @@ local function tipHasOurs()
 	for i = 1, n do
 		local fs = rawget(_G, "GameTooltipTextLeft" .. i)
 		local t = fs and type(fs.GetText) == "function" and safe(fs.GetText, fs) or nil
-		if type(t) == "string" and t:find("Codex: ", 1, true) then return true end
+		if type(t) == "string" and t:find("CODEX: ", 1, true) then return true end
 	end
 	return false
 end

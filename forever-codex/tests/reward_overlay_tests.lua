@@ -88,7 +88,7 @@ do
 	-- drawn on the buttons
 	local n = RO.Update(dialog({ KRIS(), HAMMER(), AXE(), STAFF() }))
 	check(n == 4 and RO.state.shown, "all four buttons were annotated")
-	check(RO.state.summary.text.__text == "CODEX: TENTATIVE PICK - CHOICE 2", "the summary names choice 2 as the tentative pick (without the parenthetical, which the tooltip carries)")
+	check(RO.state.summary == nil and RO.StarGlyph(RO.state.attached[2].row) == "TENTATIVE", "no verdict line is drawn: the hollow star marks the tentative pick")
 	for i = 1, 4 do
 		local bs = RO.state.attached[i]
 		check(bs and bs.button == "QuestInfoRewardsFrameQuestInfoItem" .. i, "choice " .. i .. " is attached to its own button")
@@ -109,7 +109,7 @@ do
 	RO.Update(dialog({ poor, good }))
 	local e1, e2 = RO.state.attached[1], RO.state.attached[2]
 	check(e2 and e2.row.recommended == "pick" and e1 and e1.row.recommended == nil, "the recommendation is attached to choice 2's button, not choice 1's")
-	check(RO.state.summary.text.__text == "CODEX: RECOMMENDED - CHOICE 2", "the summary names the choice")
+	check(RO.state.summary == nil and RO.StarGlyph(RO.state.attached[2].row) == "RECOMMENDED", "no verdict line: the solid star marks the pick")
 	-- the gold border shows on the recommended button only
 	local s1, s2 = RO.Strip(b[1]), RO.Strip(b[2])
 	check(s2.edges[1].__shown == true and s2.edges[4].__shown == true, "choice 2 (recommended) has the gold border")
@@ -151,15 +151,15 @@ section("reward overlay: lifecycle (opens, updates, closes)")
 do
 	local b = buttons(2)
 	local d1 = dialog({ KRIS(), HAMMER() })
-	check(RO.Update(d1) == 2 and RO.state.shown and RO.state.summary.frame.__shown ~= false, "the annotations appear when the dialog is open")
+	check(RO.Update(d1) == 2 and RO.state.shown, "the annotations appear when the dialog is open")
 	local before = RO.state.display.rows[1].tags[1]
 	-- the observation changes: a better choice appears
 	local good, poor = w(1, "Good Dagger", { [DPS] = 12, [AGI] = 5 }, U), w(2, "Poor Dagger", { [DPS] = 5, [AGI] = 1 }, U)
 	RO.Update(dialog({ good, poor }))
-	check(RO.state.display.rows[1].recommended == "pick" and RO.state.summary.text.__text == "CODEX: RECOMMENDED - CHOICE 1" and before == "MIXED", "an updated observation redraws (MIXED -> RECOMMENDED choice 1)")
+	check(RO.state.display.rows[1].recommended == "pick" and RO.StarGlyph(RO.state.attached[1].row) == "RECOMMENDED" and before == "MIXED", "an updated observation redraws (MIXED -> the solid star on choice 1)")
 	-- the dialog closes: advisor says nothing -> hidden
 	RO.Update(dialog({ good, poor }, "QUEST_COMPLETE", false))
-	check(not RO.state.shown and RO.state.summary.frame.__shown == false, "closing the dialog hides everything")
+	check(not RO.state.shown, "closing the dialog hides everything")
 	-- the light close check
 	RO.Update(d1)
 	check(RO.state.shown, "(setup) shown again")
@@ -209,18 +209,18 @@ do
 		check(_G["QuestInfoRewardsFrameQuestInfoItem" .. i] == bt, "button " .. i .. ": still the game's own frame")
 		check(bt.hooks.OnEnter ~= nil, "button " .. i .. ": its tooltip is extended through a hook")
 	end
-	local blocking = (RO.state.summary.frame.__mouse ~= false) and 1 or 0
+	local blocking = 0
 	for _, bt in ipairs(b) do
 		local st = RO.Strip(bt)
 		check(st ~= nil and st.frame.__mouse == false, "the strip on button's frame takes no mouse input")
 	end
-	check(blocking == 0, "the summary takes no mouse input either")
+	check(blocking == 0 and RO.state.summary == nil, "there is no verdict frame to take mouse input")
 	-- tooltip: the advisor's full reason is added to the game's own tooltip
 	local lines = {}
 	GameTooltip.AddLine = function(_, text) lines[#lines + 1] = text end
 	b[1].hooks.OnEnter(b[1])
-	check(table.concat(lines, "|"):find("Compared with what you wear: " .. RO.state.attached[1].row.short, 1, true), "the tooltip carries the stat comparison the strip leaves out")
-	check(#lines >= 2 and table.concat(lines, "|"):find("Codex:", 1, true) and table.concat(lines, "|"):find(RO.state.attached[1].row.reason, 1, true), "hovering adds the advisor's reason to the tooltip")
+	check(table.concat(lines, "|"):find("CODEX: " .. RO.state.attached[1].row.headline, 1, true), "the tooltip is the one CODEX: line")
+	check(#lines <= 2 and table.concat(lines, "|"):find("CODEX: ", 1, true), "hovering adds only the one short line")
 	GameTooltip.AddLine = nil
 end
 

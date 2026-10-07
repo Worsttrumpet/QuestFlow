@@ -780,7 +780,22 @@ function A.DisplayRow(it, selected, state)
 		if ev.losses and #ev.losses > 0 then parts[#parts + 1] = statsText(ev.losses) end
 		if #parts > 0 then short = table.concat(parts, ", ") end
 	end
-	local row = { index = it.index, name = c.item.name, tags = tags, family = primary and primary.family or "grey", short = short, unsure = unsure or nil,
+	-- 0.10.1: a reward that is equipment and gives no gain over what is worn is NOT AN UPGRADE (its own icon and word; the advisor's outcome kind "none", shown, not re-decided).
+	-- Blizzard's own tooltip already carries every stat, so no comparison numbers are put in the view model.
+	if o and o.kind == "none" then
+		local blocked = false
+		for _, t in ipairs(tags) do if t == "NOT USABLE" then blocked = true end end
+		if not blocked then table.insert(tags, 1, "NOT AN UPGRADE") end
+	end
+	local headline = tags[1] or "UNKNOWN"
+	local vendor
+	for _, t in ipairs(tags) do
+		if t == "VENDOR" then
+			local vv = it.facts and it.facts.fields and it.facts.fields.vendorValue
+			if vv and vv.state == "PROVEN" and type(vv.value) == "number" and vv.value > 0 then vendor = I.Money(vv.value) end
+		end
+	end
+	local row = { index = it.index, name = c.item.name, tags = tags, headline = headline, vendor = vendor, family = primary and primary.family or "grey", short = short, unsure = unsure or nil,
 		reason = primary and primary.reason or "Nothing is known about this item yet.", caveats = c.caveats }
 	if selected and selected.kind == "choice" and selected.index == it.index then
 		row.recommended = state == "RECOMMEND" and "pick" or (state == "TENTATIVE" and "tentative" or nil)
