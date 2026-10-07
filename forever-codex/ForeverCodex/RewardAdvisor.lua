@@ -30,7 +30,15 @@ local I = ns.Items
 --   slightRelative   an improvement whose largest relative gain is below this is a SLIGHT upgrade
 --   relativeFloor    the smallest base a relative gain is measured against (so +1 over 0 is not "infinite")
 --   temporaryQuests / temporaryMinutes   a known replacement at most this far away makes an upgrade TEMPORARY (needs context; never invented)
-A.THRESHOLDS = { slightRelative = 0.25, relativeFloor = 5, temporaryQuests = 3, temporaryMinutes = 15 }
+A.THRESHOLDS = { slightRelative = 0.25, relativeFloor = 5, temporaryQuests = 3, temporaryMinutes = 15, dpsNoise = 0.03 }
+
+-- STATS A CLASS DOES NOT USE (PROPOSED, from how these classes' resources work in Classic; not read from the client, and not weights): a difference in such a stat is
+-- not counted as a gain or a loss, and the reason says it was left out. Only the unambiguous cases are listed; every other class keeps the plain "every stat counts" comparison.
+-- Warriors and Rogues have no mana and no spell power in this comparison: intellect and spirit do nothing for them.
+A.IGNORED_STATS = {
+	WARRIOR = { word = "Warrior", stats = { intellect = true, spirit = true } },
+	ROGUE   = { word = "Rogue",   stats = { intellect = true, spirit = true } },
+}
 
 --- Category table (extensible): id -> { tag (plain ASCII text), family (a colour name for a later icon), order (presentation order only, not a ranking) }.
 A.CATEGORIES = {
@@ -96,11 +104,24 @@ function A.Usability(facts) return ns.Eligibility.ClientUsability(facts) end
 -- ---------------------------------------------------------------- the upgrade judgement (facts in, no weights)
 
 --- Splits a Gear.Compare result into gains, losses and unknowns. Pure.
-local function judge(cmp)
-	local r = { gains = {}, losses = {}, unknown = {}, compared = 0 }
+-- `rel` (optional) = A.IGNORED_STATS[class]: stats the class does not use are left out (listed in r.ignored); a weapon dps difference under A.THRESHOLDS.dpsNoise of
+-- the equipped weapon's dps is noise, not a gain or a loss.
+local function judge(cmp, rel)
+	local r = { gains = {}, losses = {}, unknown = {}, compared = 0, ignored = {} }
 	for _, stat in ipairs(STAT_ORDER) do
 		local s = cmp.stats[stat]
-		if s.state == "COMPARED" then
+		local skip = false
+		if s.state == "COMPARED" and s.diff ~= 0 then
+			if rel and rel.stats[stat] then
+				skip = true
+				r.ignored[#r.ignored + 1] = STAT_LABEL[stat]
+			elseif stat == "weapon_dps" and (s.b or 0) > 0 and math.abs(s.diff) / s.b < A.THRESHOLDS.dpsNoise then
+				skip = true                                  -- (a rounding-sized difference: not mentioned either)
+			end
+		end
+		if skip then
+			r.compared = r.compared + 1
+		elseif s.state == "COMPARED" then
 			r.compared = r.compared + 1
 			local e = { stat = stat, a = s.a, b = s.b, diff = s.diff, assumedZero = s.assumedZero }
 			if s.diff > 0 then
@@ -128,16 +149,16 @@ end
 
 --- Which equipped entry the reward is judged against: an EMPTY slot it fits first, otherwise the comparable entry with the largest relative gain (or, when
 -- none gains, the first comparable one). All entries are kept in the evidence. Returns the entry or nil.
-local function chooseEntry(entries)
+local function chooseEntry(entries, rel)
 	local bestGain, bestRel, firstCompared, firstOther
 	for _, e in ipairs(entries) do
 		if e.state == "EMPTY_SLOT" then return e end
 		if e.state == "COMPARED" then
 			firstCompared = firstCompared or e
-			local j = judge(e.comparison)
-			local rel = 0
-			for _, g in ipairs(j.gains) do rel = math.max(rel, g.relative) end
-			if #j.gains > 0 and #j.losses == 0 and (not bestRel or rel > bestRel) then bestGain, bestRel = e, rel end
+			local j = judge(e.comparison, rel)
+			local gain = 0
+			for _, g in ipairs(j.gains) do gain = math.max(gain, g.relative) end
+			if #j.gains > 0 and #j.losses == 0 and (not bestRel or gain > bestRel) then bestGain, bestRel = e, gain end
 		else
 			firstOther = firstOther or e
 		end
@@ -149,7 +170,7 @@ end
 
 -- the factual comparison of the item with what is worn, turned into an outcome the classification can use. Never judges usability.
 --   { kind = "empty_slot" | "upgrade" | "slight" | "mixed" | "none" | "unknown" | "no_slot", text, evidence, note, partial }
-local function compareOutcome(facts, equipped)
+local function compareOutcome(facts, equipped, rel)
 	local fl = facts.fields
 	local slotState = fl.equipSlot.state
 	if slotState == "EMPTY" then return { kind = "no_slot", note = "the item has no equip slot" } end
@@ -157,16 +178,18 @@ local function compareOutcome(facts, equipped)
 	if not (ns.Gear and equipped) then return { kind = "unknown", note = "the equipped items were not read" } end
 	local cmp = ns.Gear.CompareToEquipped(facts, equipped)
 	if cmp.state ~= "COMPARABLE" then return { kind = "unknown", note = cmp.reason, comparison = cmp } end
-	local entry = chooseEntry(cmp.entries)
+	local entry = chooseEntry(cmp.entries, rel)
 	if entry and entry.state == "EMPTY_SLOT" then
 		return { kind = "empty_slot", text = string.format("fills your empty %s slot", entry.slotName), evidence = { slot = entry.slot, kind = "empty_slot" }, comparison = cmp, chosen = entry.slot }
 	end
 	if not (entry and entry.state == "COMPARED") then
 		return { kind = "unknown", note = entry and (entry.reason or "the equipped item could not be compared") or "no equipment slot to compare with", comparison = cmp, chosen = entry and entry.slot }
 	end
-	local j = judge(entry.comparison)
+	local j = judge(entry.comparison, rel)
 	local cur = nameOf(entry.equipment.itemFacts)
-	local ev = { slot = entry.slot, slotName = entry.slotName, against = cur, gains = j.gains, losses = j.losses, unknown = j.unknown }
+	local ev = { slot = entry.slot, slotName = entry.slotName, against = cur, gains = j.gains, losses = j.losses, unknown = j.unknown, ignored = j.ignored }
+	-- what was left out, said in the reason: the player should see WHY a stat did not count
+	local left = (#j.ignored > 0 and rel) and string.format(" (not counted for a %s: %s)", rel.word, table.concat(j.ignored, ", ")) or ""
 	local o = { evidence = ev, comparison = cmp, chosen = entry.slot, partial = #j.unknown > 0 and tostring(j.unknown[1].reason) or nil }
 	if j.compared == 0 then
 		o.kind, o.note = "unknown", "no stat could be compared" .. (j.unknown[1] and (": " .. tostring(j.unknown[1].reason)) or "")
@@ -175,13 +198,13 @@ local function compareOutcome(facts, equipped)
 		for _, g in ipairs(j.gains) do maxRel = math.max(maxRel, g.relative) end
 		ev.maxRelative = maxRel
 		o.kind = (maxRel >= A.THRESHOLDS.slightRelative) and "upgrade" or "slight"
-		o.text = string.format("%s over your current %s (%s)", statsText(j.gains), cur, entry.slotName)
+		o.text = string.format("%s over your current %s (%s)%s", statsText(j.gains), cur, entry.slotName, left)
 	elseif #j.gains > 0 and #j.losses > 0 then
 		o.kind = "mixed"
-		o.text = string.format("%s, but %s versus your current %s; Codex does not weigh different stats against each other", statsText(j.gains), statsText(j.losses), cur)
+		o.text = string.format("%s, but %s versus your current %s; Codex does not weigh different stats against each other%s", statsText(j.gains), statsText(j.losses), cur, left)
 	else
 		o.kind = "none"
-		o.note = (#j.losses > 0) and string.format("%s versus your current %s", statsText(j.losses), cur) or ("no difference in the compared stats versus your current " .. cur)
+		o.note = ((#j.losses > 0) and string.format("%s versus your current %s", statsText(j.losses), cur) or (#j.ignored > 0 and ("no improvement in the stats that count versus your current " .. cur) or ("no difference in the compared stats versus your current " .. cur))) .. left
 	end
 	return o
 end
@@ -244,7 +267,8 @@ function A.Classify(facts, equipped, opts)
 	local certainty = yes and "PROVEN" or "PARTIAL"
 
 	-- 3. the factual comparison with what is worn (made whatever the eligibility is; what it MEANS depends on the eligibility)
-	local o = compareOutcome(facts, equipped)
+	local rel = opts.character and opts.character.classToken and A.IGNORED_STATS[tostring(opts.character.classToken):upper()] or nil
+	local o = compareOutcome(facts, equipped, rel)
 	out.comparison = { state = o.comparison and o.comparison.state or (o.kind == "no_slot" and "NO_SLOT" or "UNKNOWN"), chosen = o.chosen, entries = o.comparison and o.comparison.entries, note = o.note }
 	out.outcome = { kind = o.kind, chosen = o.chosen, evidence = o.evidence, note = o.note, partial = o.partial }   -- the factual comparison result the recommender reads (no new judgement)
 	if o.partial then certainty = "PARTIAL"; out.caveats[#out.caveats + 1] = "some stats could not be compared: " .. o.partial end

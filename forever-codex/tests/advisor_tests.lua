@@ -491,7 +491,9 @@ do
 	check(stances(r2) == "PREFERRED,UNCERTAIN,INFERIOR", "Q93320: slippers UNCERTAIN (mixed, flags disagree), legguards INFERIOR (both flags false)  [" .. stances(r2) .. "]")
 	local cv = table.concat(r2.caveats, " | ")
 	check(cv:find("proficiency evidence says it can be worn", 1, true) and cv:find("do not agree with each other", 1, true), "Q93320: the caveat says proficiency evidence supports it but the client's flags disagree, and does not call it proven")
-	check(cv:find("Windswept Slippers", 1, true) and cv:find("does not weigh different stats", 1, true), "Q93320: the mixed slippers are named as unresolved")
+	-- 0.8.9: a Rogue gets nothing from the slippers' spirit, so they are no longer a "mixed" item: armor is lost and the spirit is not counted, said in the reason
+	local c2 = ev2.items[2].classification
+	check(c2.outcome.kind == "none" and c2.outcome.note:find("not counted for a Rogue: spirit", 1, true) ~= nil, "Q93320: the cloth slippers are no improvement for a Rogue (spirit not counted), not a mixed trade  [" .. tostring(c2.outcome.kind) .. "]")
 	check(r2.state ~= "RECOMMEND", "Q93320: never a confident RECOMMEND while the client's own answers conflict")
 
 	-- Q93746 (A Firm Response): two GUARANTEED rewards, no choice
@@ -541,4 +543,61 @@ do
 	check(#readers == 0, "the planner, presenter and providers do not read the advisor (R1: reward recommendations do not influence any plan)")
 	check(code("Diag.lua"):find("Advisor.ReportLines", 1, true) ~= nil, "the report consumes the advisor through Advisor.ReportLines (and with it the recommender)")
 	check(not code("Planner.lua"):find("Recommend") and not code("PlanAdapter.lua"):find("Recommend") and not code("Presenter.lua"):find("Recommend"), "no planner, adapter or presenter code calls a recommender")
+end
+
+-- ================================================================ 0.8.9: stat trade-offs (class-aware, no weights, no score)
+section("advisor 0.8.9: a Rogue's unused stats are left out and said so; real trade-offs still name no pick")
+do
+	reset()
+	ns.Eligibility.ClearEvidence()
+	local ROGUE = { level = 15, classToken = "ROGUE" }
+	local DPS, AGI, STR, SPI, INT, STA = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT", "ITEM_MOD_AGILITY_SHORT", "ITEM_MOD_STRENGTH_SHORT", "ITEM_MOD_SPIRIT_SHORT", "ITEM_MOD_INTELLECT_SHORT", "ITEM_MOD_STAMINA_SHORT"
+	local function weapon(id, name, stats, extra)
+		local o = { id = id, name = name, type = "Weapon", classID = 2, subType = "Daggers", sub = 15, slot = "INVTYPE_WEAPONMAINHAND", stats = stats, sell = 1291, usable = true, second = true, flag = true }
+		for k, v in pairs(extra or {}) do o[k] = v end
+		return facts(o)
+	end
+	local function eqWith(stats) return equipped({ [16] = weapon(900, "Defias Rapier", stats) }) end
+	local eq = eqWith({ [DPS] = 8.125, [AGI] = 2 })
+	local function classify(f, e, ch) return A.Classify(f, e or eq, { character = ch or ROGUE }) end
+	local function reasonOf(c) for _, x in ipairs(c.categories) do if x.id == c.primary then return x.reason end end end
+
+	-- a clearly better relevant-stat weapon
+	local up = classify(weapon(1, "Good Dagger", { [DPS] = 12, [AGI] = 5 }))
+	check(up.primary == "UPGRADE" and reasonOf(up):find("agility", 1, true) and reasonOf(up):find("weapon dps", 1, true), "clearly better dps and agility: UPGRADE, with the stats in the reason  [" .. tostring(up.primary) .. ": " .. tostring(reasonOf(up)) .. "]")
+	-- a clearly worse one
+	local worse = classify(weapon(2, "Bad Dagger", { [DPS] = 5, [AGI] = 1 }))
+	check(worse.primary ~= "UPGRADE" and worse.outcome.kind == "none", "lower dps and agility: not an improvement")
+	-- gains only in stats a Rogue does not use are no improvement (they used to be called an upgrade)
+	local junk = classify(weapon(3, "Mage Dagger", { [DPS] = 8.125, [AGI] = 2, [SPI] = 6, [INT] = 6 }))
+	check(junk.outcome.kind == "none" and junk.primary == "VENDOR" and reasonOf(junk):find("not counted for a Rogue: intellect, spirit", 1, true), "only spirit and intellect gained: no improvement, VENDOR, and the reason says those were not counted  [" .. tostring(junk.primary) .. ": " .. tostring(reasonOf(junk)) .. "]")
+	local sh = classify(weapon(3, "Mage Dagger", { [DPS] = 8.125, [AGI] = 2, [SPI] = 6 }), nil, { level = 15, classToken = "SHAMAN" })
+	check(sh.outcome.kind ~= "none", "another class keeps the plain comparison (spirit counts for a Shaman)")
+	-- losing an unused stat is not a loss
+	local eqS = eqWith({ [DPS] = 8.125, [AGI] = 2, [SPI] = 3 })
+	local keep = classify(weapon(4, "Agile Dagger", { [DPS] = 8.125, [AGI] = 5 }), eqS)
+	check(keep.primary == "UPGRADE" and reasonOf(keep):find("not counted for a Rogue: spirit", 1, true), "+3 agility and -3 spirit: UPGRADE for a Rogue (the lost spirit is not counted, and that is said)  [" .. tostring(keep.primary) .. ": " .. tostring(reasonOf(keep)) .. "]")
+	-- higher dps but a LOSS of a stat that counts (the Q5730 hammer): still a trade-off, no pick
+	local hammer = classify(weapon(5, "Hammer", { [DPS] = 12.41, [STR] = 3, [SPI] = 3 }, { subType = "Maces", sub = 4 }))
+	check(hammer.primary == "UNKNOWN" or hammer.primary == "MIXED", "more dps and strength but -2 agility: a trade-off, not an Upgrade")
+	check(hammer.outcome.kind == "mixed" and reasonOf(hammer) ~= nil, "(its outcome is mixed)")
+	-- a rounding-sized dps difference is noise (Kris: -0.125 dps = -1.5%): mentioned nowhere, +stamina does not rescue the -2 agility
+	local kris = classify(weapon(6, "Kris", { [DPS] = 8, [STA] = 4 }))
+	check(kris.outcome.kind == "mixed" and not reasonOf(kris):find("weapon dps", 1, true), "-1.5% dps is noise, and +4 stamina does not outweigh -2 agility: mixed, dps not mentioned")
+	local noise = classify(weapon(7, "Same Dagger", { [DPS] = 8.2, [AGI] = 2 }))
+	check(noise.outcome.kind == "none", "+0.9% dps and nothing else: no improvement")
+	local slight = classify(weapon(8, "Slightly Better", { [DPS] = 8.9, [AGI] = 2 }))
+	check(slight.primary == "SLIGHT_UPGRADE", "+9.5% dps: only a SLIGHT upgrade, never presented as a big one  [" .. tostring(slight.primary) .. "]")
+	-- usability and missing information are untouched
+	check(classify(weapon(9, "Two Hander", { [DPS] = 16, [AGI] = 9 }, { usable = false, second = false, flag = false })).primary == "NOT_USABLE", "an item the client says is not usable stays NOT_USABLE")
+	check(classify(facts({ id = 10, name = "Loading", waiting = true })).primary == "UNKNOWN", "an item that has not loaded stays UNKNOWN")
+	check(A.Recommend({ items = {} }).state == "NOT_A_CHOICE", "no reward items: NOT_A_CHOICE")
+
+	-- several choices
+	local good, bad = weapon(11, "Good Dagger", { [DPS] = 12, [AGI] = 5 }), weapon(12, "Hammer", { [DPS] = 12.41, [STR] = 3, [SPI] = 3 }, { subType = "Maces", sub = 4 })
+	local r = A.Recommend(choiceEval({ good, bad }, eq, ROGUE))
+	check((r.state == "RECOMMEND" or r.state == "TENTATIVE") and r.selected and r.selected.index == 1, "one clearly better choice and one trade-off: the clear one is picked  [" .. tostring(r.state) .. "/" .. tostring(r.selected and r.selected.index) .. "]")
+	local q = A.Recommend(choiceEval({ weapon(13, "Hammer", { [DPS] = 12.41, [STR] = 3, [SPI] = 3 }, { subType = "Maces", sub = 4 }), weapon(14, "Kris", { [DPS] = 8, [STA] = 4 }) }, eq, ROGUE))
+	check(q.state == "NO_CLEAR_RECOMMENDATION" and q.selected == nil, "two trade-offs: still NO_CLEAR_RECOMMENDATION  [" .. tostring(q.state) .. "]")
+	check(#ns.errors == 0, "no errors")
 end
