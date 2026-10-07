@@ -2,6 +2,12 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.14.4] - the bind point can be learned from a Hearthstone trip
+
+- A character bound long ago never shows Quest Flow the innkeeper, so the Hearthstone route could never be offered. Now, when a Hearthstone cast completes and the character then arrives somewhere else, that arrival place is recorded as the bind point (marked as learned from the trip). Binding at an innkeeper still works as before.
+- The report says how the bind point was learned and whether the client gives the bind location NAME (a name is never used as a place).
+- Still nothing is guessed: no bind point is recorded from a cast alone, from a name, or from an arrival long after the cast.
+
 ## [0.14.3] - tracker: click the NOW quest; fold away "in your log, not on the map"
 
 - **Clicking the NOW quest title now opens that quest's details** (it did nothing when the quest had a map position). The route is not changed by opening or closing the details.

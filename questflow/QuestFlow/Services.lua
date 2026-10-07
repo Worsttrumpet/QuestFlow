@@ -23,7 +23,7 @@ S.MAX_ENTRANCES = 60
 S.ENTRANCE_MAX_AGE = 90
 S.SAMPLE_SECONDS = 5
 S.KINDS = { "vendor", "trainer", "flightmaster", "innkeeper", "repair" }
-S.EVENTS = { "MERCHANT_SHOW", "TRAINER_SHOW", "TAXIMAP_OPENED", "GOSSIP_SHOW", "CONFIRM_BINDER", "HEARTHSTONE_BOUND", "CHAT_MSG_SYSTEM", "PLAYER_ENTERING_WORLD" }
+S.EVENTS = { "UNIT_SPELLCAST_SUCCEEDED", "MERCHANT_SHOW", "TRAINER_SHOW", "TAXIMAP_OPENED", "GOSSIP_SHOW", "CONFIRM_BINDER", "HEARTHSTONE_BOUND", "CHAT_MSG_SYSTEM", "PLAYER_ENTERING_WORLD" }
 -- gossip option types (strings, where the client gives them) -> a service kind
 S.GOSSIP_KINDS = { vendor = "vendor", trainer = "trainer", taxi = "flightmaster", binder = "innkeeper" }
 
@@ -162,7 +162,7 @@ function S.OnBound()
 	if not (o and o.point and wall() - o.t <= 120) then S.bindUnplaced = (S.bindUnplaced or 0) + 1 return false end
 	local name
 	if type(GetBindLocation) == "function" then local ok, v = pcall(GetBindLocation) if ok then name = text(v) end end
-	if ns.Travel then ns.Travel.SetBind(o.point.map, o.point.x, o.point.y, name) end
+	if ns.Travel then ns.Travel.SetBind(o.point.map, o.point.x, o.point.y, name, "binder") end
 	S.Observe("innkeeper", o.npc or {}, o.point)
 	return true
 end
@@ -176,6 +176,48 @@ function S.OnSystemMessage(msg)
 	end)
 	if ok and hit then return S.OnBound() end
 	return false
+end
+
+
+-- A character that was bound long ago never shows us the binder. The Hearthstone's own trip does: where the character ARRIVES after a
+-- completed Hearthstone cast is the bind point. Learned only from that observed trip (cast succeeded, then the character really moved).
+S.HEARTH_SPELL = 8690           -- the Hearthstone spell (also matched by the use-spell name of item 6948 when the client can tell us)
+S.HEARTH_WAIT = 90              -- seconds after the cast in which the arrival is accepted
+S.HEARTH_MOVED = 0.04           -- map-fraction jump (same map) that counts as having arrived somewhere else
+local hearthCast                -- { point, t }
+
+local function isHearthSpell(spellId)
+	if type(spellId) ~= "number" or isSecret(spellId) then return false end
+	if spellId == S.HEARTH_SPELL then return true end
+	if type(GetItemSpell) == "function" and type(GetSpellInfo) == "function" then
+		local ok, nm = pcall(GetItemSpell, 6948)
+		local ok2, sn = pcall(GetSpellInfo, spellId)
+		if ok and ok2 and type(nm) == "string" and nm ~= "" and sn == nm then return true end
+	end
+	return false
+end
+
+function S.OnHearthCast(spellId)
+	if not isHearthSpell(spellId) then return false end
+	hearthCast = { point = S.PlayerPoint(), t = wall() }
+	return true
+end
+
+--- Polled (about once a second): has the character arrived somewhere else since a completed Hearthstone cast?
+function S.CheckHearthArrival()
+	local h = hearthCast
+	if not h then return false end
+	if wall() - h.t > S.HEARTH_WAIT then hearthCast = nil return false end
+	local p = S.PlayerPoint()
+	if not (p and h.point) then return false end
+	local moved = p.map ~= h.point.map or math.abs(p.x - h.point.x) + math.abs(p.y - h.point.y) > S.HEARTH_MOVED
+	if not moved then return false end
+	hearthCast = nil
+	local name
+	if type(GetBindLocation) == "function" then local ok, v = pcall(GetBindLocation) if ok then name = text(v) end end
+	if ns.Travel then ns.Travel.SetBind(p.map, p.x, p.y, name, "hearth") end
+	S.bindFromHearth = (S.bindFromHearth or 0) + 1
+	return true
 end
 
 -- ---------------------------------------------------------------- dungeon entrances
@@ -263,13 +305,13 @@ function S.ReportLines()
 		"; bind point " .. (sm.bind and "learned" or "not learned") .. "; entrances not placed=" .. sm.entranceUnplaced .. ", binds not placed=" .. sm.bindUnplaced .. "." }
 end
 
-function S._Reset() bindOffer, lastOutdoor, sinceSample, S.version, S.entranceUnplaced, S.bindUnplaced = nil, nil, 0, 0, 0, 0 end
+function S._Reset() hearthCast, bindOffer, lastOutdoor, sinceSample, S.version, S.entranceUnplaced, S.bindUnplaced, S.bindFromHearth = nil, nil, nil, 0, 0, 0, 0, 0 end
 
 -- ---------------------------------------------------------------- events
 
 local frame = CreateFrame("Frame")
 for _, ev in ipairs(S.EVENTS) do pcall(frame.RegisterEvent, frame, ev) end
-frame:SetScript("OnEvent", function(_, event, a1)
+frame:SetScript("OnEvent", function(_, event, a1, a2, a3)
 	local ok, err = pcall(function()
 		if event == "MERCHANT_SHOW" then S.OnMerchant()
 		elseif event == "TRAINER_SHOW" then S.OnTrainer()
@@ -278,12 +320,18 @@ frame:SetScript("OnEvent", function(_, event, a1)
 		elseif event == "CONFIRM_BINDER" then S.OnBinderOffer()
 		elseif event == "HEARTHSTONE_BOUND" then S.OnBound()
 		elseif event == "CHAT_MSG_SYSTEM" then S.OnSystemMessage(a1)
-		elseif event == "PLAYER_ENTERING_WORLD" then S.OnEnteringWorld()
+		elseif event == "PLAYER_ENTERING_WORLD" then S.OnEnteringWorld(); S.CheckHearthArrival()
+		elseif event == "UNIT_SPELLCAST_SUCCEEDED" then if a1 == "player" then S.OnHearthCast(a3) end
 		end
 	end)
 	if not ok and ns.RecordError then ns.RecordError("services " .. tostring(event), err) end
 end)
+local sinceHearth = 0
 frame:SetScript("OnUpdate", function(_, elapsed)
+	if hearthCast then
+		sinceHearth = sinceHearth + (elapsed or 0)
+		if sinceHearth >= 1 then sinceHearth = 0 pcall(S.CheckHearthArrival) end
+	end
 	sinceSample = sinceSample + (elapsed or 0)
 	if sinceSample < S.SAMPLE_SECONDS then return end
 	sinceSample = 0

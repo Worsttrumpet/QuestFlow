@@ -371,6 +371,32 @@ do
 	_G.ERR_DEATHBIND_SUCCESS_S = nil
 end
 
+section("services: a bind learned from a completed Hearthstone trip (a character bound long ago)")
+do
+	local ns = world()
+	local S, H2 = ns.Services, H
+	local saveBM = _G.C_Map.GetBestMapForUnit
+	_G.C_Map.GetBestMapForUnit = function() return H2.world().loc.map end
+	check(S.OnHearthCast(12345) == false and S.CheckHearthArrival() == false, "a cast of some other spell starts nothing")
+	check(S.OnHearthCast(S.HEARTH_SPELL) == true, "a Hearthstone cast is noticed")
+	check(S.CheckHearthArrival() == false and ns.Travel.Bind() == nil, "still standing where it was cast: no bind (no arrival seen)")
+	H2.world().loc.map, H2.world().loc.x, H2.world().loc.y = 9102, 0.4, 0.5
+	check(S.CheckHearthArrival() == true, "arriving somewhere else after the cast is the observed trip")
+	local b = ns.Travel.Bind()
+	check(b and b.map == 9102 and b.x == 0.4 and b.src == "hearth", "the bind point is where the character arrived, marked as learned from the trip")
+	check(S.CheckHearthArrival() == false, "one trip is used once")
+	-- a stale cast never produces a bind
+	S._Reset()
+	local ns2 = ns
+	S.OnHearthCast(S.HEARTH_SPELL)
+	local realTime = _G.time
+	_G.time = function() return (realTime and realTime() or 0) + S.HEARTH_WAIT + 5 end
+	H2.world().loc.map = 9101
+	check(S.CheckHearthArrival() == false, "an arrival long after the cast is not attributed to it")
+	_G.time = realTime
+	_G.C_Map.GetBestMapForUnit = saveBM
+end
+
 section("services: a dungeon entrance is the last outdoor place seen before an instance loaded")
 do
 	local ns = world()

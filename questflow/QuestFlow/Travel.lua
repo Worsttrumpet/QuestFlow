@@ -94,11 +94,11 @@ function Tr.Bind()
 	return nil
 end
 
-function Tr.SetBind(map, x, y, name)
+function Tr.SetBind(map, x, y, name, src)
 	if not (P and P.Char) or type(map) ~= "number" or type(x) ~= "number" or type(y) ~= "number" then return false end
 	local c = P.Char()
 	c.travel = type(c.travel) == "table" and c.travel or {}
-	c.travel.bind = { map = map, x = x, y = y, name = type(name) == "string" and name:sub(1, 60) or nil, t = type(time) == "function" and time() or 0 }
+	c.travel.bind = { map = map, x = x, y = y, name = type(name) == "string" and name:sub(1, 60) or nil, t = type(time) == "function" and time() or 0, src = src == "hearth" and "hearth" or "binder" }
 	return true
 end
 
@@ -249,7 +249,7 @@ function Tr.ReportLines(ctx)
 		if e.state == "COMPLETED" then completed = completed + 1 else offered = offered + 1 end
 	end
 	L[#L + 1] = string.format("Travel model: walking baseline (%d yd/s); %d flight node(s) with a position; edges the planner can use: %d registered fixed transport(s) (boats / zeppelins: none ship), %d flight(s) completed and measured, %d flight(s) only offered (estimated time); hearth %s; bind point %s.",
-		Tr.RUN_SPEED, nodes, #transports, completed, offered, Tr.HearthState(ctx), bind and string.format("learned (map %d)", bind.map) or "not learned")
+		Tr.RUN_SPEED, nodes, #transports, completed, offered, Tr.HearthState(ctx), bind and string.format("learned (map %d, from %s)", bind.map, bind.src == "hearth" and "a completed Hearthstone trip" or "binding at an innkeeper") or "not learned")
 	L[#L + 1] = "Travel limits: flights come only from edges a taxi map offered; no boat/zeppelin data is shipped, so none is routed; walking is a straight line."
 	return L
 end
@@ -284,7 +284,12 @@ function Tr.Validation(ctx)
 		add(n > 0 and "PASS" or "PENDING", k[2] .. " recorded (" .. n .. ")", "open one")
 	end
 	add(sv.entrances > 0 and "PASS" or "PENDING", "a dungeon entrance recorded (" .. sv.entrances .. ")", "enter a dungeon from outside")
-	add(sv.bind and "PASS" or "PENDING", "a bind point learned from binding", "bind at an innkeeper")
+	add(sv.bind and "PASS" or "PENDING", "a bind point learned (from binding, or from a completed Hearthstone trip)", "bind at an innkeeper, or use your Hearthstone once")
+	do
+		local nm
+		if type(_G.GetBindLocation) == "function" then local ok, v = pcall(_G.GetBindLocation) if ok and type(v) == "string" and v ~= "" then nm = true end end
+		add(nm and "PASS" or "FAIL", "the bind location NAME is readable (GetBindLocation; a name only, never a place)")
+	end
 	local hs = Tr.HearthState(ctx)
 	add(hs ~= "UNKNOWN" and "PASS" or "FAIL", "the Hearthstone state is readable (" .. hs:lower() .. ")")
 	add((ctx and ctx.char and type(ctx.char.money) == "number") and "PASS" or "FAIL", "money is readable")

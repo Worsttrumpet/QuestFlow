@@ -189,3 +189,9 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 
 - [ ] Click the NOW quest title: its details open; click again: they close. The arrow/route does not change.
 - [ ] "IN YOUR LOG, NOT ON THE MAP" is the last section. Click its header: it folds to one line with the count; /reload keeps it folded.
+
+## Part N - Hearthstone and bind point (0.14.4)
+
+- [ ] Report before: "bind point NOT learned"; Hearthstone state is ready/cooldown (not unknown).
+- [ ] Either bind at an innkeeper (talk, "Make this inn your home", confirm) OR use your Hearthstone once and let it finish. Report: "a bind point learned" PASS, "learned (map N, from ...)".
+- [ ] Walk 300+ seconds away from the inn with the Hearthstone ready: a quest far from you can show "Use your Hearthstone" as a travel step; with it on cooldown it never does.
