@@ -166,3 +166,13 @@ do
 	check(seq(ns2):find("Q:2:ACCEPT", 1, true) ~= nil, "with the prerequisite done and the quest offered it is committed")
 	cleanup()
 end
+
+section("availability policy: the report's explanation matches the policy")
+do
+	local ns = world({ { id = 1, name = "Offered One", dx = 100 }, { id = 2, name = "Unknown Beside", dx = 106 } })
+	offered(ns, 1, "Offered One")
+	local r = reportText(ns)
+	check(r:find("why it is only OPTIONAL: availability is UNKNOWN", 1, true) and not r:find("the planner allows unknown pickups", 1, true), "an unknown ALSO DO is explained as OPTIONAL, not as 'allowed' (the 0.14.1 report still carried the old sentence)")
+	routable(ns, true)
+	check(reportText(ns):find("the planner allows unknown pickups", 1, true) ~= nil, "with the old routing switched on, the old sentence returns")
+end

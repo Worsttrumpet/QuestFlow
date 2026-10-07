@@ -402,7 +402,11 @@ function D.PickupEvidenceLines(a, role)
 		L[#L + 1] = "    data layers that know this quest: none (no pack has a record: no giver, location or prerequisite data)"
 	end
 	if state == "UNKNOWN" then
-		L[#L + 1] = "    why it can be recommended: availability is UNKNOWN and the planner allows unknown pickups (existing policy, with its small discounts). Only a FRESH not-offered observation at the giver's dialog holds a pickup back"
+		if ns.Planner and ns.Planner.UNKNOWN_PICKUPS_ROUTABLE then
+			L[#L + 1] = "    why it can be recommended: availability is UNKNOWN and the planner allows unknown pickups (existing policy, with its small discounts). Only a FRESH not-offered observation at the giver's dialog holds a pickup back"
+		else
+			L[#L + 1] = "    why it is only OPTIONAL: availability is UNKNOWN (the game has not offered it to you). Quest Flow lists it, and may show it as an ALSO DO beside your route, but never makes it a committed step (NOW / THEN) until the game offers it. A FRESH not-offered answer from the giver would hold it back instead"
+		end
 	end
 	return L
 end

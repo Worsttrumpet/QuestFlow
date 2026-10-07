@@ -2,6 +2,10 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.14.2] - the report explains optional pickups correctly
+
+- The report's "why it can be recommended" line for a pickup the game has not offered still said unknown pickups are allowed. Since 0.14.0 they are only optional, so it now says why it is only OPTIONAL (listed, may be an ALSO DO, never NOW / THEN until the game offers it). No planning change.
+
 ## [0.14.1] - flights confirmed; a quest with no place no longer outranks real work
 
 - **Flights work on the real client.** A Thunder Bluff to Orgrimmar flight was recorded end to end (selected, started, completed, 207 s measured) and is now an observed route the planner uses with its real time.
