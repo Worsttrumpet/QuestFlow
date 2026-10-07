@@ -96,15 +96,14 @@ local function place(s, btn)
 	edge(e[4], "TOPRIGHT", "BOTTOMRIGHT", 2, nil)
 end
 
---- The text of a strip: "[TAG] [TAG]  short stats  ?" (a RECOMMENDED choice says RECOMMENDED first). Pure; exported for the tests.
+--- The text of a strip: "[TAG] [TAG]  (usability unclear)" (a RECOMMENDED choice says RECOMMENDED first). The stat comparison does not fit a strip: it is in the tooltip. Pure; exported for the tests.
 function RO.StripText(row)
 	local parts = {}
 	if row.recommended == "pick" then parts[#parts + 1] = "RECOMMENDED"
 	elseif row.recommended == "tentative" then parts[#parts + 1] = "TENTATIVE PICK" end
 	for _, t in ipairs(row.tags) do parts[#parts + 1] = "[" .. t .. "]" end
 	local s = table.concat(parts, " ")
-	if row.short then s = s .. "  " .. row.short end
-	if row.unsure then s = s .. "  (usability unclear)" end
+	if row.unsure then s = s .. (s ~= "" and " " or "") .. "(usability unclear)" end
 	return s
 end
 
@@ -142,7 +141,7 @@ function RO.Hide() clear(); state.settled, state.backoff = false, 0 end
 function RO.Apply(d)
 	clear()
 	if not d or not d.rows or #d.rows == 0 then return 0 end
-	local first, n = nil, 0
+	local first, n, lowest, lowestAt = nil, 0, nil, nil
 	local byIndex = {}
 	for _, row in ipairs(d.rows) do byIndex[row.index] = row end
 	local attached = {}
@@ -150,6 +149,9 @@ function RO.Apply(d)
 		local btn, name = RO.FindButton(row.index)
 		if btn then
 			first = first or btn
+			-- the lowest button (smallest bottom edge; the first one when the client cannot say): the verdict line goes under its strip
+			local bottom = type(btn.GetBottom) == "function" and safe(btn.GetBottom, btn) or nil
+			if not lowest or (type(bottom) == "number" and (type(lowestAt) ~= "number" or bottom < lowestAt - 1)) then lowest, lowestAt = btn, bottom end
 			local s = stripFor(btn)
 			place(s, btn)
 			s.text:SetText(RO.StripText(row))
@@ -165,7 +167,7 @@ function RO.Apply(d)
 	if first then
 		local sm = summaryFont()
 		pcall(sm.frame.ClearAllPoints, sm.frame)
-		pcall(sm.frame.SetPoint, sm.frame, "BOTTOMLEFT", first, "TOPLEFT", 0, 1)
+		pcall(sm.frame.SetPoint, sm.frame, "TOPLEFT", lowest or first, "BOTTOMLEFT", 0, -11)    -- (under the last strip: above the first row it covered the game's own "Choose" line)
 		pcall(sm.frame.SetWidth, sm.frame, 260)
 		sm.text:SetText(d.verdict.text)
 		local c = d.verdict.kind == "none" and COLORS.yellow or PICK
@@ -186,6 +188,7 @@ function RO.Tooltip(btn)
 	pcall(tip.AddLine, tip, " ")
 	pcall(tip.AddLine, tip, "Codex: " .. table.concat(row.tags, " / "), 1, 0.82, 0.2)
 	pcall(tip.AddLine, tip, row.reason, 0.9, 0.9, 0.9, true)
+	if row.short then pcall(tip.AddLine, tip, "Compared with what you wear: " .. row.short, 0.8, 0.8, 0.8, true) end
 	for i, cv in ipairs(row.caveats or {}) do
 		if i > 3 then break end
 		pcall(tip.AddLine, tip, cv, 0.7, 0.7, 0.7, true)

@@ -26,3 +26,13 @@ The reward frame's structure. Choice buttons are looked up as `QuestInfoRewardsF
 
 ## 0.9.3: the real cause (0.9.2 report, still "not showing")
 0.9.2's poll was not the problem (it stayed as a safety net). `ItemProbe.readDialog("FACTS")`, the live refresh the advisor makes, stamped the dialog's `at` as `"FACTS"`, overwriting the QUEST_COMPLETE / QUEST_DETAIL that opened it. `Advisor.Display` only annotates the turn-in (`at == "QUEST_COMPLETE"`), so against the real client it was always nil. My fake-dialog tests supplied `at` directly and could not see it; the corrected test goes through the live path. Fix: a refresh read keeps the opening event of the same quest's dialog. Accept previews (QUEST_DETAIL) are still not annotated.
+
+## 0.9.4: layout fixes from the first screenshot (0.9.3 drew, the layout was wrong)
+
+The Q5730 screenshot on 0.9.3 showed the overlay working (4 of 4 annotated) and three layout faults:
+
+- The strip text (tags plus the stat comparison) was longer than a strip and spilled left over the item icon and into the neighbouring choice. The strip now carries tags only (and "(usability unclear)"), is held to its width and never wraps; the stat comparison moved to the hover tooltip ("Compared with what you wear: ...").
+- The strips covered the second line of each item name. They now sit in the gap just below each button instead of over its bottom edge.
+- The verdict line covered the game's own "Choose one of these rewards" text. It now sits under the lowest row of strips.
+
+Geometry is still judged only from real-client screenshots; the tests check content, not pixels. Advisor, rules and display data are unchanged.

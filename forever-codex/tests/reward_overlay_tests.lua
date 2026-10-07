@@ -105,6 +105,7 @@ do
 	check(d.rows[2].recommended == "pick" and d.rows[1].recommended == nil, "only choice 2 is marked")
 	check(d.rows[2].tags[1] == "UPGRADE" and rowText(d, 2):find("^RECOMMENDED %[UPGRADE%]"), "its strip says RECOMMENDED [UPGRADE] with the stats  [" .. rowText(d, 2) .. "]")
 	check(d.rows[2].short and d.rows[2].short:find("agility", 1, true), "and the stat text")
+	check(not rowText(d, 2):find("agility", 1, true) and #rowText(d, 2) <= 40, "the strip carries tags only: the stat comparison is in the tooltip, so nothing spills past a narrow strip  [" .. rowText(d, 2) .. "]")
 	RO.Update(dialog({ poor, good }))
 	local e1, e2 = RO.state.attached[1], RO.state.attached[2]
 	check(e2 and e2.row.recommended == "pick" and e1 and e1.row.recommended == nil, "the recommendation is attached to choice 2's button, not choice 1's")
@@ -215,6 +216,7 @@ do
 	local lines = {}
 	GameTooltip.AddLine = function(_, text) lines[#lines + 1] = text end
 	b[1].hooks.OnEnter(b[1])
+	check(table.concat(lines, "|"):find("Compared with what you wear: " .. RO.state.attached[1].row.short, 1, true), "the tooltip carries the stat comparison the strip leaves out")
 	check(#lines >= 2 and table.concat(lines, "|"):find("Codex:", 1, true) and table.concat(lines, "|"):find(RO.state.attached[1].row.reason, 1, true), "hovering adds the advisor's reason to the tooltip")
 	GameTooltip.AddLine = nil
 end
