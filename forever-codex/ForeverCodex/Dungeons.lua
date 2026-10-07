@@ -79,7 +79,9 @@ function Dg.List(ctx)
 	table.sort(ids)
 	for _, id in ipairs(ids) do
 		local e = ctx.log[id]
-		if Dg.IsDungeon(ctx, id) then
+		-- a quest the player skipped is not listed (the same key every other list checks: "QT:<id>", the one a quest in the log carries)
+		local skipped = ns.Prefs and ns.Prefs.IsSkipped("QT:" .. id)
+		if Dg.IsDungeon(ctx, id) and not skipped then
 			local name, via = dungeonName(ctx, e)
 			local key = name or "Dungeon quests"
 			local g = byName[key]

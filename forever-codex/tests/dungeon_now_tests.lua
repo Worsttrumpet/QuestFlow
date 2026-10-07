@@ -149,3 +149,42 @@ do
 	clearInstance()
 	check(#ns.errors + #ns2.errors + #ns3.errors == 0, "no errors")
 end
+
+-- 0.8.8: a skipped dungeon quest is not listed in the DUNGEON QUESTS card (it used to ignore skips: the real report listed a skipped Q5723 as ready)
+section("dungeon card: a skipped dungeon quest is hidden, and nothing else about dungeon behaviour changes")
+do
+	clearInstance(); setInstance(true, "Ragefire Chasm")
+	local ns = boot({ char = { level = 15 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Ragefire Chasm" } })
+	H.attPack(ns, {
+		{ id = 1, name = "Power", map = 9001, x = 0.52, y = 0.5, req = 1, areaId = 4001 },
+		{ id = 2, name = "Beast", map = 9001, x = 0.53, y = 0.5, req = 1, areaId = 4001 },
+		{ id = 3, name = "Testing", map = 9001, x = 0.54, y = 0.5, req = 1, areaId = 4001 },
+	}, nil)
+	local W = H.world()
+	W.log = { { questID = 1, title = "Power", complete = false }, { questID = 2, title = "Beast", complete = false }, { questID = 3, title = "Testing", complete = true } }
+	W.objectives = { [1] = { { text = "Spells", type = "item", finished = false, numFulfilled = 0, numRequired = 1 } },
+		[2] = { { text = "Heart", type = "item", finished = false, numFulfilled = 0, numRequired = 1 } } }
+	ns.Context.DefaultReader.questTag = function() return DUNGEON end
+	ns.Context.DefaultReader.areaName = function(a) return a == 4001 and "Ragefire Chasm" or nil end
+	ns.Prefs.FinishSetup(); ns.State.Recompute()
+	local function listed()
+		local out = {}
+		for _, g in ipairs(ns.Presenter.Card(ns.State.plan, ns.State.ctx).dungeons or {}) do for _, q in ipairs(g.quests) do out[q.quest] = true end end
+		return out
+	end
+	local l = listed()
+	check(l[1] and l[2] and l[3], "(setup) all three dungeon quests are listed")
+	local leadBefore = ns.Presenter.Card(ns.State.plan, ns.State.ctx).now.quest
+	ns.Prefs.Skip("QT:3"); ns.State.Recompute()
+	l = listed()
+	check(not l[3] and l[1] and l[2], "the skipped quest (a ready one, as in the report) is gone; the others stay")
+	ns.Prefs.Skip("QT:2"); ns.State.Recompute()
+	l = listed()
+	check(not l[2] and not l[3] and l[1], "an unfinished skipped quest is hidden too")
+	check(ns.Presenter.Card(ns.State.plan, ns.State.ctx).now.quest == leadBefore, "the dungeon lead is unchanged (quest 1 was and is first by id)")
+	ns.Prefs.Unskip("QT:2"); ns.Prefs.Unskip("QT:3"); ns.State.Recompute()
+	l = listed()
+	check(l[1] and l[2] and l[3], "unskipping brings them back")
+	clearInstance()
+	check(#ns.errors == 0, "no errors")
+end

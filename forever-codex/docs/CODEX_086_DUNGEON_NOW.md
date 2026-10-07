@@ -13,3 +13,6 @@ Real report (Ruins of Lordaeron): the client said `IsInInstance` true, name "Rui
 - `Presenter.Guidance(plan, ctx, true)`: while the client says the player is inside a dungeon, that dungeon's unfinished objectives (game tag + `Dungeons.PlayerInside`) lead as GUIDANCE (quest log's own objective text, no place, no arrow), even over the planner's NOW. The planner is not changed; its NOW hand-in moves to READY TO TURN IN so it does not vanish.
 - `Dungeons.PlayerInside` matches the instance name against the quest's area name OR its quest log heading.
 - Tests: `dungeon_now_tests.lua` (inside / other dungeon / outside). No golden changed.
+
+## 0.8.8: skipped dungeon quests are hidden from the DUNGEON QUESTS card
+`Dungeons.List` (the only builder of that card) read `ctx.log` directly and ignored skips; every other list (`Providers/Quest.lua`, `Pr.Guidance`, `Pr.Unplaced`, `Overlap`) drops a quest whose `QT:<id>` key is skipped. `Dungeons.List` now does the same. Detection, the instance APIs, lead selection, NOW / READY / ALSO are unchanged. Tests: `dungeon_now_tests.lua`. No golden changed.
