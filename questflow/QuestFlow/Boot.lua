@@ -54,6 +54,7 @@ local function onLogin()
 	local okI, idRes = pcall(P.CheckIdentity, identitySnapshot())
 	if not okI then ns.RecordError("identity", idRes)
 	elseif idRes.result == "RESET" then ns.Say("This looks like a new character with a name Quest Flow has seen before (" .. idRes.reason .. "): its old skips, journey and training state were cleared.") end
+	if ns.Taxi then ns.Safe(ns.Taxi.InstallHook) end                        -- a post-hook on TakeTaxiNode: only to time a flight (see Taxi)
 	if ns.SpellTraining then ns.Safe(ns.SpellTraining.InstallHook) end      -- a post-hook on BuyTrainerService: how a trainer purchase is noticed (see SpellTraining)
 	-- quest knowledge from the optional QuestieDB addon; when it is not usable, say why once (Codex still works on its own small data)
 	if ns.QuestieBridge then

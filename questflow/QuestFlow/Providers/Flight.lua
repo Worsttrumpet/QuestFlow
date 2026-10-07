@@ -1,8 +1,7 @@
 -- ForeverCodex.Providers.Flight: nearby flight-path HINTS from ATT flight-node data.
 --
--- Honest limits: Codex cannot tell whether you have already discovered a flight path (the taxi APIs are not
--- verified on Forever), so these are only ever "while you're here" hints, labelled as such, never part of the
--- main route. Locations are ATT's (unverified).
+-- Honest limits: a path is dropped from these hints only when THIS character's own taxi map has shown it (Taxi.lua: Taxi.AttDiscovery YES / LISTED).
+-- A node never seen on a taxi map stays UNKNOWN: a "while you're here" hint, labelled as such, never part of the main route. Locations are ATT's (unverified).
 
 local addonName, ns = ...
 local C = ForeverCodex
@@ -15,7 +14,9 @@ local function generate(ctx, env)
 	local out = {}
 	local fac = ctx.char.faction
 	for _, n in ipairs(R.FlightNodes()) do
-		if not (n.faction and fac and n.faction ~= fac) then
+		-- a flight path this character's own taxi map has shown (Taxi.lua) needs no "discover it" hint; a node never seen on a taxi map stays UNKNOWN (a hint), never "not discovered"
+		local seen = ns.Taxi and ns.Taxi.AttDiscovery(n.id) or "UNKNOWN"
+		if not (n.faction and fac and n.faction ~= fac) and seen == "UNKNOWN" then
 			local label = (n.name or ("flight node " .. n.id))
 			local a = R.NewAction({
 				id = "FP:" .. n.id, type = "FLIGHT", kind = "DISCOVER", skipKey = "FP:" .. n.id, hereOnly = true, name = label,

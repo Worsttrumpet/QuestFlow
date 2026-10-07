@@ -2,7 +2,7 @@
 ## Title: Quest Flow
 ## Notes: A questing companion for WoW Forever. See what's available, choose what comes next: your next quest steps, nearby objectives, turn-ins, dungeon quests, and advice on quest rewards. You stay in control; it never accepts, completes or turns in quests for you.
 ## Author: Worsttrumpet
-## Version: 0.10.6
+## Version: 0.11.0
 ## OptionalDeps: QuestieDB
 ## IconTexture: Interface\AddOns\QuestFlow\Media\QuestFlowLogo.tga
 ## X-Website: https://github.com/Worsttrumpet/questflow
@@ -28,6 +28,9 @@ Data\Pack_Observed.lua
 QuestieBridge.lua
 Context.lua
 Engine.lua
+Taxi.lua
+Services.lua
+Travel.lua
 Planner.lua
 PlanAdapter.lua
 Presenter.lua

@@ -963,6 +963,20 @@ function D.PlaytestLines(snap, lines)
 			add("REWARD ADVISOR: error: " .. tostring(alines))
 		end
 	end
+	do
+		local okW, err = pcall(function()
+			add("WORLD AND TRAVEL KNOWLEDGE (taxi, services, travel; PASS / FAIL / PENDING are about THIS client)")
+			for _, mod in ipairs({ ns.Taxi, ns.Services }) do
+				if mod then for _, l in ipairs(mod.ReportLines()) do add(l) end end
+			end
+			if ns.Travel then
+				local c = ns.State and ns.State.ctx
+				for _, l in ipairs(ns.Travel.ReportLines(c)) do add(l) end
+				for _, l in ipairs(ns.Travel.Validation(c)) do add(l) end
+			end
+		end)
+		if not okW then add("WORLD AND TRAVEL KNOWLEDGE: error: " .. tostring(err)) end
+	end
 	if ns.RewardOverlay then
 		local okO, olines = pcall(ns.RewardOverlay.ReportLines)
 		if okO then for _, l in ipairs(olines) do add(l) end else add("REWARD OVERLAY: error: " .. tostring(olines)) end

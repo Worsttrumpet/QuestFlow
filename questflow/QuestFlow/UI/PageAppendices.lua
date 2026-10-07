@@ -57,22 +57,43 @@ local function refreshQuests(w)
 	w.qHint:SetText(#text < 2 and "Type part of a quest name" or (#found == 0 and "No quest matches that." or ""))
 end
 
-local K_ROW = 74
+local K_ROW = 62
+local K_ROWS = 6
 local function buildKnowledge(f, w)
 	w.kIntro = lineAt(f, -30, W.GREY, true)
-	w.kIntro:SetText("What Quest Flow can and cannot see about your character today.")
+	w.kIntro:SetText("What Quest Flow knows, by area. It only lists what helps a decision.")
+	w.kCat = w.kCat or 1
+	w.kTabs = {}
+	for i = 1, 7 do
+		local b = W.Button(f, 74, 20, "", function() w.kCat = i; UI.pages.appendices.Refresh() end)
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", (i - 1) * 78, -50)
+		w.kTabs[i] = b
+	end
 	w.kRows = {}
-	for i = 1, 4 do
-		local y = -54 - (i - 1) * K_ROW
+	for i = 1, K_ROWS do
+		local y = -78 - (i - 1) * K_ROW
 		w.kRows[i] = { name = lineAt(f, y, W.WHITE), text = lineAt(f, y - 16, W.GREY, true) }
 		w.kRows[i].text:SetHeight(K_ROW - 22)
 	end
 end
 
+local K_SHORT = { quest = "Quests", world = "World", travel = "Travel", player = "You", planner = "Planner", navigation = "Navigate", extra = "More" }
 local function refreshKnowledge(w)
-	for i, s in ipairs(ns.Knowledge.Systems()) do
-		w.kRows[i].name:SetText(s.label .. (s.status and ("  -  " .. s.status) or ""))
-		w.kRows[i].text:SetText(s.text)
+	local cats = ns.Knowledge.Categories(ns.State.ctx)
+	if w.kCat > #cats then w.kCat = 1 end
+	for i, b in ipairs(w.kTabs) do
+		local c = cats[i]
+		if c then
+			b:Show()
+			local label = (i == w.kCat and "> " or "") .. (K_SHORT[c.key] or c.label)
+			if b.text then b.text:SetText(label) else ns.Safe(b.SetText, b, label) end
+		else b:Hide() end
+	end
+	local rows = cats[w.kCat].rows
+	for i = 1, K_ROWS do
+		local r, s = w.kRows[i], rows[i]
+		r.name:SetText(s and (s.label .. (s.status and ("  -  " .. s.status) or "")) or "")
+		r.text:SetText(s and s.text or "")
 	end
 end
 

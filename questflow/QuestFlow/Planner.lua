@@ -336,8 +336,15 @@ end
 local function seconds(ctx, a, b)
 	if not a or not b then return 0 end
 	local d = E.Distance(ctx, a, b)
-	if d == nil or d >= E.DIFFERENT_CONTINENT then return nil end
-	return d / Pl.RUN_SPEED
+	local walk
+	if d ~= nil and d < E.DIFFERENT_CONTINENT then walk = d / Pl.RUN_SPEED end
+	-- an EVIDENCED faster way (a discovered flight the taxi map offered, a ready hearth with a learned bind, a registered transport) may beat walking; with no
+	-- such evidence Travel returns the walking time unchanged (Travel.lua)
+	if ns.Travel and (walk == nil or walk >= ns.Travel.MIN_WALK_SECONDS) then
+		local s = ns.Travel.Seconds(ctx, a, b, walk)
+		return s
+	end
+	return walk
 end
 
 -- ---------------------------------------------------------------- compute

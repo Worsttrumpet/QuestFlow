@@ -29,6 +29,7 @@ local function helpLines()
 	say("  /qflow spells [restore]   SPELL TRAINING: what the client reported; restore = bring back spells you marked Don't Want to Learn")
 	say("  /qflow feedback [status|list]   REPORT A PROBLEM (also the Feedback button in the window); /qflow report is the full diagnostic")
 	say("  /qflow professions [hide <name>|restore]   PROFESSIONS: what the client reported")
+	say("  /qflow services [vendor|trainer|flight|inn|repair|dungeon]   what Quest Flow has seen of services, flights and dungeon entrances from your own visits;  /qflow travel = same")
 	say("  /qflow where | reset | help")
 end
 
@@ -255,6 +256,35 @@ local function handle(msg)
 			lines[#lines + 1] = "/qflow professions hide fishing|cooking|firstaid  or  restore"
 			showLines(lines)
 		end
+	elseif cmd == "services" or cmd == "travel" then
+		-- what Quest Flow has seen of the world's services and your flights (read-only; the same facts as the report's world and travel section)
+		local kinds = { vendor = "vendor", trainer = "trainer", flight = "flightmaster", flightmaster = "flightmaster", inn = "innkeeper", innkeeper = "innkeeper", repair = "repair" }
+		local kind = kinds[restLower:match("^(%S+)") or ""]
+		local lines = {}
+		local ctx = ns.State.ctx
+		local here = ctx and ctx.loc and ctx.loc.available and { map = ctx.loc.map, x = ctx.loc.x, y = ctx.loc.y } or nil
+		if kind then
+			local list = ns.Services.Find(kind)
+			if #list == 0 then lines[1] = "Quest Flow has not seen any " .. kind .. " yet: it learns the ones you open."
+			else
+				lines[1] = #list .. " " .. kind .. "(s) seen by you:"
+				for i, e in ipairs(list) do
+					if i > 8 then lines[#lines + 1] = "  ..." break end
+					local d = here and e.map and ns.Engine.Distance(ctx, here, { map = e.map, x = e.x, y = e.y })
+					lines[#lines + 1] = string.format("  %s  (%s %.0f, %.0f)%s", e.name or e.key, ns.Registry.MapLabel(e.map), (e.x or 0) * 100, (e.y or 0) * 100,
+						(d and d ~= ns.Engine.DIFFERENT_CONTINENT) and string.format("  about %d yards away", math.floor(d + 0.5)) or "")
+				end
+			end
+		elseif restLower:match("^dungeon") then
+			local list = ns.Services.Entrances()
+			lines[1] = #list == 0 and "No dungeon entrance seen yet: it is recorded when you enter a dungeon from outside." or (#list .. " dungeon entrance(s) seen:")
+			for _, e in ipairs(list) do lines[#lines + 1] = string.format("  %s  (%s %.0f, %.0f)", e.name, ns.Registry.MapLabel(e.map), (e.x or 0) * 100, (e.y or 0) * 100) end
+		else
+			for _, l in ipairs(ns.Taxi.ReportLines()) do lines[#lines + 1] = l end
+			for _, l in ipairs(ns.Services.ReportLines()) do lines[#lines + 1] = l end
+			lines[#lines + 1] = "/qflow services vendor | trainer | flight | inn | repair | dungeon"
+		end
+		showLines(lines)
 	elseif cmd == "help" or cmd == "?" then
 		helpLines()
 	elseif cmd == "diag" then

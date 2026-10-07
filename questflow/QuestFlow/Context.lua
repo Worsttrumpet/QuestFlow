@@ -78,6 +78,26 @@ function reader.character()
 	else
 		c.missing[#c.missing + 1] = "UnitFactionGroup"
 	end
+	-- what the planner can use for travel: money (a flight it cannot pay for is not offered) and the Hearthstone (in the bags? off cooldown?). Each is optional and nil when unreadable.
+	local money, okM = try(GetMoney)
+	if okM and type(money) == "number" then c.money = money end
+	local hs = ns.Travel and ns.Travel.HEARTHSTONE_ITEM or 6948
+	local count, okC = try(GetItemCount, hs)
+	if okC and type(count) == "number" then
+		c.hearth = { has = count > 0 }
+		if count > 0 then
+			local start, dur
+			local cd = (type(C_Container) == "table" and type(C_Container.GetItemCooldown) == "function") and C_Container.GetItemCooldown or GetItemCooldown
+			if type(cd) == "function" then
+				local okD, s1, d1 = pcall(cd, hs)
+				if okD then start, dur = s1, d1 end
+			end
+			if type(start) == "number" and type(dur) == "number" then
+				local t = type(GetTime) == "function" and GetTime() or nil
+				c.hearth.ready = dur == 0 or (t ~= nil and start + dur <= t)
+			end
+		end
+	end
 	return c
 end
 

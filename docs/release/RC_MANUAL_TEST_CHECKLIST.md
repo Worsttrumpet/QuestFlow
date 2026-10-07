@@ -103,6 +103,21 @@ Capture: **SHOT** for each row, and one REPORT taken with the window open for ca
 
 ---
 
+## Part H. World and travel (0.11.0)
+
+Do these in the real client with the ZIP. After each, run `/qflow report` and look at the section **WORLD AND TRAVEL KNOWLEDGE**: each line is PASS, FAIL or PENDING. PENDING means "not tried yet", not a failure. A FAIL on an API line means that API does not exist on Forever: paste the report.
+
+- [ ] H1. Open a flight master's map. Report: taxi API status shows which family answered; "the taxi map listed nodes when opened" PASS; "discovered flight paths recorded" PASS.
+- [ ] H2. At that flight master, "direct flights recorded" PASS and "matched to Quest Flow's own flight data" is not FAIL. (If the node names differ from Quest Flow's data this says so.)
+- [ ] H3. Take one flight. Report: "a real flight time measured" PASS (the timer hook line must be PASS too).
+- [ ] H4. With a quest far away in an area you can fly to, check the plan shows a **Fly** step first, the arrow points at the flight master, and the step after the landing walks to the objective. Skip the step and confirm Quest Flow does not nag.
+- [ ] H5. A flight path you have NOT discovered must never appear in a Fly step. Compare against your game's own taxi map.
+- [ ] H6. Open a vendor, a trainer and an innkeeper's window. `/qflow services vendor` (and `trainer`, `inn`) lists them with a place near where you stood.
+- [ ] H7. Bind at an innkeeper. Report: "a bind point learned from binding" PASS. If the line stays PENDING, paste the report: the bind message may differ on Forever.
+- [ ] H8. Enter a dungeon from outside, leave, and `/qflow services dungeon` lists it near the real entrance.
+- [ ] H9. Report: "the Hearthstone state is readable" and "money is readable" PASS.
+- [ ] H10. Appendices > What Quest Flow knows: the seven buttons switch categories, text is not clipped, counts match what you did.
+
 ## Evidence to keep (screenshots)
 1. AddOns list (A2). 2. A normal NOW / ALSO COMPLETE screen (D1). 3. Reward window with all icon rows (C1). 4. A second-column reward (C2). 5. The recommended reward with the golden border and star (C5). 6. A vendor reward with its price (C8). 7. A tooltip with the Quest Flow line (C9). 8. Each icon type (C7). 9. One `/qflow report` (F1).
 

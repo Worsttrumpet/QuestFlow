@@ -2,6 +2,25 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.11.0] - world and travel knowledge
+
+### Flight paths and travel
+- Quest Flow now reads **your** flight paths from the game's own taxi map when you open a flight master. It keeps "this flight path exists" apart from "you have it": a path never seen on your taxi map is unknown, never assumed.
+- When a flight you have is offered and quicker than walking, the plan shows a **Fly** step that leads you to the flight master first, then the walk from where you land. Flight times use the real time of a flight once you have taken it (estimates are labelled).
+- The Hearthstone is suggested only when it is ready, you have bound at an innkeeper while Quest Flow was running, and it saves a lot of walking.
+- Flight hints are no longer shown for paths your taxi map has already shown. Boats and zeppelins are not routed (no reliable data); a quest's own text still tells you to follow them.
+
+### What Quest Flow learns as you play
+- Vendors (with repair), trainers, flight masters and innkeepers you open, and dungeon entrances (recorded when you enter a dungeon from outside). `/qflow services` lists them.
+- Money and Hearthstone state are read for the planner.
+
+### Clearer knowledge page
+- Appendices > What Quest Flow knows is now seven categories (Quests, World, Travel, You, Planner, Navigate, More), computed from what Quest Flow actually holds, and honest about what is not known yet.
+- `/qflow report` gains a World and Travel section with PASS / FAIL / PENDING checks for this client.
+
+### Compatibility
+- No existing setting, saved data or command changed. With no taxi or bind evidence, recommendations are exactly as before.
+
 ## [0.10.6] - release candidate for the first public release
 
 **Quest Flow: a questing companion for WoW Forever.** See what's available. Choose what comes next.

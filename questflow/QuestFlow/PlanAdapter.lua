@@ -53,7 +53,18 @@ function A.ToLegacy(plan, ctx, c)
 		if a.target and pos then
 			local d = E.Distance(ctx, pos, a.target)
 			a._dist = d
-			if d and (d >= E.TRAVEL_MIN or d >= E.DIFFERENT_CONTINENT) then seq[#seq + 1] = E.MakeTravel(a, d) end
+			local route = ns.Travel and ns.Travel.Route(ctx, pos, a.target)
+			local made = route and ns.Travel.Steps(route, a, d)
+			if made then
+				for _, st in ipairs(made.steps) do seq[#seq + 1] = st end
+				-- after the flight (or hearth) the character is at the far end: the remaining walk is measured from there
+				local p2 = made.endPoint
+				if p2 then
+					local d2 = E.Distance(ctx, p2, a.target)
+					a._travelMode = route.mode
+					if d2 and (d2 >= E.TRAVEL_MIN or d2 >= E.DIFFERENT_CONTINENT) then seq[#seq + 1] = E.MakeTravel(a, d2) seq[#seq].id = "T2:" .. a.id end
+				end
+			elseif d and (d >= E.TRAVEL_MIN or d >= E.DIFFERENT_CONTINENT) then seq[#seq + 1] = E.MakeTravel(a, d) end
 		end
 		seq[#seq + 1] = a
 		if a.target then pos = { map = a.target.map, x = a.target.x, y = a.target.y, world = a.target.world } end

@@ -306,7 +306,9 @@ do
 	check(app.qRows[1].name.__text:find("Open", 1, true) and app.qRows[1].state.__text:find("Available", 1, true), "searching a quest shows where you stand with it")
 	click(app.back)
 	click(app.menu.knowledge)
-	check(app.kRows[1].name.__text:find("^Trainers") and not app.kRows[1].text.__text:find("cannot yet see", 1, true), "Knowledge describes what Quest Flow can and cannot see (0.7.8: no longer the old blanket \"cannot yet\")")
+	local sawTrainers = false
+	for _, cat in ipairs(ns.Knowledge.Categories(ns.State.ctx)) do for _, r in ipairs(cat.rows) do if r.label:find("trainers") and not r.text:find("cannot yet see", 1, true) then sawTrainers = true end end end
+	check(sawTrainers and app.kRows[1].name.__text ~= "", "Knowledge describes what Quest Flow can and cannot see (0.7.8: no longer the old blanket \"cannot yet\"; 0.11.0: by category, from live evidence)")
 	click(app.back)
 	ns.Prefs.FinishSetup()
 	ns.UI.Open("options")
