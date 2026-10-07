@@ -244,8 +244,12 @@ function Tr.ReportLines(ctx)
 	local nodes = 0
 	for _ in pairs(nodePoints()) do nodes = nodes + 1 end
 	local bind = Tr.Bind()
-	L[#L + 1] = string.format("Travel model: walking baseline (%d yd/s); %d flight node(s) with a position, %d registered transport edge(s); hearth %s; bind point %s.",
-		Tr.RUN_SPEED, nodes, #transports, Tr.HearthState(ctx), bind and string.format("learned (map %d)", bind.map) or "not learned")
+	local offered, completed = 0, 0
+	for _, e in ipairs(ns.Taxi and ns.Taxi.Edges() or {}) do
+		if e.state == "COMPLETED" then completed = completed + 1 else offered = offered + 1 end
+	end
+	L[#L + 1] = string.format("Travel model: walking baseline (%d yd/s); %d flight node(s) with a position; edges the planner can use: %d registered fixed transport(s) (boats / zeppelins: none ship), %d flight(s) completed and measured, %d flight(s) only offered (estimated time); hearth %s; bind point %s.",
+		Tr.RUN_SPEED, nodes, #transports, completed, offered, Tr.HearthState(ctx), bind and string.format("learned (map %d)", bind.map) or "not learned")
 	L[#L + 1] = "Travel limits: flights come only from edges a taxi map offered; no boat/zeppelin data is shipped, so none is routed; walking is a straight line."
 	return L
 end
@@ -267,8 +271,13 @@ function Tr.Validation(ctx)
 	else add("PENDING", "the taxi map listed nodes when opened", "open a flight master's map once") end
 	add(ts.discovered > 0 and "PASS" or "PENDING", "discovered flight paths recorded (" .. ts.discovered .. ")", "open a flight master's map")
 	add(ts.matched > 0 and "PASS" or (ts.nodes > 0 and "FAIL" or "PENDING"), "taxi nodes matched to Quest Flow's own flight data (" .. ts.matched .. " of " .. ts.nodes .. ")", "open a flight master's map")
-	add(ts.edges > 0 and "PASS" or "PENDING", "direct flights recorded from where you stood (" .. ts.edges .. ")", "open the map at a flight master")
-	add(ts.measured > 0 and "PASS" or "PENDING", "a real flight time measured (" .. ts.measured .. ")", "take one flight")
+	add(ts.nodes > 0 and "PASS" or "PENDING", "flight paths LISTED by the taxi map (" .. ts.nodes .. ")", "open a flight master's map")
+	add(ts.offered > 0 and "PASS" or "PENDING", "direct flights recorded from where you stood, OFFERED by the map (" .. ts.offered .. ")", "open the map at a flight master that has a destination you have")
+	add(ts.taken > 0 and (ts.unresolved < ts.taken and "PASS" or "FAIL") or "PENDING", "a flight was SELECTED and its destination resolved (" .. ts.taken .. " selected, " .. ts.unresolved .. " unresolved)", "take one flight")
+	add(ts.started > 0 and "PASS" or ((ts.taken > 0) and "FAIL" or "PENDING"), "a flight STARTED (" .. ts.started .. ")", "take one flight")
+	add(ts.completed > 0 and "PASS" or ((ts.started > 0) and "FAIL" or "PENDING"), "a flight COMPLETED (" .. ts.completed .. ", " .. ts.aborted .. " aborted)", "take one flight and wait to land")
+	add(ts.measured > 0 and "PASS" or "PENDING", "a real flight time measured (" .. ts.measured .. ") - the MEASURED duration is recorded", "complete one flight")
+	add(ts.measured > 0 and "PASS" or "PENDING", "an observed transport edge is registered for the planner (src client observation)", "complete one flight")
 	add((T and T._hooked) and "PASS" or ((type(_G.TakeTaxiNode) == "function") and "FAIL" or "FAIL"), "the flight timer hook is installed (TakeTaxiNode post-hook)")
 	for _, k in ipairs({ { "vendor", "a vendor window" }, { "trainer", "a trainer window" }, { "flightmaster", "a flight master" }, { "innkeeper", "an innkeeper" } }) do
 		local n = sv.kinds[k[1]] or 0

@@ -282,7 +282,7 @@ function T.Read()
 							local id = num(n.nodeID)
 							local nm = text(n.name)
 							local x, y = posOf(n.position)
-							local item = { id = id, name = nm, state = n.state, cost = n.cost or n.money, map = x and map or nil, x = x, y = y }
+							local item = { id = id, name = nm, state = n.state, cost = n.cost or n.money, map = x and map or nil, x = x, y = y, slot = num(n.slotIndex) }
 							local k = keyOf(item)
 							if k and not seen[k] then seen[k] = true list[#list + 1] = item any = true end
 						end
@@ -292,6 +292,11 @@ function T.Read()
 				end
 			end
 		end
+	end
+	if got.modern then
+		-- the index TakeTaxiNode will be called with: the node's slot when the API gives one (0.12.0 report: a real flight was lost because only the classic read filled this)
+		lastIndex = {}
+		for _, item in ipairs(list) do if item.slot then lastIndex[item.slot] = keyOf(item) end end
 	end
 	if T.Resolve("NumTaxiNodes") and not got.modern then
 		local cnt, ok = callProbe("NumTaxiNodes")
@@ -335,38 +340,144 @@ function T.OnMapOpened()
 	return n, cur
 end
 
--- ---------------------------------------------------------------- flight timing
+-- ---------------------------------------------------------------- flight lifecycle
+--
+-- One flight is a small state machine, and each state is separate evidence:
+--   OFFERED    a taxi map offered B from A (Taxi.Ingest: s.reach). Not a flight.
+--   SELECTED   TakeTaxiNode(index) was called and the index resolved to a known destination; the ORIGIN is the node the map was opened at.
+--   STARTED    the client says the player is on the taxi: PLAYER_CONTROL_LOST right after the selection, or UnitOnTaxi("player") true.
+--   COMPLETED  the flight ended (PLAYER_CONTROL_GAINED, or UnitOnTaxi false after it had started) AND, when both places can be measured, the player is near the destination.
+--   ABORTED    never started within START_TIMEOUT, ended away from the destination, ran past MAX_FLIGHT_SECS, or the destination was never resolved: counted, never an edge.
+-- Only COMPLETED writes s.flights[from>to] = { secs (the measured mean), n, last, min, max, src = "client observation", verified = true }. A duration is the time between STARTED and
+-- the end; it is never taken from the selection time, an estimate or another flight. Nothing is written for an aborted or unresolved flight.
+T.START_TIMEOUT = 12            -- seconds after the selection within which the flight must start
+T.ARRIVAL_YD = 500              -- how close to the destination the player must be when the flight ends (when both can be measured)
+T.POLL_SECONDS = 0.5
 
---- A flight is starting: `from` (key) to `to` (key). Called from the TakeTaxiNode post-hook, and by tests.
-function T.OnTake(index, toKey)
-	local to = toKey or lastIndex[index]
-	if not (session.standing and to) then pending = nil return end
-	pending = { from = session.standing, to = to, t0 = now() }
-end
+local function lastFlight(t) session.lastFlight = t return t end
 
-function T.OnControlLost()
-	if pending and now() - pending.t0 < 8 then pending.started = true end
-end
-
---- Control returned. When a flight we know the ends of was under way, its duration is stored.
-function T.OnControlGained()
-	local p = pending
-	pending = nil
-	if not (p and p.started) then return nil end
-	local secs = now() - p.t0
-	if secs < T.MIN_FLIGHT_SECS or secs > T.MAX_FLIGHT_SECS then bump("flightRejected") return nil end
+--- Resolves the index TakeTaxiNode was called with to a node key: the slot of the last read, then a node id, else nil (with how it was tried).
+function T.ResolveIndex(index)
+	if lastIndex[index] then return lastIndex[index], "slot" end
 	local s = store()
-	if not s then return nil end
+	if s and type(index) == "number" and s.nodes["id:" .. index] then return "id:" .. index, "node id" end
+	return nil, "unresolved"
+end
+
+--- A flight is being selected. `toKey` is only for tests; the hook passes the index.
+function T.OnTake(index, toKey)
+	bump("taken")
+	local to, how = toKey, "given"
+	if not to then to, how = T.ResolveIndex(index) end
+	local from = session.standing
+	if not (from and to) then
+		bump("takeUnresolved")
+		pending = nil
+		local slots = {}
+		for k in pairs(lastIndex) do slots[#slots + 1] = tostring(k) end
+		table.sort(slots)
+		lastFlight({ state = "UNRESOLVED", why = (from and "destination" or "origin") .. " not known (index " .. tostring(index) .. ", slots seen: " .. (#slots > 0 and table.concat(slots, ",") or "none") .. ")" })
+		return false
+	end
+	pending = { from = from, to = to, t0 = now(), state = "SELECTED", how = how }
+	lastFlight({ state = "SELECTED", from = from, to = to, how = how })
+	return true
+end
+
+local function abort(why)
+	if pending then bump("aborted") lastFlight({ state = "ABORTED", from = pending.from, to = pending.to, why = why, started = pending.startedAt ~= nil }) end
+	pending = nil
+end
+
+local function start()
+	if pending and pending.state == "SELECTED" and now() - pending.t0 <= T.START_TIMEOUT then
+		pending.state, pending.startedAt = "STARTED", now()
+		bump("started")
+		session.lastFlight = { state = "STARTED", from = pending.from, to = pending.to, how = pending.how }
+		return true
+	end
+	return false
+end
+
+function T.OnControlLost() return start() end
+
+local function nodePoint(key)
+	local pts = ns.Travel and ns.Travel._nodePoints and ns.Travel._nodePoints() or nil
+	return pts and pts[key] and pts[key].point or nil
+end
+
+--- Is the player near `key`'s place? true / false, or nil when either cannot be measured.
+local function nearNode(key)
+	local ctx = ns.State and ns.State.ctx
+	local pt = nodePoint(key)
+	if not (ctx and ns.Context and ns.Engine and pt) then return nil end
+	local ok, loc = pcall(ns.Context.Position)
+	if not (ok and type(loc) == "table" and loc.available and loc.map) then return nil end
+	local d = ns.Engine.Distance(ctx, { map = loc.map, x = loc.x, y = loc.y }, pt)
+	if d == nil or d == ns.Engine.DIFFERENT_CONTINENT then return nil end
+	return d <= T.ARRIVAL_YD, d
+end
+
+--- The flight ended. Writes the edge only for a flight that was selected, started and (when measurable) arrived.
+function T.OnControlGained() return T.Finish() end
+
+function T.Finish()
+	local p = pending
+	if not p then return nil end
+	if p.state ~= "STARTED" then
+		-- control returned without the flight ever having started: nothing flew
+		if now() - p.t0 > T.START_TIMEOUT then abort("never started") end
+		return nil
+	end
+	local secs = now() - p.startedAt
+	if secs < T.MIN_FLIGHT_SECS or secs > T.MAX_FLIGHT_SECS then abort("implausible duration " .. math.floor(secs) .. " s") bump("flightRejected") return nil end
+	local near, d = nearNode(p.to)
+	if near == false then abort("ended " .. math.floor(d) .. " yd from the destination") bump("endedAway") return nil end
+	local s = store()
+	if not s then pending = nil return nil end
 	local k = p.from .. ">" .. p.to
 	local f = s.flights[k]
-	if type(f) ~= "table" then f = { n = 0, secs = secs } s.flights[k] = f end
+	if type(f) ~= "table" then f = { n = 0, secs = secs, min = secs, max = secs } s.flights[k] = f end
 	f.secs = f.n == 0 and secs or (f.secs * f.n + secs) / (f.n + 1)
 	f.n = f.n + 1
-	f.t = wall()
+	f.last, f.min, f.max = secs, math.min(f.min or secs, secs), math.max(f.max or secs, secs)
+	f.src, f.verified, f.t = "client observation", true, wall()
+	f.arrival = near == true and "CHECKED" or "UNCHECKED"
+	-- both ends of a flight that was actually taken are paths this character has
+	for _, key in ipairs({ p.from, p.to }) do
+		local n = s.nodes[key]
+		if type(n) == "table" then n.disc = "YES" end
+	end
 	trim(s.flights, T.MAX_FLIGHTS, "t")
+	bump("completed")
 	version = version + 1
+	pending = nil
+	lastFlight({ state = "COMPLETED", from = k:match("^(.-)>"), to = p.to, secs = secs, arrival = f.arrival, how = p.how })
 	return secs
 end
+
+--- Called every frame by the frame below, and by tests. Polls UnitOnTaxi while a flight is pending (the events alone may not fire on every client).
+function T.Tick(elapsed)
+	if not pending then return end
+	pending.acc = (pending.acc or 0) + (elapsed or 0)
+	if pending.acc < T.POLL_SECONDS then return end
+	pending.acc = 0
+	local f = T.Resolve("UnitOnTaxi")
+	local on
+	if f then
+		local ok, v = pcall(f, "player")
+		if ok and type(v) == "boolean" then on = v proof("UnitOnTaxi", "PROVEN") elseif ok then proof("UnitOnTaxi", "UNPROVEN") else proof("UnitOnTaxi", "FAILED") end
+	end
+	if pending.state == "SELECTED" then
+		if on == true then start()
+		elseif now() - pending.t0 > T.START_TIMEOUT then abort("never started") end
+	elseif pending.state == "STARTED" then
+		if on == false and now() - pending.startedAt >= T.MIN_FLIGHT_SECS then T.Finish()
+		elseif now() - pending.startedAt > T.MAX_FLIGHT_SECS then abort("ran past the longest plausible flight") end
+	end
+end
+
+function T.Pending() return pending end
 
 function T.InstallHook()
 	if T._hooked or type(hooksecurefunc) ~= "function" or type(_G.TakeTaxiNode) ~= "function" then return false end
@@ -402,15 +513,27 @@ function T.AttDiscovery(attId)
 	return best
 end
 
---- Direct-offer edges: array of { from, to, cost (copper or nil), secs (measured or nil), measured }.
+--- Flight edges, offered and taken, as one list: { from, to, cost, secs, measured, offered, taken, state, src, verified }.
+--   state "COMPLETED"  a real flight from -> to was selected, started and ended (secs is its measured mean; src "client observation", verified true)
+--   state "OFFERED"    a taxi map offered `to` while the player stood at `from` and no flight of it has completed (secs nil: there is nothing to measure)
+-- An offer is never a completed flight, and a completed flight needs no offer on record (it happened).
 function T.Edges()
 	local s = store()
-	local out = {}
+	local out, seen = {}, {}
 	if not s then return out end
 	for from, r in pairs(s.reach) do
 		for to, c in pairs(r.to or {}) do
 			local f = s.flights[from .. ">" .. to]
-			out[#out + 1] = { from = from, to = to, cost = type(c) == "number" and c or nil, secs = f and f.secs or nil, measured = f ~= nil }
+			local done = type(f) == "table" and (f.n or 0) > 0
+			out[#out + 1] = { from = from, to = to, cost = type(c) == "number" and c or nil, secs = done and f.secs or nil, measured = done, offered = true, taken = done,
+				state = done and "COMPLETED" or "OFFERED", src = done and f.src or "taxi map", verified = done and f.verified == true or false }
+			seen[from .. ">" .. to] = true
+		end
+	end
+	for k, f in pairs(s.flights) do
+		if not seen[k] and type(f) == "table" and (f.n or 0) > 0 then
+			local from, to = k:match("^(.-)>(.+)$")
+			out[#out + 1] = { from = from, to = to, secs = f.secs, measured = true, offered = false, taken = true, state = "COMPLETED", src = f.src, verified = f.verified == true }
 		end
 	end
 	table.sort(out, function(a, b) if a.from ~= b.from then return a.from < b.from end return a.to < b.to end)
@@ -420,7 +543,7 @@ end
 --- Summary for the report and the knowledge page.
 function T.Summary()
 	local s = store()
-	local out = { nodes = 0, discovered = 0, listed = 0, matched = 0, standings = 0, edges = 0, measured = 0, opens = session.opens, proof = {}, stats = {} }
+	local out = { nodes = 0, discovered = 0, listed = 0, matched = 0, standings = 0, edges = 0, offered = 0, measured = 0, taken = 0, started = 0, completed = 0, aborted = 0, unresolved = 0, opens = session.opens, proof = {}, stats = {} }
 	if not s then return out end
 	for _, n in pairs(s.nodes) do
 		out.nodes = out.nodes + 1
@@ -428,7 +551,14 @@ function T.Summary()
 		if n.att then out.matched = out.matched + 1 end
 	end
 	for _ in pairs(s.reach) do out.standings = out.standings + 1 end
-	for _, e in ipairs(T.Edges()) do out.edges = out.edges + 1 if e.measured then out.measured = out.measured + 1 end end
+	for _, e in ipairs(T.Edges()) do
+		out.edges = out.edges + 1
+		if e.offered then out.offered = out.offered + 1 end
+		if e.measured then out.measured = out.measured + 1 end
+	end
+	out.taken, out.started, out.completed, out.aborted = s.stats.taken or 0, s.stats.started or 0, s.stats.completed or 0, s.stats.aborted or 0
+	out.unresolved = s.stats.takeUnresolved or 0
+	out.lastFlight = session.lastFlight
 	out.proof, out.stats, out.last = s.proof, s.stats, session.last
 	return out
 end
@@ -436,8 +566,17 @@ end
 function T.ReportLines()
 	local sm = T.Summary()
 	local L = {}
-	L[#L + 1] = string.format("Taxi evidence (this character): %d nodes seen on a taxi map (%d discovered=YES, %d listed only), %d matched to ATT, %d standing points, %d direct-offer edges (%d with a measured flight time); map opened %d time(s) this session.",
-		sm.nodes, sm.discovered, sm.listed, sm.matched, sm.standings, sm.edges, sm.measured, sm.opens)
+	L[#L + 1] = string.format("Taxi evidence (this character): %d nodes seen on a taxi map (%d discovered=YES, %d listed only), %d matched to ATT, %d standing points; map opened %d time(s) this session.",
+		sm.nodes, sm.discovered, sm.listed, sm.matched, sm.standings, sm.opens)
+	L[#L + 1] = string.format("Flight evidence, one state at a time: direct flights OFFERED %d | flights SELECTED (TakeTaxiNode) %d, of which unresolved %d | STARTED %d | COMPLETED %d | ABORTED %d | edges with a MEASURED duration %d.",
+		sm.offered, sm.taken, sm.unresolved, sm.started, sm.completed, sm.aborted, sm.measured)
+	local lf = sm.lastFlight
+	if lf then
+		L[#L + 1] = string.format("Last flight: %s%s%s%s.", lf.state, lf.from and (" " .. lf.from .. " -> " .. tostring(lf.to)) or "", lf.secs and string.format(", %.0f s (arrival %s)", lf.secs, lf.arrival or "?") or "",
+			lf.why and (" (" .. lf.why .. ")") or (lf.how and (" (destination resolved by " .. lf.how .. ")") or ""))
+	else
+		L[#L + 1] = "Last flight: none seen this session."
+	end
 	local parts = {}
 	for _, api in ipairs(T.APIS) do
 		local present = T.Resolve(api) ~= nil
@@ -455,6 +594,7 @@ end
 function T.EventNames() return T.EVENTS end
 
 function T._Reset() pending, lastIndex, session, version = nil, {}, { opens = 0, reads = 0 }, 0 end
+function T._SetStanding(key) session.standing = key end
 
 -- ---------------------------------------------------------------- events
 
@@ -469,4 +609,5 @@ frame:SetScript("OnEvent", function(_, event)
 	end)
 	if not ok and ns.RecordError then ns.RecordError("taxi " .. tostring(event), err) end
 end)
+frame:SetScript("OnUpdate", function(_, elapsed) if pending then pcall(T.Tick, elapsed) end end)
 T.frame = frame

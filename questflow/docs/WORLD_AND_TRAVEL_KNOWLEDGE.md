@@ -62,3 +62,21 @@ See `/qflow report`, section "WORLD AND TRAVEL KNOWLEDGE": each check is `[PASS]
 * `ForeverCodexDB.chars[<character>].travel.bind`: the learned bind point.
 * `ForeverCodexDB.world`: `npcs`, `entrances` (account-wide, bounded).
 * Nothing existing changed; a character with none of these behaves exactly as before.
+
+## The flight lifecycle (0.12.2)
+
+A flight is a small state machine and each state is separate evidence (`Taxi.lua`):
+
+| State | Evidence | Written |
+|---|---|---|
+| LISTED | a taxi map listed the node | `nodes` |
+| DISCOVERED | current or reachable on this character's map | `nodes[..].disc = YES` |
+| OFFERED | the map offered B while standing at A | `reach` |
+| SELECTED | `TakeTaxiNode(index)` resolved to a known destination; origin = the node the map was opened at | pending only |
+| STARTED | `PLAYER_CONTROL_LOST` right after selecting, or `UnitOnTaxi` true | pending only |
+| COMPLETED | control returned or `UnitOnTaxi` false, and the player is within 500 yd of the destination when both can be measured | `flights[A>B]` |
+| ABORTED | never started in 12 s, ended away from the destination, implausible duration, unresolved destination | counters only |
+
+`flights[A>B] = { secs (mean), n, last, min, max, src = "client observation", verified = true, arrival }`. `Taxi.Edges()` returns offered and completed edges as one list (`state` OFFERED or COMPLETED) and that is the list `Travel.Route` reads, so a completed flight is used with its measured time and an offer with a flagged estimate.
+
+Why the first real flight was missed (0.12.0): the hook resolved the destination only through an index table filled by the classic taxi API. This client answers through `C_TaxiMap`, whose nodes carry `slotIndex`; that was never stored, so every `TakeTaxiNode` was dropped as "destination unknown". The index is now resolved by slot, then by node id, and an unresolved call is counted and explained in the report (with the slots the map listed).

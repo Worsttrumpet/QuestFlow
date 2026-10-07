@@ -2,6 +2,13 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.12.2] - real flights are now recorded
+
+- **A flight you take is now measured and remembered.** Before, a completed flight was missed because Quest Flow could not tell which destination the game's flight call meant. It now follows each flight from selection to landing, records the real time, and the planner uses that time for that flight from then on (other flights still use a labelled estimate).
+- A flight only counts when it started and you landed near the destination. A flight that never started, ended early or could not be matched to a destination is counted but never becomes a route, and no time is made up for it.
+- `/qflow report` now keeps the stages apart: paths listed, paths you have, flights offered, flights taken, started, completed, measured, and an observed route registered.
+- The "What Quest Flow knows" page now scrolls, and its seven buttons fit the window.
+
 ## [0.12.1] - fixes from the first level 17 dungeon test
 
 - **Dungeon hand-ins are no longer dropped for being on the next map.** Quest Flow treated only the map you stand on as "here", so the Ruins of Lordaeron hand-ins just outside Undercity (a different map, about 240 yards away) were left out of the plan. "Here" is now your map or anything within 600 yards, and work toward your dungeon goal is never dropped for being on another map.

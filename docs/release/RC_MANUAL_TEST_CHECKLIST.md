@@ -110,6 +110,9 @@ Do these in the real client with the ZIP. After each, run `/qflow report` and lo
 - [ ] H1. Open a flight master's map. Report: taxi API status shows which family answered; "the taxi map listed nodes when opened" PASS; "discovered flight paths recorded" PASS.
 - [ ] H2. At that flight master, "direct flights recorded" PASS and "matched to Quest Flow's own flight data" is not FAIL. (If the node names differ from Quest Flow's data this says so.)
 - [ ] H3. Take one flight. Report: "a real flight time measured" PASS (the timer hook line must be PASS too).
+- [ ] H3b. (0.12.2) After the flight lands, `/qflow report`: "Last flight: COMPLETED <from> -> <to>, N s (arrival CHECKED)", and PASS for SELECTED, STARTED, COMPLETED, "a real flight time measured" and "an observed transport edge is registered". If it says UNRESOLVED or ABORTED, paste the report: the reason is in that line.
+- [ ] H3c. (0.12.2) Fly the same route again: the measured time becomes the mean of both. Open the map without flying: nothing is added.
+- [ ] H11. (0.12.2) Appendices > What Quest Flow knows: the seven buttons fit inside the window, and every category scrolls (mouse wheel or the bar) so no text runs past the bottom.
 - [ ] H4. With a quest far away in an area you can fly to, check the plan shows a **Fly** step first, the arrow points at the flight master, and the step after the landing walks to the objective. Skip the step and confirm Quest Flow does not nag.
 - [ ] H5. A flight path you have NOT discovered must never appear in a Fly step. Compare against your game's own taxi map.
 - [ ] H6. Open a vendor, a trainer and an innkeeper's window. `/qflow services vendor` (and `trainer`, `inn`) lists them with a place near where you stood.

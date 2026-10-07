@@ -57,23 +57,35 @@ local function refreshQuests(w)
 	w.qHint:SetText(#text < 2 and "Type part of a quest name" or (#found == 0 and "No quest matches that." or ""))
 end
 
-local K_ROW = 62
 local K_ROWS = 6
+local K_TEXT_W = WIDTH - 34            -- room for the scroll bar on the right
+local K_VIEW_TOP = 78
 local function buildKnowledge(f, w)
 	w.kIntro = lineAt(f, -30, W.GREY, true)
 	w.kIntro:SetText("What Quest Flow knows, by area. It only lists what helps a decision.")
 	w.kCat = w.kCat or 1
 	w.kTabs = {}
+	-- seven buttons that fit the page width (they used to run past the right edge)
+	local gap = 4
+	local tw = math.floor((WIDTH - 6 * gap) / 7)
 	for i = 1, 7 do
-		local b = W.Button(f, 74, 20, "", function() w.kCat = i; UI.pages.appendices.Refresh() end)
-		b:SetPoint("TOPLEFT", f, "TOPLEFT", (i - 1) * 78, -50)
+		local b = W.Button(f, tw, 20, "", function() w.kCat = i; w.kScrollTo = 0; UI.pages.appendices.Refresh() end)
+		b:SetPoint("TOPLEFT", f, "TOPLEFT", (i - 1) * (tw + gap), -50)
 		w.kTabs[i] = b
 	end
+	-- the rows live in a scroll frame (the same template the report window uses), so long text never runs off the page
+	local viewH = UI.HEIGHT - 70 - K_VIEW_TOP - 46
+	local sf = CreateFrame("ScrollFrame", "ForeverCodexKnowledgeScroll", f, "UIPanelScrollFrameTemplate")
+	sf:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -K_VIEW_TOP)
+	sf:SetSize(WIDTH - 30, viewH)
+	local body = CreateFrame("Frame", nil, sf)
+	body:SetSize(WIDTH - 30, 10)
+	sf:SetScrollChild(body)
+	ns.Safe(sf.EnableMouseWheel, sf, true)
+	w.kScroll, w.kBody, w.kViewH = sf, body, viewH
 	w.kRows = {}
 	for i = 1, K_ROWS do
-		local y = -78 - (i - 1) * K_ROW
-		w.kRows[i] = { name = lineAt(f, y, W.WHITE), text = lineAt(f, y - 16, W.GREY, true) }
-		w.kRows[i].text:SetHeight(K_ROW - 22)
+		w.kRows[i] = { name = lineAt(body, 0, W.WHITE, false, 0, K_TEXT_W), text = lineAt(body, 0, W.GREY, true, 0, K_TEXT_W) }
 	end
 end
 
@@ -90,11 +102,26 @@ local function refreshKnowledge(w)
 		else b:Hide() end
 	end
 	local rows = cats[w.kCat].rows
+	-- lay the rows out one under another by their real heights, then size the scrolled area to fit
+	local y = 0
 	for i = 1, K_ROWS do
 		local r, s = w.kRows[i], rows[i]
 		r.name:SetText(s and (s.label .. (s.status and ("  -  " .. s.status) or "")) or "")
 		r.text:SetText(s and s.text or "")
+		r.name:ClearAllPoints()
+		r.text:ClearAllPoints()
+		if s then
+			W.Place(r.name, w.kBody, 0, -y, K_TEXT_W)
+			local h = W.TextHeight(r.text, K_TEXT_W)
+			W.Place(r.text, w.kBody, 0, -(y + 18), K_TEXT_W)
+			r.text:SetHeight(h + 2)
+			y = y + 18 + h + 12
+		end
 	end
+	w.kContentH = y
+	w.kBody:SetHeight(math.max(y, 10))
+	ns.Safe(w.kScroll.SetVerticalScroll, w.kScroll, w.kScrollTo or 0)
+	w.kScrollTo = nil
 end
 
 -- COMMANDS AND CARD GUIDE: the commands worth knowing, and what each card's marker letter means (the same letters in every theme)

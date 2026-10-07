@@ -142,7 +142,8 @@ do
 	local pos
 	for _, x in ipairs(T.Nodes()) do if x.key == "id:602" then pos = x end end
 	check(pos and pos.map == 9101 and pos.x == 0.8, "the position comes with the map it was read from")
-	-- timing a flight
+	-- timing a flight (the player has to be where the flight ends: the arrival is checked)
+	H.world().loc.x, H.world().loc.y = 0.8, 0.8
 	local t = 1000
 	local oldGT = _G.GetTime
 	_G.GetTime = function() return t end
@@ -507,4 +508,187 @@ do
 	H.slash("travel")
 	check(ns.UI.report.box.__text:find("Taxi evidence", 1, true), "/qflow travel is the same")
 	check(#ns.errors == 0, "no errors")
+end
+
+-- ================================================================ the flight lifecycle (0.12.2: a real Silverpine -> Undercity flight was not recorded)
+
+local function modernSetup(ns)
+	local saved = { c = _G.C_TaxiMap, n = _G.NumTaxiNodes, gt = _G.GetTime, en = _G.Enum, bm = _G.C_Map.GetBestMapForUnit, mi = _G.C_Map.GetMapInfo, on = _G.UnitOnTaxi, hk = _G.hooksecurefunc, tk = _G.TakeTaxiNode }
+	_G.NumTaxiNodes = nil
+	_G.C_Map.GetBestMapForUnit = function() return H.world().loc.map end
+	_G.C_Map.GetMapInfo = function() return { parentMapID = 0 } end
+	_G.Enum = _G.Enum or {}
+	_G.Enum.FlightPathState = { Current = 0, Reachable = 1, Unreachable = 2 }
+	-- the shape this client answers with: nodeID, name, state, position, and the slot TakeTaxiNode is called with
+	_G.C_TaxiMap = { GetAllTaxiNodes = function(m)
+		if m ~= 9101 then return {} end
+		return { { nodeID = 601, slotIndex = 1, name = "Alpha Post", state = 0, position = { x = 0.1, y = 0.1 } },
+			{ nodeID = 602, slotIndex = 2, name = "Beta Post", state = 1, position = { x = 0.8, y = 0.8 } },
+			{ nodeID = 603, slotIndex = 3, name = "Gamma Post", state = 2, position = { x = 0.5, y = 0.9 } } }
+	end }
+	local t = 1000
+	_G.GetTime = function() return t end
+	local function restore()
+		_G.C_TaxiMap, _G.NumTaxiNodes, _G.GetTime, _G.Enum = saved.c, saved.n, saved.gt, saved.en
+		_G.C_Map.GetBestMapForUnit, _G.C_Map.GetMapInfo, _G.UnitOnTaxi, _G.hooksecurefunc, _G.TakeTaxiNode = saved.bm, saved.mi, saved.on, saved.hk, saved.tk
+	end
+	return function(v) if v then t = v end return t end, restore
+end
+local function atOrigin() H.world().loc.map, H.world().loc.x, H.world().loc.y = 9101, 0.1, 0.1 end
+local function atDestination() H.world().loc.map, H.world().loc.x, H.world().loc.y = 9101, 0.8, 0.8 end
+local function edge(ns, from, to) for _, e in ipairs(ns.Taxi.Edges()) do if e.from == from and e.to == to then return e end end end
+local function summary(ns) return ns.Taxi.Summary() end
+
+section("flight lifecycle: an offer is not a flight (map opened, direct flight offered, nothing taken)")
+do
+	local ns = world()
+	local clock, restore = modernSetup(ns)
+	atOrigin()
+	local T = ns.Taxi
+	T.OnMapOpened()
+	local e = edge(ns, "id:601", "id:602")
+	check(e and e.state == "OFFERED" and e.offered and not e.taken and not e.measured and e.secs == nil and e.verified == false, "the map offered Beta from Alpha: an OFFERED edge with no duration and no verification")
+	check(edge(ns, "id:601", "id:603") == nil, "an UNREACHABLE (listed only) node is not an edge")
+	local sm = summary(ns)
+	check(sm.offered == 1 and sm.taken == 0 and sm.completed == 0 and sm.measured == 0, "the summary counts it as offered only")
+	check(ns.Taxi.AttDiscovery(1) == "UNKNOWN", "and still no claim about flight data it cannot match")
+	-- the planner prices an offer-only flight as an ESTIMATE
+	local ctx = ns.State.ctx
+	ns.Travel._Reset()
+	local r = ns.Travel.Route(ctx, { map = 9101, x = 0.1, y = 0.1 }, { map = 9101, x = 0.8, y = 0.8 })
+	check(r and r.mode == "FLIGHT" and r.estimated == true, "an offered flight is used with an ESTIMATED time, flagged as one")
+	restore()
+end
+
+section("flight lifecycle: selected, started, completed -> a persisted, measured, observed edge the planner uses")
+do
+	local ns = world()
+	local clock, restore = modernSetup(ns)
+	atOrigin()
+	local T = ns.Taxi
+	T.OnMapOpened()
+	-- the real call: TakeTaxiNode(slot) through the post-hook
+	local calls = {}
+	_G.TakeTaxiNode = function(i) calls[#calls + 1] = i end
+	_G.hooksecurefunc = function(name, fn) local orig = _G[name] _G[name] = function(...) orig(...) fn(...) end end
+	T._hooked = nil
+	check(T.InstallHook() == true, "the TakeTaxiNode post-hook installs")
+	_G.TakeTaxiNode(2)
+	local p = T.Pending()
+	check(#calls == 1 and p and p.state == "SELECTED" and p.from == "id:601" and p.to == "id:602" and p.how == "slot", "selecting slot 2 captures origin Alpha, destination Beta (resolved by slot) and the time")
+	clock(1005)
+	T.OnControlLost()
+	check(T.Pending().state == "STARTED" and summary(ns).started == 1, "losing control right after the selection is the start")
+	check(edge(ns, "id:601", "id:602").state == "OFFERED", "mid-flight the edge is still only OFFERED")
+	atDestination()
+	clock(1105)
+	check(T.OnControlGained() == 100, "gaining control after the flight completes it: 100 s measured from the START")
+	local e = edge(ns, "id:601", "id:602")
+	check(e.state == "COMPLETED" and e.taken and e.measured and e.secs == 100 and e.src == "client observation" and e.verified == true, "the edge is COMPLETED: measured 100 s, src client observation, flagged verified")
+	local f = ns.Prefs.Char().taxi.flights["id:601>id:602"]
+	check(f and f.n == 1 and f.secs == 100 and f.min == 100 and f.max == 100 and f.arrival == "CHECKED", "origin and destination and the duration are persisted on the character (arrival checked)")
+	local sm = summary(ns)
+	check(sm.taken == 1 and sm.started == 1 and sm.completed == 1 and sm.aborted == 0 and sm.measured == 1, "the lifecycle counters: selected 1, started 1, completed 1, aborted 0, measured 1")
+	check(sm.lastFlight.state == "COMPLETED" and sm.lastFlight.secs == 100, "the last flight is remembered for the report")
+	-- the planner now uses the MEASURED time
+	ns.Travel._Reset()
+	local r = ns.Travel.Route(ns.State.ctx, { map = 9101, x = 0.1, y = 0.1 }, { map = 9101, x = 0.8, y = 0.8 })
+	check(r and r.mode == "FLIGHT" and r.estimated == false and r.legs[2].secs == 100 + ns.Travel.BOARD_SECONDS, "Travel.Route consumes the observed edge: not estimated, 100 s + boarding")
+	-- a second flight averages
+	atOrigin() T.OnMapOpened()
+	clock(2000) _G.TakeTaxiNode(2) clock(2003) T.OnControlLost() atDestination() clock(2123)
+	T.OnControlGained()
+	f = ns.Prefs.Char().taxi.flights["id:601>id:602"]
+	check(f.n == 2 and f.secs == 110 and f.min == 100 and f.max == 120, "a second flight updates the mean (110 s), minimum and maximum")
+	check(ns.Prefs.IsSavedVariablesSafe(ForeverCodexDB) == true, "the saved data is still writable")
+	restore()
+end
+
+section("flight lifecycle: a flight that did not complete never becomes an edge, and no time is invented")
+do
+	local ns = world()
+	local clock, restore = modernSetup(ns)
+	atOrigin()
+	local T = ns.Taxi
+	T.OnMapOpened()
+	T.OnTake(2)
+	clock(1100)
+	check(T.OnControlGained() == nil and next(ns.Prefs.Char().taxi.flights) == nil and summary(ns).aborted == 1, "control returning with no start in between writes nothing (the stale selection is ABORTED)")
+	T.OnTake(2)
+	clock(1200)
+	T.Tick(1)
+	check(T.Pending() == nil and summary(ns).aborted == 2 and next(ns.Prefs.Char().taxi.flights) == nil, "a selection that never starts is ABORTED after the timeout; no edge")
+	check(summary(ns).lastFlight.state == "ABORTED" and summary(ns).lastFlight.why == "never started", "and the report says why")
+	-- started but ended away from the destination (dismounted early)
+	T.OnTake(2) T.OnControlLost()
+	clock(1260)
+	atOrigin()
+	check(T.OnControlGained() == nil and next(ns.Prefs.Char().taxi.flights) == nil, "a flight that ends 10000 yd from its destination is ABORTED, not completed")
+	check(summary(ns).lastFlight.why:find("from the destination", 1, true), "with the reason")
+	-- too short to be a flight
+	T.OnTake(2) T.OnControlLost() clock(1262) atDestination()
+	check(T.OnControlGained() == nil and next(ns.Prefs.Char().taxi.flights) == nil, "a two second 'flight' is rejected")
+	-- the index cannot be resolved
+	T.OnTake(99)
+	check(T.Pending() == nil and summary(ns).unresolved == 1 and summary(ns).lastFlight.state == "UNRESOLVED" and summary(ns).lastFlight.why:find("slots seen: 1,2,3", 1, true), "an unresolved index is counted and explained (with the slots the map listed), and starts nothing")
+	check(edge(ns, "id:601", "id:602").secs == nil and edge(ns, "id:601", "id:602").state == "OFFERED", "through all of that the offered edge stayed an offer with no duration")
+	check(summary(ns).measured == 0 and summary(ns).completed == 0, "nothing measured, nothing completed")
+	restore()
+end
+
+section("flight lifecycle: UnitOnTaxi polling carries the lifecycle when the control events do not fire")
+do
+	local ns = world()
+	local clock, restore = modernSetup(ns)
+	atOrigin()
+	local T = ns.Taxi
+	T.OnMapOpened()
+	local on = false
+	_G.UnitOnTaxi = function() return on end
+	T.OnTake(2)
+	clock(1003) on = true
+	T.Tick(1)
+	check(T.Pending() and T.Pending().state == "STARTED", "UnitOnTaxi true starts it")
+	atDestination() clock(1083) on = false
+	T.Tick(1)
+	check(T.Pending() == nil and edge(ns, "id:601", "id:602").secs == 80, "UnitOnTaxi false ends it: 80 s measured from the start")
+	check(summary(ns).proof["UnitOnTaxi"] == "PROVEN", "UnitOnTaxi is tallied PROVEN once it answered a boolean")
+	restore()
+end
+
+section("flight lifecycle: the report keeps the evidence states apart")
+do
+	local ns = world()
+	local clock, restore = modernSetup(ns)
+	atOrigin()
+	local T = ns.Taxi
+	local function report() local _, lines = ns.Diag.Report() return table.concat(lines, "\n") end
+	T.OnMapOpened()
+	local r = report()
+	check(r:find("flight paths LISTED by the taxi map (3)", 1, true) and r:find("[PASS] direct flights recorded from where you stood, OFFERED by the map (1)", 1, true), "listed and offered are PASS")
+	check(r:find("[PENDING] a flight was SELECTED", 1, true) and r:find("[PENDING] a flight STARTED", 1, true) and r:find("[PENDING] a flight COMPLETED", 1, true), "selected, started and completed are PENDING")
+	check(r:find("[PENDING] a real flight time measured (0)", 1, true) and r:find("[PENDING] an observed transport edge is registered", 1, true), "measured and registered are PENDING")
+	check(r:find("OFFERED 1 | flights SELECTED (TakeTaxiNode) 0", 1, true), "the one-line summary keeps the counts apart")
+	T.OnTake(2) T.OnControlLost() atDestination() clock(1090) T.OnControlGained()
+	r = report()
+	check(r:find("[PASS] a flight was SELECTED", 1, true) and r:find("[PASS] a flight STARTED (1)", 1, true) and r:find("[PASS] a flight COMPLETED (1, 0 aborted)", 1, true), "after a flight: selected, started, completed are PASS")
+	check(r:find("[PASS] a real flight time measured (1)", 1, true) and r:find("[PASS] an observed transport edge is registered", 1, true), "measured and registered are PASS")
+	check(r:find("Last flight: COMPLETED id:601 -> id:602, 90 s (arrival CHECKED)", 1, true), "the last flight line names both ends and the duration")
+	check(r:find("1 flight(s) completed and measured, 0 flight(s) only offered", 1, true), "the travel model line counts the completed edge among the edges the planner can use")
+	restore()
+end
+
+section("knowledge page: tabs fit the page and the rows scroll instead of running off it")
+do
+	local ns = world()
+	ns.UI.Open("appendices")
+	local app = ns.UI.main.app
+	local function click(b) b.__scripts.OnClick(b) end
+	click(app.menu.knowledge)
+	check(app.kScroll ~= nil and app.kBody ~= nil and app.kContentH ~= nil and app.kContentH > 0, "the rows are inside a scroll frame with a measured content height")
+	click(app.kTabs[3])
+	local travelH = app.kContentH
+	click(app.kTabs[7])
+	check(app.kContentH > 0 and travelH > app.kContentH, "a longer category is taller than a shorter one (the scroll range follows the content)")
+	check(app.kScrollTo == nil, "the scroll position is applied once and cleared")
 end
