@@ -222,6 +222,20 @@ local function build(page)
 		c.unArrows[i] = W.Line(c.unBox, 11, W.DIM, "RIGHT")
 	end
 	c.unMore = W.Line(c.unBox, 11, W.DIM, "LEFT")
+	-- the header row minimises / opens the section (remembered); the [+] / [-] marks it
+	c.unToggle = W.Line(c.unBox, 11, W.DIM, "RIGHT")
+	c.unHead = W.Row(c.unBox, FULL, 20, function() UI.ToggleUnplaced() end)
+	c.unHead:SetPoint("TOPLEFT", c.unBox, "TOPLEFT", 0, 0)
+	c.unHead.action = true                                        -- (W.Row only fires for a row that has an action)
+	c.unHead:SetScript("OnEnter", function(self)
+		self.bg:SetColorTexture(1, 1, 1, 0.08)
+		W.ShowTooltip(self, "ANCHOR_RIGHT", { title = "Quests Quest Flow cannot place", rows = { { "Click", "Minimise or open this list" } } })
+	end)
+	c.unHead:SetScript("OnLeave", function(self)
+		self.bg:SetColorTexture(0, 0, 0, 0)
+		local tip = rawget(_G, "GameTooltip")
+		if tip then ns.Safe(tip.Hide, tip) end
+	end)
 	c.unHits, c.readyHits, c.nowHits = {}, {}, {}
 	c.nowHint = W.Line(c.nowBox, 11, W.DIM, "LEFT")                  -- "Click the quest name for its details." (guidance with no map position only)
 	c.readyArrows = {}
@@ -298,8 +312,8 @@ local function drawNow(c, card)
 	else
 		titleH = st:Add(c.nowTitle, 3, nil, inner - 4)
 	end
-	-- guidance for a quest Codex has no map position for: the title opens its QUEST DETAILS (a quest Codex CAN route keeps its normal guided behaviour: no click area)
-	local clickable = n and n.guidance and n.quest and n.unplaced
+	-- the title of a NOW quest that is in the log opens its QUEST DETAILS (the planner and the arrow are unaffected)
+	local clickable = n and n.quest and n.kind ~= "ACCEPT"            -- (0.14.3) any NOW for a quest in the log opens its details, not only guidance with no place
 	if clickable then
 		placeHit(hitArea(c, "nowHits", 1, box), box, box.insetX, titleY, inner - 4, titleH, n.quest)
 		c.nowHint:SetText(UI.main.detailQuest == n.quest and "Click the quest name to hide its details." or "Click the quest name for its details.")
@@ -535,10 +549,36 @@ end
 --- IN YOUR LOG, NOT ON THE MAP: quests with no usable map position, each opening its QUEST DETAILS. Returns the card height, or nil when there are none.
 local function drawUnplaced(c, un)
 	local box = c.unBox
-	if not un or #un.rows == 0 then hideHits(c, "unHits", 1) return nil end
+	if not un or #un.rows == 0 then hideHits(c, "unHits", 1) c.unHead:Hide() c.unToggle:SetText("") return nil end
 	local inner = FULL - box.insetX - PAD
 	local st = W.Stack(box, inner)
+	local collapsed = ns.Prefs.UnplacedCollapsed()
+	c.unLabel:SetText("IN YOUR LOG, NOT ON THE MAP  (" .. (#un.rows + (un.more or 0)) .. ")")
+	c.unToggle:ClearAllPoints()
+	c.unToggle:SetPoint("TOPRIGHT", box, "TOPRIGHT", -PAD, -(box.insetY))
+	c.unToggle:SetText(collapsed and "[+]" or "[-]")
+	c.unToggle:Show()
+	c.unHead:Show()
 	st:Skip(16)
+	if collapsed then
+		-- minimised: only the header row stays
+		hideHits(c, "unHits", 1)
+		c.unHint:SetText("")
+		c.unMore:SetText("")
+		for i = 1, UN_ROWS do
+			c.unRows[i]:SetText("")
+			c.unSubs[i]:SetText("")
+			c.unArrows[i]:SetText("")
+			c.unArrows[i]:Hide()
+			c.unRows[i]:Hide()
+			c.unSubs[i]:Hide()
+		end
+		c.unHint:Hide()
+		c.unMore:Hide()
+		return math.floor(st.y + PAD - 2 + 0.5)
+	end
+	c.unHint:Show()
+	c.unMore:Show()
 	c.unHint:SetText("No arrow for these: Quest Flow has no map position for them. Click one for its details.")
 	st:Add(c.unHint, 4)
 	for i = 1, UN_ROWS do
@@ -816,15 +856,6 @@ local function refresh()
 		c.readyBox:Hide()
 	end
 
-	local unH = drawUnplaced(c, card.unplaced)
-	if unH then
-		c.unBox:Show()
-		placeCard(c, c.unBox, bottom + GAP - 2, FULL, unH)
-		bottom = bottom + GAP - 2 + unH
-	else
-		c.unBox:Hide()
-	end
-
 	local dgH = drawDungeons(c, card.dungeons or {})
 	if dgH then
 		c.dgBox:Show()
@@ -868,6 +899,16 @@ local function refresh()
 		bottom = bottom + GAP - 2 + h
 	else
 		c.nfyBox:Hide()
+	end
+
+	-- LAST of the cards (0.14.3): quests Quest Flow cannot place are the quietest list, and can be minimised
+	local unH = drawUnplaced(c, card.unplaced)
+	if unH then
+		c.unBox:Show()
+		placeCard(c, c.unBox, bottom + GAP - 2, FULL, unH)
+		bottom = bottom + GAP - 2 + unH
+	else
+		c.unBox:Hide()
 	end
 
 	-- below the cards: the party card (quests Codex cannot place are not listed here: they are in /codex report)

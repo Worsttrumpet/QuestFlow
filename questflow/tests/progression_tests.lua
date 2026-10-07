@@ -325,3 +325,46 @@ do
 	local sc = started.Presenter.Card(started.State.plan, started.State.ctx)
 	check(sc.now and sc.now.noPlace == true and sc.now.whereShort:find("not known", 1, true), "and its NOW row says the place is not known")
 end
+
+section("tracker: the 'not on the map' list is the last card and can be minimised (remembered)")
+do
+	cleanup()
+	local ns = boot({ char = { level = 20 }, synthetic = true, production = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Test" } })
+	H.attPack(ns, { { id = 1, name = "Placeless One", map = 9001, x = 0.5, y = 0.5, req = 1, level = 20 }, { id = 2, name = "Ready Hand In", map = 9001, x = 0.55, y = 0.5, req = 1, level = 20, objCoords = { { map = 9001, x = 0.55, y = 0.5 } } } }, nil)
+	H.world().log = { { questID = 1, title = "Placeless One", complete = false }, { questID = 2, title = "Ready Hand In", complete = true } }
+	H.world().objectives = { [1] = { { text = "Thing", type = "item", finished = false, numFulfilled = 1, numRequired = 5 } }, [2] = { { text = "Done", type = "item", finished = true, numFulfilled = 1, numRequired = 1 } } }
+	ns.Prefs.FinishSetup()
+	ns.State.Recompute()
+	ns.UI.Open("codex")
+	local c = ns.UI.main.codex
+	check(ns.Prefs.UnplacedCollapsed() == false and c.unHint.__text ~= "" and c.unRows[1].__text:find("Placeless One", 1, true), "open by default: the hint and the row are shown")
+	check(c.unLabel.__text:find("IN YOUR LOG, NOT ON THE MAP  (1)", 1, true), "the header carries the count")
+	check(c.unToggle.__text == "[-]", "and a [-] mark")
+	-- the click on the header row
+	c.unHead.__scripts.OnClick(c.unHead)
+	check(ns.Prefs.UnplacedCollapsed() == true and ForeverCodexDB.ui.unplacedCollapsed == true, "clicking the header minimises it and stores that")
+	check(c.unHint.__text == "" and c.unRows[1].__text == "" and c.unToggle.__text == "[+]", "only the header remains, with [+]")
+	check(c.unLabel.__text:find("(1)", 1, true), "the count stays visible when minimised")
+	c.unHead.__scripts.OnClick(c.unHead)
+	check(ns.Prefs.UnplacedCollapsed() == false and c.unRows[1].__text:find("Placeless One", 1, true), "clicking again opens it")
+	check(#ns.errors == 0, "no errors")
+end
+
+section("tracker: the NOW title opens the quest's details for any quest in the log")
+do
+	cleanup()
+	local ns = boot({ char = { level = 20 }, synthetic = true, production = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Test" } })
+	H.attPack(ns, { { id = 2, name = "Ready Hand In", map = 9001, x = 0.55, y = 0.5, req = 1, level = 20, objCoords = { { map = 9001, x = 0.55, y = 0.5 } } } }, nil)
+	H.world().log = { { questID = 2, title = "Ready Hand In", complete = true } }
+	H.world().objectives = { [2] = { { text = "Done", type = "item", finished = true, numFulfilled = 1, numRequired = 1 } } }
+	ns.Prefs.FinishSetup()
+	ns.State.Recompute()
+	ns.UI.Open("codex")
+	local c = ns.UI.main.codex
+	check(ns.State.plan.now and ns.State.plan.now.id == "Q:2:TURN_IN", "(setup) NOW is a located hand-in")
+	check(c.nowHits[1] and c.nowHits[1].__shown, "its title has a click area (before 0.14.3 only placeless guidance had one)")
+	c.nowHits[1].__scripts.OnClick(c.nowHits[1])
+	check(ns.UI.main.detailQuest == 2, "clicking it opens the quest's details")
+	c.nowHits[1].__scripts.OnClick(c.nowHits[1])
+	check(ns.UI.main.detailQuest == nil, "and clicking again closes them")
+end

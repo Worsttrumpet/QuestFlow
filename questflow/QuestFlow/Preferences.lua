@@ -266,6 +266,9 @@ end
 function P.SetMinimapAngle(a) root().ui.minimapAngle = type(a) == "number" and a or nil end
 function P.ClearMinimapAngle() root().ui.minimapAngle = nil end
 --- Whether the tracker was showing when the player last used it (shown by default; only an explicit close keeps it away after a reload).
+--- Whether the tracker's "In your log, not on the map" section is minimised (account-wide window setting; default open).
+function P.UnplacedCollapsed() return root().ui.unplacedCollapsed == true end
+function P.SetUnplacedCollapsed(on) root().ui.unplacedCollapsed = on == true end
 function P.TrackerShown() return root().ui.trackerShown ~= false end
 function P.SetTrackerShown(on) root().ui.trackerShown = on == true end
 function P.ClearMinimapPos() root().ui.minimapPos = nil end

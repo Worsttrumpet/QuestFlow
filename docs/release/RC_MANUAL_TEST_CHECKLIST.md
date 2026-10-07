@@ -184,3 +184,8 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 - The screenshots above exist.
 - The version in the AddOns list matches the ZIP name and `CHANGELOG.md`.
 - The manual GitHub and CurseForge steps in `docs/release/CURSEFORGE.md` are done.
+
+## Part M - tracker (0.14.3)
+
+- [ ] Click the NOW quest title: its details open; click again: they close. The arrow/route does not change.
+- [ ] "IN YOUR LOG, NOT ON THE MAP" is the last section. Click its header: it folds to one line with the count; /reload keeps it folded.

@@ -430,6 +430,12 @@ function UI.Refresh()
 	if UI.options and UI.options:IsShown() and UI.optionsKey then refreshPage(UI.optionsKey) end
 end
 
+--- Minimises / opens the tracker's "In your log, not on the map" section (remembered). Kept here: PageCodex only draws and never changes a preference.
+function UI.ToggleUnplaced()
+	P.SetUnplacedCollapsed(not P.UnplacedCollapsed())
+	if UI.Refresh then UI.Refresh() end
+end
+
 function UI.IsShown()
 	return (UI.frame ~= nil and UI.frame:IsShown()) or (UI.options ~= nil and UI.options:IsShown()) or (ns.DevUI ~= nil and ns.DevUI.IsShown() == true)
 end

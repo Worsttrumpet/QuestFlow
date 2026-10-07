@@ -2,6 +2,12 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.14.3] - tracker: click the NOW quest; fold away "in your log, not on the map"
+
+- **Clicking the NOW quest title now opens that quest's details** (it did nothing when the quest had a map position). The route is not changed by opening or closing the details.
+- **"IN YOUR LOG, NOT ON THE MAP" can be minimised.** Click its header to fold it to one line with the count; the choice is remembered. It is now the last section of the list.
+- Quests with no known objective place are a data gap (Questie/ATT coverage), not a planner fault; nothing is guessed for them.
+
 ## [0.14.2] - the report explains optional pickups correctly
 
 - The report's "why it can be recommended" line for a pickup the game has not offered still said unknown pickups are allowed. Since 0.14.0 they are only optional, so it now says why it is only OPTIONAL (listed, may be an ALSO DO, never NOW / THEN until the game offers it). No planning change.

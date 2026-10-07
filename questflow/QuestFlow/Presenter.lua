@@ -169,6 +169,7 @@ local function describe(a, plan, ctx, icon)
 	if pos0 and d0 and d0 >= E.DIFFERENT_CONTINENT then it.whereShort = "In another area" end
 	it.dist = Pr.Dist(d0, a.kind == "OBJECTIVE")          -- the number the tracker prints ("90 yd", "1,800 yd", "Here")
 	if type(a.level) == "number" and a.quest then it.level = a.level end
+	if a.quest and a.kind ~= "ACCEPT" then it.quest = a.quest end          -- a quest in the log: the NOW title opens its details
 	if a.type == "FLIGHT" then
 		it.title = "Visit the flight master"
 		it.detail = a.name and ("Flight path: " .. a.name .. ".") or nil

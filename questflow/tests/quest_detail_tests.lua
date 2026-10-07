@@ -235,11 +235,13 @@ do
 	c.nowHits[1].__scripts.OnClick(c.nowHits[1])
 	check(ns.UI.main.detailQuest == nil, "and collapses")
 
-	-- a located quest: normal guided behaviour, no click area, no hint
+	-- a located quest: guided as before; since 0.14.3 its title is also a click area (opens the details; no change to the route)
 	local ns2 = world({ Q(1, "Near Quest", 100, 0, { objCoords = { { map = 9001, x = 0.6, y = 0.5 } } }) }, { [1] = { title = "Near Quest", objectives = { { text = "Boars", have = 1, need = 5 } } } })
 	ns2.UI.Open("codex")
 	local c2 = ns2.UI.main.codex
-	check(ns2.State.plan.now ~= nil and (not c2.nowHits[1] or c2.nowHits[1].__shown == false) and c2.nowHint.__text == "", "a quest the planner routes has no click area competing with it")
+	check(ns2.State.plan.now ~= nil and c2.nowHits[1] and c2.nowHits[1].__shown ~= false, "a quest the planner routes: its title opens the details (0.14.3)")
+	c2.nowHits[1].__scripts.OnClick(c2.nowHits[1])
+	check(ns2.UI.main.detailQuest == 1 and ns2.State.plan.now ~= nil and ns2.State.plan.now.quest == 1, "opening the details leaves the route untouched")
 
 	-- READY rows: one with a position and one without
 	local ns3 = world({
