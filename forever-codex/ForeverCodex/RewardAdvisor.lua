@@ -147,23 +147,34 @@ local function statsText(list)
 	return table.concat(parts, ", ")
 end
 
---- Which equipped entry the reward is judged against: an EMPTY slot it fits first, otherwise the comparable entry with the largest relative gain (or, when
--- none gains, the first comparable one). All entries are kept in the evidence. Returns the entry or nil.
+--- How good a reward is in ONE legal slot, as a rank (never a score): 3 = a clear gain with no loss, 2 = a slight gain with no loss, 1 = mixed (gains and losses), 0 = no gain,
+-- -1 = nothing could be compared; nil = the slot could not be compared at all. Second value: the largest relative gain (to tell two gains apart). Same thresholds as the outcome.
+local function entryRank(e, rel)
+	if e.state ~= "COMPARED" then return nil end
+	local j = judge(e.comparison, rel)
+	if j.compared == 0 then return -1, 0 end
+	local maxRel = 0
+	for _, g in ipairs(j.gains) do maxRel = math.max(maxRel, g.relative) end
+	if #j.gains > 0 and #j.losses == 0 then return (maxRel >= A.THRESHOLDS.slightRelative) and 3 or 2, maxRel end
+	if #j.gains > 0 then return 1, maxRel end
+	return 0, 0
+end
+
+--- Which equipped entry the reward is judged against. A reward is compared with the item in EACH slot it may legally occupy (Gear.SLOTS_FOR: a one-hand weapon may go in either
+-- hand, a main-hand-only or off-hand-only one in just that hand); an EMPTY slot it fits comes first, otherwise the legal slot where it does best (a clear gain, then a slight gain,
+-- then mixed, then no gain; the larger relative gain breaks a tie between two gains; otherwise the first slot). All entries are kept in the evidence. Returns the entry or nil.
 local function chooseEntry(entries, rel)
-	local bestGain, bestRel, firstCompared, firstOther
+	local best, bestRank, bestRel, firstOther
 	for _, e in ipairs(entries) do
 		if e.state == "EMPTY_SLOT" then return e end
-		if e.state == "COMPARED" then
-			firstCompared = firstCompared or e
-			local j = judge(e.comparison, rel)
-			local gain = 0
-			for _, g in ipairs(j.gains) do gain = math.max(gain, g.relative) end
-			if #j.gains > 0 and #j.losses == 0 and (not bestRel or gain > bestRel) then bestGain, bestRel = e, gain end
+		local rank, gain = entryRank(e, rel)
+		if rank then
+			if not best or rank > bestRank or (rank == bestRank and rank >= 2 and gain > bestRel) then best, bestRank, bestRel = e, rank, gain end
 		else
 			firstOther = firstOther or e
 		end
 	end
-	return bestGain or firstCompared or firstOther
+	return best or firstOther
 end
 
 -- ---------------------------------------------------------------- classification
@@ -178,6 +189,27 @@ local function compareOutcome(facts, equipped, rel)
 	if not (ns.Gear and equipped) then return { kind = "unknown", note = "the equipped items were not read" } end
 	local cmp = ns.Gear.CompareToEquipped(facts, equipped)
 	if cmp.state ~= "COMPARABLE" then return { kind = "unknown", note = cmp.reason, comparison = cmp } end
+	-- TWO-HANDERS change the whole setup. A two-handed reward takes the main hand AND puts the off hand out of use: with an off-hand item worn (or the off hand unread) Codex does not
+	-- compare that setup. And an off-hand slot is not free while the main hand holds a two-handed weapon.
+	local function item(slot) local s = equipped.slots and equipped.slots[slot]; return s end
+	local function twoHanded(s) local f = s and s.state == "POPULATED" and s.itemFacts and s.itemFacts.fields and s.itemFacts.fields.equipSlot; return f and f.state == "PROVEN" and f.value == "INVTYPE_2HWEAPON" end
+	if slotState == "PROVEN" and fl.equipSlot.value == "INVTYPE_2HWEAPON" then
+		local oh = item(17)
+		if not (oh and oh.state == "EMPTY") then
+			local mh = item(16)
+			local function nm(s) return (s and s.state == "POPULATED" and s.itemFacts) and nameOf(s.itemFacts) or "?" end
+			return { kind = "unknown", comparison = cmp, chosen = 16, twoHand = true,
+				note = (oh and oh.state == "POPULATED") and string.format("it is two-handed: it would replace your main hand (%s) and put your off hand (%s) out of use, and Codex does not compare that setup", nm(mh), nm(oh))
+					or "it is two-handed and the off hand could not be read, so what it would replace is not known" }
+		end
+	end
+	if twoHanded(item(16)) then
+		for _, e in ipairs(cmp.entries) do
+			if e.slot == 17 then
+				e.state, e.comparison, e.reason = "UNKNOWN", nil, "your main hand holds a two-handed weapon, so the off hand is not free"
+			end
+		end
+	end
 	local entry = chooseEntry(cmp.entries, rel)
 	if entry and entry.state == "EMPTY_SLOT" then
 		return { kind = "empty_slot", text = string.format("fills your empty %s slot", entry.slotName), evidence = { slot = entry.slot, kind = "empty_slot" }, comparison = cmp, chosen = entry.slot }

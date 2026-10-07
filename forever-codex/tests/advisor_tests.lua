@@ -601,3 +601,91 @@ do
 	check(q.state == "NO_CLEAR_RECOMMENDATION" and q.selected == nil, "two trade-offs: still NO_CLEAR_RECOMMENDATION  [" .. tostring(q.state) .. "]")
 	check(#ns.errors == 0, "no errors")
 end
+
+-- ================================================================ 0.9.1: legal equipment slots (generic fixtures; no item names are special)
+section("advisor 0.9.1: a reward is compared with the item in each slot it may legally occupy, and only those")
+do
+	reset()
+	ns.Eligibility.ClearEvidence()
+	local ROGUE = { level = 15, classToken = "ROGUE" }
+	local DPS, AGI, STA, STR, SPI = "ITEM_MOD_DAMAGE_PER_SECOND_SHORT", "ITEM_MOD_AGILITY_SHORT", "ITEM_MOD_STAMINA_SHORT", "ITEM_MOD_STRENGTH_SHORT", "ITEM_MOD_SPIRIT_SHORT"
+	local function wp(id, name, slot, dps, agi, flags, extra)
+		local o = { id = id, name = name, type = "Weapon", classID = 2, subType = "Daggers", sub = 15, slot = slot, stats = { [DPS] = dps, [AGI] = agi }, sell = 500, usable = true, second = true, flag = true }
+		for k, v in pairs(flags or {}) do o[k] = v end
+		for k, v in pairs(extra or {}) do o[k] = v end
+		return facts(o)
+	end
+	local MH, OH, EITHER, TWO = "INVTYPE_WEAPONMAINHAND", "INVTYPE_WEAPONOFFHAND", "INVTYPE_WEAPON", "INVTYPE_2HWEAPON"
+	local function setup(mh, oh) return equipped({ [16] = mh, [17] = oh }) end
+	local function classify(f, eq) return A.Classify(f, eq, { character = ROGUE }) end
+	local function slotsOf(c) local s = {} for _, e in ipairs(c.comparison.entries or {}) do s[#s + 1] = e.slot end return table.concat(s, ",") end
+	local function reasonOf(c) for _, x in ipairs(c.categories) do if x.id == c.primary then return x.reason end end end
+	local eq = setup(wp(100, "Worn Main", MH, 10, 2), wp(101, "Worn Off", OH, 7, 1))
+
+	-- 1. a main-hand-only reward is compared with the main hand only
+	local c1 = classify(wp(1, "Mh Reward", MH, 12, 5), eq)
+	check(slotsOf(c1) == "16" and c1.outcome.chosen == 16 and c1.outcome.evidence.against == "Worn Main" and c1.outcome.kind == "upgrade", "main-hand-only reward: compared with slot 16 (the main hand) only  [" .. slotsOf(c1) .. "]")
+	-- 2. an off-hand-only reward is compared with the off hand only
+	local c2 = classify(wp(2, "Oh Reward", OH, 9, 2), eq)
+	check(slotsOf(c2) == "17" and c2.outcome.chosen == 17 and c2.outcome.evidence.against == "Worn Off", "off-hand-only reward: compared with slot 17 (the off hand) only  [" .. slotsOf(c2) .. "]")
+	-- 4. a main-hand-only item that is worn is never a replacement target for an off-hand reward (nor an off-hand-only worn item for a main-hand reward)
+	local c4 = classify(wp(4, "Weak Off Reward", OH, 6, 1), eq)
+	check(slotsOf(c4) == "17" and c4.outcome.kind == "none", "a weaker off-hand reward is judged against the off hand only (not an upgrade over the worn main hand's slot)  [" .. c4.outcome.kind .. "]")
+	local c4b = classify(wp(5, "Strong Off Reward", OH, 12, 5), eq)
+	check(slotsOf(c4b) == "17" and c4b.outcome.evidence.against == "Worn Off", "a stronger off-hand reward replaces the off hand, not the main hand")
+
+	-- 3. an either-hand weapon: both legal slots are considered; it is an upgrade where it replaces the weaker one
+	local c3 = classify(wp(3, "Either Reward", EITHER, 9, 2), eq)
+	check(slotsOf(c3) == "16,17", "an either-hand reward considers both the main hand and the off hand  [" .. slotsOf(c3) .. "]")
+	check(c3.outcome.chosen == 17 and c3.outcome.kind == "upgrade" and c3.primary == "UPGRADE", "9 dps is worse than the main hand (10) but better than the off hand (7): an UPGRADE as the off hand  [" .. tostring(c3.outcome.kind) .. " slot " .. tostring(c3.outcome.chosen) .. "]")
+	check(reasonOf(c3):find("OFFHAND", 1, true), "and the reason names the slot  [" .. tostring(reasonOf(c3)) .. "]")
+	-- (the same weapon is judged against the main hand alone it is no upgrade: the slot awareness is what changes the answer)
+	check(classify(wp(3, "Same Weapon", MH, 9, 2), eq).outcome.kind == "none", "(as a main-hand-only item, the same stats are no upgrade)")
+
+	-- 6. several legal scenarios with different results: the clearly better one wins; mixed stays mixed
+	local eq6 = setup(wp(110, "Main", MH, 10, 5), wp(111, "Off", OH, 7, 1))
+	local c6 = classify(wp(6, "Either", EITHER, 12, 3), eq6)
+	check(c6.outcome.chosen == 17 and c6.outcome.kind == "upgrade", "mixed in the main hand but a clear gain in the off hand: the off hand is the scenario  [" .. c6.outcome.kind .. "/" .. tostring(c6.outcome.chosen) .. "]")
+	local eq6b = setup(wp(112, "Main", MH, 10, 5), wp(113, "Off", OH, 14, 1))
+	local c6b = classify(wp(7, "Either", EITHER, 12, 3), eq6b)
+	check(c6b.outcome.kind == "mixed", "mixed in both hands: still mixed, no scenario is clearly better  [" .. c6b.outcome.kind .. "]")
+	local eq6c = setup(wp(114, "Main", MH, 14, 5), wp(115, "Off", OH, 14, 1))
+	local c6c = classify(wp(8, "Either", EITHER, 12, 3), eq6c)
+	check(c6c.outcome.kind == "mixed" and c6c.outcome.chosen == 17, "no gain over the main hand, a trade-off against the off hand: reported as the trade-off it is (mixed), not as 'no gain'  [" .. c6c.outcome.kind .. "]")
+	local rec = A.Recommend(choiceEval({ wp(9, "Either A", EITHER, 12, 3), wp(10, "Either B", EITHER, 12, 3) }, eq6b, ROGUE))
+	check(rec.state == "NO_CLEAR_RECOMMENDATION" and rec.selected == nil, "two such choices: no clear recommendation")
+
+	-- 5. two-handers: not a plain main-hand replacement
+	local c5 = classify(wp(11, "Two Hand", TWO, 20, 8), eq)
+	check(c5.outcome.kind == "unknown" and c5.outcome.note:find("two-handed", 1, true) and c5.primary ~= "UPGRADE", "a two-hander with an off-hand item worn: not compared as a main-hand upgrade, stays UNKNOWN  [" .. tostring(c5.outcome.note) .. "]")
+	check(c5.outcome.note:find("Worn Main", 1, true) and c5.outcome.note:find("Worn Off", 1, true), "and the note names what it would replace")
+	local rec5 = A.Recommend(choiceEval({ wp(12, "Two Hand", TWO, 20, 8), wp(13, "Poor One", MH, 5, 1) }, eq, ROGUE))
+	check(rec5.selected == nil or rec5.selected.index ~= 1, "a two-hander is never the pick over an off-hand-displacing setup Codex cannot judge")
+	local eqEmpty = setup(wp(120, "Worn Main", MH, 10, 2), nil)
+	local c5b = classify(wp(14, "Two Hand", TWO, 20, 8), eqEmpty)
+	check(c5b.outcome.kind == "upgrade" and c5b.outcome.chosen == 16 and slotsOf(c5b) == "16", "with the off hand empty a two-hander is an ordinary comparison with the main hand")
+	-- an off-hand slot is not free while a two-hander is wielded
+	local eq2h = setup(wp(121, "Worn Two Hand", TWO, 18, 4), nil)
+	local c5c = classify(wp(15, "Off Reward", OH, 6, 1), eq2h)
+	check(c5c.outcome.kind == "unknown" and c5c.primary ~= "UPGRADE", "an off-hand reward while the main hand holds a two-hander: the empty off hand is NOT 'free' (UNKNOWN)  [" .. c5c.outcome.kind .. "]")
+	local c5d = classify(wp(16, "Either", EITHER, 12, 5), eq2h)
+	check(c5d.outcome.kind ~= "empty_slot", "an either-hand reward is judged against the two-hander in the main hand, not as filling a 'free' off hand  [" .. c5d.outcome.kind .. "]")
+
+	-- the real Q5730 setup: Hammer is main-hand-only, Kris either-hand, Axe and Staff two-handed; still no clear pick
+	local rapier = facts({ id = 900, name = "Defias Rapier", type = "Weapon", classID = 2, subType = "Daggers", sub = 15, slot = MH, stats = { [DPS] = 8.125, [AGI] = 2 }, usable = true, second = true })
+	local quick = facts({ id = 901, name = "Quickblade's Dagger", type = "Weapon", classID = 2, subType = "Daggers", sub = 15, slot = EITHER, stats = { [DPS] = 6.76, [AGI] = 1 }, usable = true, second = true })
+	local eqQ = equipped({ [16] = rapier, [17] = quick })
+	local CF = { usable = false, second = false, flag = true }
+	local NO = { usable = false, second = false, flag = false }
+	local kris = facts({ id = 1, name = "Kris", type = "Weapon", classID = 2, subType = "Daggers", sub = 15, slot = EITHER, stats = { [DPS] = 8, [STA] = 4 }, sell = 1291, usable = false, second = false, flag = true })
+	local hammer = facts({ id = 2, name = "Hammer", type = "Weapon", classID = 2, subType = "Maces", sub = 4, slot = MH, stats = { [DPS] = 12.41, [STR] = 3, [SPI] = 3 }, sell = 1291, usable = false, second = false, flag = true })
+	local axe = facts({ id = 3, name = "Axe", type = "Weapon", classID = 2, subType = "Two-Handed Axes", sub = 1, slot = TWO, stats = { [DPS] = 16.06, [SPI] = 6, [STA] = 6 }, sell = 1614, usable = false, second = false, flag = false })
+	local staff = facts({ id = 4, name = "Staff", type = "Weapon", classID = 2, subType = "Staves", sub = 10, slot = TWO, stats = { [DPS] = 11.8, [AGI] = 6 }, sell = 1614, usable = false, second = false, flag = false })
+	local ck, ch = classify(kris, eqQ), classify(hammer, eqQ)
+	check(slotsOf(ch) == "16" and ch.outcome.evidence.against == "Defias Rapier", "Hammer (main-hand-only) is compared with the main hand, Defias Rapier")
+	check(slotsOf(ck) == "16,17", "Kris (either hand) is compared with both hands")
+	local rq = A.Recommend(choiceEval({ kris, hammer, axe, staff }, eqQ, ROGUE))
+	check(rq.state == "NO_CLEAR_RECOMMENDATION" and rq.selected == nil, "Q5730: still NO_CLEAR_RECOMMENDATION  [" .. tostring(rq.state) .. "]")
+	check(classify(axe, eqQ).primary == "NOT_USABLE" and classify(staff, eqQ).primary == "NOT_USABLE", "Axe and Staff stay NOT_USABLE")
+	check(#ns.errors == 0, "no errors")
+end
