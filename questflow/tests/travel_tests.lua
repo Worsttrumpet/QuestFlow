@@ -409,6 +409,79 @@ do
 	_G.C_Map.GetBestMapForUnit = saveBM
 end
 
+section("rides: a boat or zeppelin is recorded only from a ride the player made")
+do
+	local ns = world()
+	local R, S = ns.Rides, ns.Services
+	local realRead = R.Read
+	local t = 1000
+	local function pt(map, x) return { map = map, x = x, y = 0.5 } end
+	local function sample(dt, y, x, cont, point, extra)
+		t = t + dt
+		local s = { t = t, y = y, x = x, cont = cont, point = point }
+		for k, v in pairs(extra or {}) do s[k] = v end
+		return s
+	end
+	local function standAndRide(contFrom)
+		R._Reset()
+		for i = 1, 6 do R.Feed(sample(2, 100, 100, 1, pt(9101, 0.30))) end        -- waiting at the tower
+		for i = 1, 8 do R.Feed(sample(2, 100 + i * 30, 100, 1, pt(9101, 0.30 + i * 0.01))) end  -- carried (15 yd/s)
+	end
+	local function load(contTo, extra)
+		local first = sample(1, 5000, 5000, contTo, pt(9102, 0.40), extra)
+		return R.OnLoaded(first), first
+	end
+	-- a real ride
+	standAndRide()
+	local started, first = load(0)
+	check(started == true, "a loading screen to another continent after a standing start begins a ride")
+	R.Feed(sample(2, 5000, 5000, 0, pt(9102, 0.40)))
+	check(ns.Rides.List()[1] == nil, "one reading at the new place is not a dock yet")
+	R.Feed(sample(2, 5000, 5000, 0, pt(9102, 0.40)))
+	R.Feed(sample(2, 5000, 5000, 0, pt(9102, 0.40)))
+	local l = R.List()
+	check(#l == 1 and l[1].ride.from.map == 9101 and l[1].ride.to.map == 9102 and l[1].ride.n == 1, "standing still twice at the far end records the ride")
+	check(l[1].ride.secs > 20 and l[1].ride.secs < 120, "the time runs from the last place it stood still to the dock  [" .. tostring(l[1].ride.secs) .. "]")
+	local reg = false
+	for _, e in ipairs(ns.Travel.Transports()) do if e.id == "ride:" .. l[1].key then reg = e.secs == l[1].ride.secs and e.src == "observed" end end
+	check(reg, "it is registered with Travel as an observed fixed transport")
+	-- a shorter second ride keeps the shortest, counts twice
+	standAndRide(); load(0)
+	for i = 1, 3 do R.Feed(sample(2, 5000, 5000, 0, pt(9102, 0.40))) end
+	check(R.List()[1].ride.n == 2, "the same ride again is merged, not duplicated")
+	-- nothing else is a ride
+	local function nothing(why, setup, extra)
+		standAndRide()
+		if setup then setup() end
+		local ok = load(0, extra)
+		for i = 1, 3 do R.Feed(sample(2, 5000, 5000, 0, pt(9102, 0.40))) end
+		check(ok == false and #R.List() == 1 and R.List()[1].ride.n == 2, why)
+	end
+	standAndRide(); check(select(1, R.OnLoaded(sample(1, 100, 100, 1, pt(9101, 0.31)))) == false, "(same continent) not started")
+	nothing("a Hearthstone cast in flight explains the jump", function() S.OnHearthCast(S.HEARTH_SPELL) end)
+	S._Reset()
+	nothing("entering an instance is not a ride", nil, { inst = true })
+	nothing("being dead (a spirit release) is not a ride", nil, { dead = true })
+	nothing("being on a flight is not a ride", nil, { taxi = true })
+	-- no standing start: moving the whole buffer
+	R._Reset()
+	for i = 1, 10 do R.Feed(sample(2, 100 + i * 30, 100, 1, pt(9101, 0.30 + i * 0.01))) end
+	check(select(1, R.OnLoaded(sample(1, 5000, 5000, 0, pt(9102, 0.4)))) == false, "never standing still beforehand: no start, nothing recorded")
+	-- a continent-level dock reading is never the end
+	local saveInfo = _G.C_Map.GetMapInfo
+	standAndRide(); load(0)
+	_G.C_Map.GetMapInfo = function(m) return { mapType = 2, name = "Continent" } end
+	for i = 1, 4 do R.Feed(sample(2, 5000, 5000, 0, pt(9102, 0.40))) end
+	_G.C_Map.GetMapInfo = saveInfo
+	check(R.List()[1].ride.n == 2, "a continent-level map is not a dock")
+	-- the report names rides and what was not recorded
+	standAndRide(); load(0, { dead = true })
+	local txt = table.concat(R.ReportLines(), "\n")
+	check(txt:find("rides you have made: 1", 1, true) and txt:find("not recorded because", 1, true), "the report lists the ride and why other jumps were not recorded")
+	R._Reset()
+	R.Read = realRead
+end
+
 section("services: a dungeon entrance is the last outdoor place seen before an instance loaded")
 do
 	local ns = world()

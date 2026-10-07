@@ -209,6 +209,9 @@ local function isHearthSpell(spellId)
 	return false
 end
 
+--- Is a Hearthstone cast still waiting for its arrival? (a loading screen then is the hearth, not something else)
+function S.HearthPending() return hearthCast ~= nil end
+
 function S.OnHearthCast(spellId)
 	if not isHearthSpell(spellId) then return false end
 	hearthCast = { point = S.PlayerPoint(), t = wall() }

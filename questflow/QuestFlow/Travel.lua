@@ -40,6 +40,7 @@ local transports = {}            -- registered fixed-transport edges
 --- Registers a fixed transport edge: { id, label, from = {map,x,y}, to = {map,x,y}, secs, src, evidence }. `evidence` must say where it came from.
 function Tr.AddTransport(e)
 	if type(e) ~= "table" or type(e.from) ~= "table" or type(e.to) ~= "table" or type(e.secs) ~= "number" or type(e.evidence) ~= "string" then return false end
+	if e.id then for i, old in ipairs(transports) do if old.id == e.id then transports[i] = e return true end end end
 	transports[#transports + 1] = e
 	return true
 end
@@ -252,9 +253,9 @@ function Tr.ReportLines(ctx)
 	for _, e in ipairs(ns.Taxi and ns.Taxi.Edges() or {}) do
 		if e.state == "COMPLETED" then completed = completed + 1 else offered = offered + 1 end
 	end
-	L[#L + 1] = string.format("Travel model: walking baseline (%d yd/s); %d flight node(s) with a position; edges the planner can use: %d registered fixed transport(s) (boats / zeppelins: none ship), %d flight(s) completed and measured, %d flight(s) only offered (estimated time); hearth %s; bind point %s.",
+	L[#L + 1] = string.format("Travel model: walking baseline (%d yd/s); %d flight node(s) with a position; edges the planner can use: %d registered fixed transport(s) (boats / zeppelins: none ship; only rides you have made), %d flight(s) completed and measured, %d flight(s) only offered (estimated time); hearth %s; bind point %s.",
 		Tr.RUN_SPEED, nodes, #transports, completed, offered, Tr.HearthState(ctx), bind and string.format("learned (map %d, from %s)", bind.map, bind.src == "hearth" and "a completed Hearthstone trip" or "binding at an innkeeper") or "not learned")
-	L[#L + 1] = "Travel limits: flights come only from edges a taxi map offered; no boat/zeppelin data is shipped, so none is routed; walking is a straight line."
+	L[#L + 1] = "Travel limits: flights come only from edges a taxi map offered; no boat/zeppelin data is shipped, so only a ride you made yourself is routed (in the direction you rode it); walking is a straight line."
 	return L
 end
 
@@ -293,6 +294,10 @@ function Tr.Validation(ctx)
 		local nm
 		if type(_G.GetBindLocation) == "function" then local ok, v = pcall(_G.GetBindLocation) if ok and type(v) == "string" and v ~= "" then nm = true end end
 		add(nm and "PASS" or "FAIL", "the bind location NAME is readable (GetBindLocation; a name only, never a place)")
+	end
+	do
+		local rides = ns.Rides and ns.Rides.Summary().rides or 0
+		add(rides > 0 and "PASS" or "PENDING", "a boat or zeppelin ride recorded (" .. rides .. "; stood still at both ends, another continent after a loading screen)", "ride one (for example Orgrimmar to Undercity) and stand still on the dock")
 	end
 	local hs = Tr.HearthState(ctx)
 	add(hs ~= "UNKNOWN" and "PASS" or "FAIL", "the Hearthstone state is readable (" .. hs:lower() .. ")")

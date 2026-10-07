@@ -195,3 +195,9 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 - [ ] Report before: "bind point NOT learned"; Hearthstone state is ready/cooldown (not unknown).
 - [ ] Either bind at an innkeeper (talk, "Make this inn your home", confirm) OR use your Hearthstone once and let it finish. Report: "a bind point learned" PASS, "learned (map N, from ...)".
 - [ ] Walk 300+ seconds away from the inn with the Hearthstone ready: a quest far from you can show "Use your Hearthstone" as a travel step; with it on cooldown it never does.
+
+## Part O - boats and zeppelins (0.15.0)
+
+- [ ] Take a zeppelin or boat to another continent (for example Orgrimmar to Undercity). Do not cast anything while waiting. Stand still on the dock after you arrive for a few seconds.
+- [ ] Report: "a boat or zeppelin ride recorded (1 ...)" PASS and a line "<from> -> <to>: N s shortest".
+- [ ] If it says "not recorded because ...", send the report: the reason names what blocked it.

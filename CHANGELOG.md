@@ -2,6 +2,11 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.15.0] - boats and zeppelins you ride become routes
+
+- Quest Flow ships no boat or zeppelin data, so it could never plan one. It now learns them from rides you make: when a loading screen takes you to another continent and nothing else explains it (no Hearthstone, flight, summon, spell, instance or death), you had been carried after standing still, and you stand still again at the far end, the ride is recorded (start place, dock place, shortest time, how often). Each recorded ride is offered to the planner as a transport, in the direction you rode it, only when it beats walking. The way back stays unknown until you ride it.
+- The report lists the rides and why other jumps were not recorded. Nothing is recorded when any part is missing.
+
 ## [0.14.6] - one bind is counted once
 
 - Binding at an innkeeper works on the real client (bind point learned on the right zone map, innkeeper recorded). The client reports one bind twice; the second report was counted as an "unplaced" bind in the report. It is now recognised as the same bind. Report wording only; nothing changes in what is learned or routed.

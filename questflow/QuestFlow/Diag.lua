@@ -977,7 +977,7 @@ function D.PlaytestLines(snap, lines)
 	do
 		local okW, err = pcall(function()
 			add("WORLD AND TRAVEL KNOWLEDGE (taxi, services, travel; PASS / FAIL / PENDING are about THIS client)")
-			for _, mod in ipairs({ ns.Taxi, ns.Services }) do
+			for _, mod in ipairs({ ns.Taxi, ns.Services, ns.Rides }) do
 				if mod then for _, l in ipairs(mod.ReportLines()) do add(l) end end
 			end
 			if ns.Travel then
