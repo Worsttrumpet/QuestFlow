@@ -114,6 +114,18 @@ do
 		check(st.frame.__mouse == false, "button " .. i .. ": the icon row takes no mouse input")
 		for _, bd in ipairs(st.badges) do check(bd.frame.__mouse == false, "button " .. i .. ": a badge takes no mouse input") end
 	end
+	-- WHERE they are drawn (0.9.7 shipped with the old anchor and no test for it): the bottom-right corner of the button, only as wide as the badges
+	for i = 1, 4 do
+		local st = RO.Strip(b[i])
+		local pt = st.frame.__points
+		check(pt and pt[1] == "BOTTOMRIGHT" and pt[2] == b[i] and pt[3] == "BOTTOMRIGHT", "button " .. i .. ": the icon row is anchored to the button's bottom-right corner")
+		local n = #st.badges + (RO.StarGlyph(RO.state.attached[i].row) and 1 or 0)
+		local shownBadges = #RO.Glyphs(RO.state.attached[i].row) + (RO.StarGlyph(RO.state.attached[i].row) and 1 or 0)
+		check(st.frame.__w == shownBadges * (I.BadgeSize() + 2) - 2, "button " .. i .. ": the row is exactly as wide as its badges, so it cannot reach the item icon  [" .. tostring(st.frame.__w) .. "]")
+	end
+	local sp = RO.state.summary.frame.__points
+	check(sp and sp[1] == "BOTTOMRIGHT" and sp[3] == "TOPRIGHT", "the verdict sits right-aligned on the line above the top row")
+	check(RO.state.summary.frame.__w <= RO.VERDICT_MAX and #RO.state.summary.text.__text <= 30, "the verdict is short and capped in width  [" .. RO.state.summary.text.__text .. "]")
 	-- the tooltip carries the words
 	local lines = {}
 	GameTooltip.AddLine = function(_, text) lines[#lines + 1] = text end

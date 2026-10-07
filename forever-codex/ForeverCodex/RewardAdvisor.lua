@@ -789,7 +789,7 @@ function A.DisplayRow(it, selected, state)
 end
 
 --- The reward dialog as the overlay shows it: nil unless a quest REWARD dialog (the turn-in step, QUEST_COMPLETE) is open right now with two or more choices to decide between.
--- Returns { q, state, pick, verdict = { text, kind }, rows = { DisplayRow ... } }. The verdict says which choice (never "the best-looking one") or that Codex makes no pick.
+-- Returns { q, state, pick, verdict = { text, short, kind }, rows = { DisplayRow ... } }. The verdict says which choice (never "the best-looking one") or that Codex makes no pick.
 -- opts as for A.Evaluate (a test passes a fake dialog).
 function A.Display(opts)
 	local ev = A.Evaluate(opts)
@@ -803,9 +803,9 @@ function A.Display(opts)
 	local sel = rec.selected
 	local verdict
 	if rec.state == "RECOMMEND" and sel then
-		verdict = { kind = "pick", text = string.format("CODEX: RECOMMENDED - CHOICE %d", sel.index) }
+		verdict = { kind = "pick", text = string.format("CODEX: RECOMMENDED - CHOICE %d", sel.index), short = string.format("CODEX: PICK - CHOICE %d", sel.index) }
 	elseif rec.state == "TENTATIVE" and sel then
-		verdict = { kind = "tentative", text = string.format("CODEX: TENTATIVE PICK - CHOICE %d (evidence incomplete)", sel.index) }
+		verdict = { kind = "tentative", text = string.format("CODEX: TENTATIVE PICK - CHOICE %d (evidence incomplete)", sel.index), short = string.format("CODEX: TENTATIVE - CHOICE %d", sel.index) }
 	else
 		verdict = { kind = "none", text = "CODEX: NO CLEAR PICK" }
 	end

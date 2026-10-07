@@ -18,6 +18,7 @@ local addonName, ns = ...
 local RO = {}
 ns.RewardOverlay = RO
 
+RO.VERDICT_MAX = 170                 -- the verdict shares the game's "Choose your reward" line: never wider than this (longer is cut, not spilled past the window edge)
 RO.EVENTS = { "QUEST_COMPLETE", "QUEST_ITEM_UPDATE", "GET_ITEM_INFO_RECEIVED", "PLAYER_EQUIPMENT_CHANGED" }
 -- the names a choice button may have, by choice number (Classic family of clients; unproven on Forever)
 RO.CANDIDATES = { "QuestInfoRewardsFrameQuestInfoItem%d", "QuestInfoItem%d" }
@@ -75,8 +76,9 @@ end
 local function place(s, btn)
 	local f = s.frame
 	pcall(f.ClearAllPoints, f)
-	pcall(f.SetPoint, f, "BOTTOMLEFT", btn, "BOTTOMLEFT", 44, 2)          -- (right of the item icon, along the bottom edge)
-	pcall(f.SetPoint, f, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", -2, 2)
+	-- BOTTOM-RIGHT corner of the button, right-aligned: the item's name wraps greedily, so its second line is the short one and the corner under it is the free part. The row is
+	-- only as wide as its badges (Draw sets the width), so it never reaches the icon. (The gap BETWEEN the rows is too small for a badge.)
+	pcall(f.SetPoint, f, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
 	local e = s.edges
 	local function edge(t, p1, p2, w, h)
 		pcall(t.ClearAllPoints, t)
@@ -121,6 +123,8 @@ local function summaryFont()
 	pcall(bg.SetColorTexture, bg, 0, 0, 0, 0.78)
 	local fs = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	pcall(fs.SetPoint, fs, "LEFT", f, "LEFT", 4, 0)
+	pcall(fs.SetPoint, fs, "RIGHT", f, "RIGHT", -2, 0)
+	pcall(fs.SetWordWrap, fs, false)
 	state.summary = { frame = f, text = fs }
 	return state.summary
 end
@@ -156,6 +160,8 @@ function RO.Draw(s, row)
 	end
 	for n = #glyphs + 1, #s.badges do pcall(s.badges[n].frame.Hide, s.badges[n].frame) end
 	local star = RO.StarGlyph(row)
+	local count = #glyphs + (star and 1 or 0)
+	pcall(s.frame.SetWidth, s.frame, math.max(size, count * (size + 2) - 2))
 	if star then
 		local b = s.star
 		if not b then b = I.NewBadge(s.frame); s.star = b end
@@ -200,9 +206,9 @@ function RO.Apply(d)
 		local sm = summaryFont()
 		pcall(sm.frame.ClearAllPoints, sm.frame)
 		pcall(sm.frame.SetPoint, sm.frame, "BOTTOMRIGHT", rightmost or first, "TOPRIGHT", 0, 1)    -- (right-aligned on the game's own "Choose your reward" line: under the last row it covered "You will also receive")
-		sm.text:SetText(d.verdict.text)
+		sm.text:SetText(d.verdict.short or d.verdict.text)
 		local sw = type(sm.text.GetStringWidth) == "function" and safe(sm.text.GetStringWidth, sm.text) or nil
-		pcall(sm.frame.SetWidth, sm.frame, (type(sw) == "number" and sw > 0) and (sw + 10) or 190)
+		pcall(sm.frame.SetWidth, sm.frame, math.min(RO.VERDICT_MAX, (type(sw) == "number" and sw > 0) and (sw + 10) or 150))
 		local c = d.verdict.kind == "none" and COLORS.yellow or PICK
 		sm.text:SetTextColor(c[1], c[2], c[3])
 		pcall(sm.frame.Show, sm.frame)

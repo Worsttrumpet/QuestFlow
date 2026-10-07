@@ -88,7 +88,7 @@ do
 	-- drawn on the buttons
 	local n = RO.Update(dialog({ KRIS(), HAMMER(), AXE(), STAFF() }))
 	check(n == 4 and RO.state.shown, "all four buttons were annotated")
-	check(RO.state.summary.text.__text:find("TENTATIVE PICK - CHOICE 2", 1, true), "the summary names choice 2 as the tentative pick")
+	check(RO.state.summary.text.__text == "CODEX: TENTATIVE - CHOICE 2", "the summary names choice 2 as the tentative pick (the short form; the long one is the report's)")
 	for i = 1, 4 do
 		local bs = RO.state.attached[i]
 		check(bs and bs.button == "QuestInfoRewardsFrameQuestInfoItem" .. i, "choice " .. i .. " is attached to its own button")
@@ -109,7 +109,7 @@ do
 	RO.Update(dialog({ poor, good }))
 	local e1, e2 = RO.state.attached[1], RO.state.attached[2]
 	check(e2 and e2.row.recommended == "pick" and e1 and e1.row.recommended == nil, "the recommendation is attached to choice 2's button, not choice 1's")
-	check(RO.state.summary.text.__text == "CODEX: RECOMMENDED - CHOICE 2", "the summary names the choice")
+	check(RO.state.summary.text.__text == "CODEX: PICK - CHOICE 2", "the summary names the choice")
 	-- the gold border shows on the recommended button only
 	local s1, s2 = RO.Strip(b[1]), RO.Strip(b[2])
 	check(s2.edges[1].__shown == true and s2.edges[4].__shown == true, "choice 2 (recommended) has the gold border")
@@ -156,7 +156,7 @@ do
 	-- the observation changes: a better choice appears
 	local good, poor = w(1, "Good Dagger", { [DPS] = 12, [AGI] = 5 }, U), w(2, "Poor Dagger", { [DPS] = 5, [AGI] = 1 }, U)
 	RO.Update(dialog({ good, poor }))
-	check(RO.state.display.rows[1].recommended == "pick" and RO.state.summary.text.__text == "CODEX: RECOMMENDED - CHOICE 1" and before == "MIXED", "an updated observation redraws (MIXED -> RECOMMENDED choice 1)")
+	check(RO.state.display.rows[1].recommended == "pick" and RO.state.summary.text.__text == "CODEX: PICK - CHOICE 1" and before == "MIXED", "an updated observation redraws (MIXED -> RECOMMENDED choice 1)")
 	-- the dialog closes: advisor says nothing -> hidden
 	RO.Update(dialog({ good, poor }, "QUEST_COMPLETE", false))
 	check(not RO.state.shown and RO.state.summary.frame.__shown == false, "closing the dialog hides everything")
