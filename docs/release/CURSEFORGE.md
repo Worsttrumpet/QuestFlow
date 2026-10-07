@@ -10,7 +10,7 @@ Nothing here was uploaded. Screenshots are taken later from the finished client 
 | Main category | Quests and Leveling (plus Map and Minimap, Tooltip, if you want more tags) |
 | Game / version | WoW Forever client. Addon interface number 16001 (tested on client 1.60.1, build 70245) |
 | License | MIT (repository `LICENSE`, confirmed by the owner) |
-| Source | https://github.com/Worsttrumpet/questflow (after the repository is renamed: see below) |
+| Source | https://github.com/Worsttrumpet/questflow |
 | File to upload | `questflow/dist/<major>.<minor>/QuestFlow-<version>.zip` (top folder `QuestFlow/`, `QuestFlow.toc` inside it) |
 | Logo / icon | `docs/release/questflow-logo.png` (1254 x 1254, the owner's logo) is the source for the project icon you upload by hand; the in-game button and add-on list icon are `QuestFlow/Media/QuestFlowLogo.tga`, made from it by `questflow/generator/make_logo.py` |
 
@@ -57,7 +57,7 @@ Quest Flow is MIT licensed. It includes quest, flight-path and zone data derived
 - The `## X-Curse-Project-ID` (and similar) TOC lines can be added after the project exists; they are optional.
 
 ## Manual steps (cannot be done from the repository)
-1. **Rename the GitHub repository** from `wow-forever-guide` to `questflow` (Settings > General > Repository name). GitHub redirects the old address. The README, `QuestFlow.toc` (`X-Website`) and this file already use `https://github.com/Worsttrumpet/questflow`; if you choose a different name, search the repository for `Worsttrumpet/questflow` and change it.
+1. ~~Rename the GitHub repository~~ **Done**: it is now `Worsttrumpet/questflow` (renamed from `wow-forever-guide`; GitHub redirects the old address). The README, `QuestFlow.toc` (`X-Website`) and this file already use `https://github.com/Worsttrumpet/questflow`.
 2. Make the repository public when you are ready (read the history note in `questflow/docs/CODEX_DATA_SOURCES.md` first).
 3. Create the GitHub Release and attach `QuestFlow-<version>.zip`, with the matching `CHANGELOG.md` text.
 4. Create the CurseForge project from the fields above, upload the same ZIP, add screenshots and the logo (made by hand).

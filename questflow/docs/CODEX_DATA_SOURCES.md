@@ -45,7 +45,7 @@ to false (one line) and Codex falls back to its observed and ATT packs (about 1,
 
 ## Decision C2: ATT-derived packs in the committed zips (2026-10-06)
 **Finding.** Every `dist/<minor>/ForeverCodex-<version>.zip` contains `Data/Pack_ATT_*.lua`. `CODEX_PROVENANCE_DECISION.md` allows that for local development and invited testers and forbids PUBLIC redistribution until it is decided.
-The repository `Worsttrumpet/wow-forever-guide` is **PRIVATE** (GitHub API `visibility: private`, checked 2026-10-06), so nothing is currently published.
+The repository `Worsttrumpet/questflow` (renamed from `wow-forever-guide` on 2026-10-07; GitHub redirects the old address) was **PRIVATE** when last checked (GitHub API `visibility: private`, 2026-10-06), so nothing was published then. Check it again before relying on that.
 
 **Decision.** The current arrangement is acceptable: the data is MIT upstream, every pack header carries its source, commit and `verified=false`, the repository is private, and no third party can fetch the zips. What is NOT acceptable and is now guarded:
 * making the repository public, attaching a zip to a public release, or posting a zip while ATT redistribution is unresolved. **Gate:** do not do any of these until the owner records a decision here. The automated test `generator/test_data_provenance.py` pins the expected data files, their provenance headers and their manifest hashes, and fails if a data file appears that is not listed here.
