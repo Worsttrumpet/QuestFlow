@@ -35,9 +35,11 @@ A.THRESHOLDS = { slightRelative = 0.25, relativeFloor = 5, temporaryQuests = 3, 
 -- STATS A CLASS DOES NOT USE (PROPOSED, from how these classes' resources work in Classic; not read from the client, and not weights): a difference in such a stat is
 -- not counted as a gain or a loss, and the reason says it was left out. Only the unambiguous cases are listed; every other class keeps the plain "every stat counts" comparison.
 -- Warriors and Rogues have no mana and no spell power in this comparison: intellect and spirit do nothing for them.
+-- weaponDamage = true: for this class a weapon's own damage is what the weapon is for (melee classes that fight with it), so a clear weapon-dps gain can separate two weapons
+-- that are both MIXED (see mixedWinner in RecommendDefault). Only these two classes are listed; every other class keeps "no pick" between mixed choices.
 A.IGNORED_STATS = {
-	WARRIOR = { word = "Warrior", stats = { intellect = true, spirit = true } },
-	ROGUE   = { word = "Rogue",   stats = { intellect = true, spirit = true } },
+	WARRIOR = { word = "Warrior", stats = { intellect = true, spirit = true }, weaponDamage = true },
+	ROGUE   = { word = "Rogue",   stats = { intellect = true, spirit = true }, weaponDamage = true },
 }
 
 --- Category table (extensible): id -> { tag (plain ASCII text), family (a colour name for a later icon), order (presentation order only, not a ranking) }.
@@ -302,7 +304,7 @@ function A.Classify(facts, equipped, opts)
 	local rel = opts.character and opts.character.classToken and A.IGNORED_STATS[tostring(opts.character.classToken):upper()] or nil
 	local o = compareOutcome(facts, equipped, rel)
 	out.comparison = { state = o.comparison and o.comparison.state or (o.kind == "no_slot" and "NO_SLOT" or "UNKNOWN"), chosen = o.chosen, entries = o.comparison and o.comparison.entries, note = o.note }
-	out.outcome = { kind = o.kind, chosen = o.chosen, evidence = o.evidence, note = o.note, partial = o.partial }   -- the factual comparison result the recommender reads (no new judgement)
+	out.outcome = { kind = o.kind, chosen = o.chosen, evidence = o.evidence, note = o.note, partial = o.partial, weaponDamage = rel and rel.weaponDamage == true or nil }   -- the factual comparison result the recommender reads (no new judgement)
 	if o.partial then certainty = "PARTIAL"; out.caveats[#out.caveats + 1] = "some stats could not be compared: " .. o.partial end
 	local improves = o.kind == "upgrade" or o.kind == "slight" or o.kind == "empty_slot"
 	local useful, comparisonUnknown = false, (o.kind == "unknown")
@@ -566,6 +568,37 @@ function A.RecommendDefault(evaluation)
 		return pick
 	end
 
+	-- BETWEEN TWO MIXED CHOICES (not a stat weighting): A is preferred to B only when, for the SAME equipment slot and for a class whose weapons are about their damage,
+	--   (1) A's weapon damage gain is clear (at least A.THRESHOLDS.slightRelative of the worn weapon's damage) and B has no weapon damage gain, and
+	--   (2) everything A loses, B loses as much or more (A gives up nothing that B keeps).
+	-- B's own gains (here: stamina) are not weighed against A's; the answer says so. Every item stays MIXED: this only picks among them.
+	local function dpsGain(o)
+		for _, e in ipairs(o.evidence and o.evidence.gains or {}) do if e.stat == "weapon_dps" then return e end end
+	end
+	local function lossMap(o)
+		local m = {}
+		for _, e in ipairs(o.evidence and o.evidence.losses or {}) do m[e.stat] = -e.diff end
+		return m
+	end
+	local function beatsMixed(a, b)
+		local oa, ob = a.c.outcome, b.c.outcome
+		if not (oa.weaponDamage and oa.kind == "mixed" and ob.kind == "mixed") then return false end
+		if oa.chosen == nil or oa.chosen ~= ob.chosen or oa.partial or ob.partial then return false end
+		local da = dpsGain(oa)
+		if not (da and da.relative and da.relative >= A.THRESHOLDS.slightRelative) or dpsGain(ob) then return false end
+		local la, lb = lossMap(oa), lossMap(ob)
+		for stat, v in pairs(la) do if (lb[stat] or 0) < v then return false end end
+		return true
+	end
+	local function mixedWinner()
+		if #g.MIXED < 2 or #g.MIXED + #g.BLOCKED + #g.NO_GAIN ~= #choices then return nil end   -- (anything unread, uncomparable or not gear could still be better: no pick)
+		for _, a in ipairs(g.MIXED) do
+			local all = true
+			for _, b in ipairs(g.MIXED) do if a ~= b and not beatsMixed(a, b) then all = false break end end
+			if all then return a end
+		end
+	end
+
 	local pick, state, basis, why
 	if #g.CLEAR >= 1 then
 		pick = winnerOf(g.CLEAR)
@@ -652,6 +685,27 @@ function A.RecommendDefault(evaluation)
 		return finish("NO_CLEAR_RECOMMENDATION", "No choice can be used by this character; Codex makes no pick.", "NONE_USABLE")
 	end
 	for _, r in ipairs(choices) do reason(string.format("%s: %s", labelOf(r), r.why)) end
+	local mw = mixedWinner()
+	if mw then
+		mw.stance = "PREFERRED"
+		for _, r in ipairs(g.MIXED) do
+			if r ~= mw then
+				r.stance = "UNCERTAIN"
+				r.why = r.why .. string.format("; %s raises weapon damage clearly and gives up nothing this one keeps, while this one's own gains are not weighed against that", mw.name)
+			end
+		end
+		local mo = mw.c.outcome
+		local d = dpsGain(mo)
+		reason(string.format("%s: the clearest gain is weapon damage (%s weapon dps, %d%% of what you wear), for a loss no larger than the other choice's. Both stay MIXED; Codex does not weigh the other choice's stats against this.", labelOf(mw), signed(d.diff), math.floor(d.relative * 100 + 0.5)))
+		local n = 0
+		local us = mw.c.eligibility and mw.c.eligibility.current.state
+		if us ~= "PROVEN_YES" then
+			n = n + 1
+			caveat("Codex cannot confirm this character can use it: " .. usabilityCaveat(mw.c))
+		end
+		for _, r in ipairs(g.MIXED) do if r ~= mw and r.c.eligibility and r.c.eligibility.current.state ~= "PROVEN_YES" then caveat(labelOf(r) .. ": usability is also not established") end end
+		return finish(n == 0 and "RECOMMEND" or "TENTATIVE", string.format("%s is the better of the viable choices: both trade stats, and it is the one that clearly raises weapon damage while giving up nothing the other keeps.", mw.name), "MIXED_DPS", mw)
+	end
 	if #g.MIXED > 0 then
 		return finish("NO_CLEAR_RECOMMENDATION", "No choice improves what you wear without giving something up, and Codex does not weigh different stats against each other.", "MIXED_ONLY")
 	elseif #g.UNKNOWN_COMPARE + #g.UNRESOLVED > 0 then

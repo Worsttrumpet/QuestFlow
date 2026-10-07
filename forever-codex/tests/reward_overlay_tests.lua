@@ -73,12 +73,12 @@ do
 	local b = buttons(4)
 	local d = A.Display(dialog({ KRIS(), HAMMER(), AXE(), STAFF() }))
 	check(d ~= nil and #d.rows == 4, "the display has the four choices")
-	check(d.verdict.kind == "none" and d.verdict.text == "CODEX: NO CLEAR PICK" and d.pick == nil, "the verdict is CODEX: NO CLEAR PICK, with no pick  [" .. tostring(d.verdict.text) .. "]")
+	check(d.verdict.kind == "tentative" and d.pick == 2, "the verdict names the Hammer as a TENTATIVE pick (0.9.6)  [" .. tostring(d.verdict.text) .. "]")
 	check(d.rows[1].tags[1] == "MIXED" and d.rows[2].tags[1] == "MIXED", "Kris and Hammer are MIXED")
 	check(d.rows[1].unsure and d.rows[2].unsure and rowText(d, 1):find("usability unclear", 1, true), "and their usability doubt is shown beside it, not hidden")
 	check(d.rows[1].short == "+4 stamina, -2 agility", "Kris' short text is the comparison: " .. tostring(d.rows[1].short))
 	check(d.rows[3].tags[1] == "NOT USABLE" and d.rows[3].tags[2] == "VENDOR" and d.rows[4].tags[1] == "NOT USABLE" and d.rows[4].tags[2] == "VENDOR", "Axe and Staff: NOT USABLE and VENDOR, both kept")
-	for i = 1, 4 do check(d.rows[i].recommended == nil, "choice " .. i .. " is not recommended") end
+	for i = 1, 4 do check(d.rows[i].recommended == (i == 2 and "tentative" or nil), "choice " .. i .. (i == 2 and " is the tentative pick" or " is not recommended")) end
 	check(rowText(d, 3):find("[NOT USABLE] [VENDOR]", 1, true), "the strip says [NOT USABLE] [VENDOR]")
 	-- the advisor's own words are what is carried
 	local c = A.Classify(KRIS(), EQ, { character = ROGUE })
@@ -88,7 +88,7 @@ do
 	-- drawn on the buttons
 	local n = RO.Update(dialog({ KRIS(), HAMMER(), AXE(), STAFF() }))
 	check(n == 4 and RO.state.shown, "all four buttons were annotated")
-	check(RO.state.summary.text.__text == "CODEX: NO CLEAR PICK", "the summary says NO CLEAR PICK")
+	check(RO.state.summary.text.__text:find("TENTATIVE PICK - CHOICE 2", 1, true), "the summary names choice 2 as the tentative pick")
 	for i = 1, 4 do
 		local bs = RO.state.attached[i]
 		check(bs and bs.button == "QuestInfoRewardsFrameQuestInfoItem" .. i, "choice " .. i .. " is attached to its own button")
@@ -120,8 +120,11 @@ section("reward overlay: no pick when uncertain; unknown stays unknown")
 do
 	buttons(2)
 	-- two trade-offs: no pick
-	local d = A.Display(dialog({ HAMMER(), KRIS() }))
-	check(d.verdict.kind == "none" and d.pick == nil and d.rows[1].recommended == nil and d.rows[2].recommended == nil, "two trade-offs: NO CLEAR PICK, neither marked")
+	-- (two trade-offs that no weapon-damage gain separates; Hammer vs Kris is now a pick, see reward_tradeoff_tests.lua)
+	local t1 = w(1, "Trade One", { [DPS] = 8, [STR] = 3 }, U, { slot = "INVTYPE_WEAPONMAINHAND" })
+	local t2 = w(2, "Trade Two", { [DPS] = 8, [STA] = 4 }, U, { slot = "INVTYPE_WEAPONMAINHAND" })
+	local d = A.Display(dialog({ t1, t2 }))
+	check(d.verdict.kind == "none" and d.pick == nil and d.rows[1].recommended == nil and d.rows[2].recommended == nil, "two trade-offs with no clear weapon-damage gain: NO CLEAR PICK, neither marked  [" .. tostring(d.verdict.text) .. "]")
 	-- usability not established, improving: UNKNOWN, no recommendation made up
 	-- (swords: nothing worn shows the proficiency, and the client's usability answers are absent)
 	local u1 = w(5, "Maybe A", { [DPS] = 12, [AGI] = 5 }, {}, { subType = "Swords", sub = 7 })

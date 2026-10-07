@@ -598,7 +598,8 @@ do
 	local r = A.Recommend(choiceEval({ good, bad }, eq, ROGUE))
 	check((r.state == "RECOMMEND" or r.state == "TENTATIVE") and r.selected and r.selected.index == 1, "one clearly better choice and one trade-off: the clear one is picked  [" .. tostring(r.state) .. "/" .. tostring(r.selected and r.selected.index) .. "]")
 	local q = A.Recommend(choiceEval({ weapon(13, "Hammer", { [DPS] = 12.41, [STR] = 3, [SPI] = 3 }, { subType = "Maces", sub = 4 }), weapon(14, "Kris", { [DPS] = 8, [STA] = 4 }) }, eq, ROGUE))
-	check(q.state == "NO_CLEAR_RECOMMENDATION" and q.selected == nil, "two trade-offs: still NO_CLEAR_RECOMMENDATION  [" .. tostring(q.state) .. "]")
+	-- 0.9.6: both stay MIXED, but the one that clearly raises weapon damage for a loss no larger than the other's is the pick (reward_tradeoff_tests.lua has the rule's limits)
+	check((q.state == "RECOMMEND" or q.state == "TENTATIVE") and q.selected and q.selected.index == 1 and q.basis == "MIXED_DPS", "two trade-offs: the Hammer (clear weapon dps gain, same agility loss) is the pick  [" .. tostring(q.state) .. "/" .. tostring(q.basis) .. "]")
 	check(#ns.errors == 0, "no errors")
 end
 
@@ -685,7 +686,7 @@ do
 	check(slotsOf(ch) == "16" and ch.outcome.evidence.against == "Defias Rapier", "Hammer (main-hand-only) is compared with the main hand, Defias Rapier")
 	check(slotsOf(ck) == "16,17", "Kris (either hand) is compared with both hands")
 	local rq = A.Recommend(choiceEval({ kris, hammer, axe, staff }, eqQ, ROGUE))
-	check(rq.state == "NO_CLEAR_RECOMMENDATION" and rq.selected == nil, "Q5730: still NO_CLEAR_RECOMMENDATION  [" .. tostring(rq.state) .. "]")
+	check(rq.state == "TENTATIVE" and rq.selected and rq.selected.index == 2 and rq.basis == "MIXED_DPS", "Q5730 (0.9.6): the Hammer is the tentative pick; usability is not established, so not a plain RECOMMEND  [" .. tostring(rq.state) .. "/" .. tostring(rq.selected and rq.selected.index) .. "]")
 	check(classify(axe, eqQ).primary == "NOT_USABLE" and classify(staff, eqQ).primary == "NOT_USABLE", "Axe and Staff stay NOT_USABLE")
 	check(#ns.errors == 0, "no errors")
 end
