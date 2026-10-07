@@ -104,3 +104,48 @@ do
 	check(ns3.State.plan.now and ns3.State.plan.now.id == "Q:1:TURN_IN", "a finished dungeon quest's hand-in still routes normally")
 	clearInstance()
 end
+
+-- 0.8.7: INSIDE the dungeon, its objectives lead even with no usable location (the real report: Ruins of Lordaeron, Q92422 with no objective position, NOW was a hand-in far away)
+section("dungeon NOW: inside the dungeon, its objectives lead (guidance) even with no location; the planner's NOW is not lost")
+do
+	local function inWorld(instanceName)
+		local ns = boot({ char = { level = 15 }, synthetic = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Ruins of Lordaeron" } })
+		H.attPack(ns, {
+			{ id = 1, name = "The Wrath", map = 9001, x = 0.52, y = 0.5, req = 1, areaId = 4000 },                          -- dungeon quest: a giver place, NO objective place
+			{ id = 2, name = "Other Dungeon Quest", map = 9001, x = 0.53, y = 0.5, req = 1, areaId = 4001 },
+			{ id = 3, name = "Far Hand-in", map = 9001, x = 0.9, y = 0.5, req = 1 },
+			{ id = 4, name = "Open Task", map = 9001, x = 0.7, y = 0.5, req = 1, objCoords = { { map = 9001, x = 0.7, y = 0.5 } } },
+		}, nil)
+		local W = H.world()
+		W.log = { { questID = 1, title = "The Wrath", complete = false }, { questID = 2, title = "Other Dungeon Quest", complete = false },
+			{ questID = 3, title = "Far Hand-in", complete = true }, { questID = 4, title = "Open Task", complete = false } }
+		W.objectives = { [1] = { { text = "Rath'mael slain", type = "monster", finished = false, numFulfilled = 0, numRequired = 1 } },
+			[2] = { { text = "Boss slain", type = "monster", finished = false, numFulfilled = 0, numRequired = 1 } },
+			[4] = { { text = "Boars", type = "monster", finished = false, numFulfilled = 1, numRequired = 8 } } }
+		ns.Context.DefaultReader.questTag = function(id) if id == 1 or id == 2 then return DUNGEON end end
+		ns.Context.DefaultReader.areaName = function(a) return a == 4000 and "Ruins of Lordaeron" or (a == 4001 and "Ragefire Chasm") or nil end
+		clearInstance(); if instanceName then setInstance(true, instanceName) else setInstance(false) end
+		ns.Prefs.FinishSetup(); ns.State.Recompute()
+		return ns
+	end
+	local ns = inWorld("Ruins of Lordaeron")
+	local card = ns.Presenter.Card(ns.State.plan, ns.State.ctx)
+	check(card.guidance == true and card.now.quest == 1 and card.now.title:find("The Wrath", 1, true) ~= nil, "NOW is the dungeon quest of THIS dungeon  [" .. tostring(card.now and card.now.title) .. "]")
+	check(card.now.where == nil and card.now.dist == nil and card.now.who:find("no arrow", 1, true) ~= nil, "as guidance: no place, no distance, and it says there is no arrow")
+	check(card.now.objectives and card.now.objectives[1] and card.now.objectives[1].text == "Rath'mael slain", "with the quest log's own objective")
+	local ready = {}
+	for _, r in ipairs(card.ready) do ready[r.quest] = true end
+	check(ready[3], "the planner's own hand-in is not lost: it moves to READY TO TURN IN while the dungeon leads")
+	check(card.dungeons and #card.dungeons >= 1, "the DUNGEON QUESTS card is still there")
+	check(ns.State.plan.now ~= nil and ns.Navigation.Target() == nil, "(the planner still has its own NOW; no arrow is made inside the instance)")
+	-- another dungeon's quest is not picked
+	local ns2 = inWorld("Wailing Caverns")
+	local card2 = ns2.Presenter.Card(ns2.State.plan, ns2.State.ctx)
+	check(not (card2.guidance and (card2.now.quest == 1 or card2.now.quest == 2)), "inside an unrelated dungeon neither dungeon quest leads")
+	-- outside: unchanged (the planner's NOW stands, dungeon quests stay in their card)
+	local ns3 = inWorld(nil)
+	local card3 = ns3.Presenter.Card(ns3.State.plan, ns3.State.ctx)
+	check(not card3.guidance and ns3.State.plan.now ~= nil, "outside, the planner's NOW stands as before")
+	clearInstance()
+	check(#ns.errors + #ns2.errors + #ns3.errors == 0, "no errors")
+end

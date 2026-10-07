@@ -48,17 +48,25 @@ end
 
 --- Is the player inside the dungeon this dungeon quest belongs to? Only the client's own instance state counts (ctx.instance, Context.lua); an unknown state is "not inside" (the player is
 -- almost always outside, and a dungeon objective must not become NOW from a guess). Inside an instance, the quest's dungeon (the game's area name, else the quest log heading) is compared with the
--- instance's name when BOTH are known; when either is missing the player is taken to be inside it (a dungeon quest is not blocked while the player is in a dungeon and the names cannot be compared).
+-- instance's name when both are known (by either of its names); when either is missing the player is taken to be inside it (a dungeon quest is not blocked while the player is in a dungeon and the names cannot be compared).
 function Dg.PlayerInside(ctx, quest)
 	local inst = ctx and ctx.instance
 	if not (inst and inst.known and inst.inInstance == true) then return false end
 	local e = ctx.log and ctx.log[quest]
-	local name = e and dungeonName(ctx, e)
 	local here = inst.name
-	if type(name) == "string" and name ~= "" and type(here) == "string" and here ~= "" then
-		return name:lower() == here:lower()
+	if type(here) ~= "string" or here == "" or not e then return true end
+	-- the quest's dungeon by either name the game gives it (its area name, or its quest log heading): a match on either is enough
+	local names, known = {}, false
+	local view = R and R.Quest(e.id)
+	if view and view.areaId and ctx.areaName then names[#names + 1] = ctx.areaName(view.areaId) end
+	names[#names + 1] = e.header
+	for _, n in ipairs(names) do
+		if type(n) == "string" and n ~= "" then
+			known = true
+			if n:lower() == here:lower() then return true end
+		end
 	end
-	return true
+	return not known
 end
 
 --- Dungeon quests in the quest log, grouped by dungeon:

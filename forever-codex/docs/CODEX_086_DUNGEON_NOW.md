@@ -7,3 +7,9 @@
 - Unchanged: candidate data (`Engine.Candidates` still holds the quest), the DUNGEON QUESTS card, hand-ins of dungeon quests, Elite and untagged quests, everything open-world. ALSO COMPLETE still never lists dungeon quests.
 - No new API or telemetry. Tests: `tests/dungeon_now_tests.lua`. No golden changed.
 - Real client: confirm `IsInInstance` / `GetInstanceInfo` names inside a real dungeon match the quest's dungeon name (so a dungeon quest becomes NOW inside), and that a dungeon objective no longer takes NOW from outside.
+
+## 0.8.7 follow-up: inside the dungeon its objectives lead
+Real report (Ruins of Lordaeron): the client said `IsInInstance` true, name "Ruins of Lordaeron"; Q92422 is a dungeon quest with no objective position, so it was a planner reminder and NOW stayed an ordinary hand-in. 0.8.6 only kept dungeon objectives out of NOW from outside; inside, "normal" meant needing a location, which an instance never gives.
+- `Presenter.Guidance(plan, ctx, true)`: while the client says the player is inside a dungeon, that dungeon's unfinished objectives (game tag + `Dungeons.PlayerInside`) lead as GUIDANCE (quest log's own objective text, no place, no arrow), even over the planner's NOW. The planner is not changed; its NOW hand-in moves to READY TO TURN IN so it does not vanish.
+- `Dungeons.PlayerInside` matches the instance name against the quest's area name OR its quest log heading.
+- Tests: `dungeon_now_tests.lua` (inside / other dungeon / outside). No golden changed.

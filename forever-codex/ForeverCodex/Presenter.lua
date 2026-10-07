@@ -259,15 +259,18 @@ end
 --- GUIDANCE for a quest the player is working on when the planner has no NOW: the quest log's own wording, never a location. Pure presentation:
 -- the planner's decision (no NOW), the waypoint and the arrow are untouched, so nothing here can point anywhere. Returns a card item or nil.
 -- Order: a finished quest to hand in, then an unfinished objective (each by quest id, skipped and dungeon-card quests left out).
-function Pr.Guidance(plan, ctx)
+function Pr.Guidance(plan, ctx, insideDungeon)
 	if not plan then return nil end
 	local P = ns.Prefs
+	-- insideDungeon: only the dungeon objectives of the dungeon the player is standing in (the client says so: Dungeons.PlayerInside); otherwise dungeon quests are never guidance
 	local function usable(a)
 		if not a.quest or (P and a.skipKey and P.IsSkipped(a.skipKey)) then return false end
-		return not (ns.Dungeons and ns.Dungeons.IsDungeon(ctx, a.quest))
+		local isDg = ns.Dungeons and ns.Dungeons.IsDungeon(ctx, a.quest)
+		if insideDungeon then return isDg == true and ns.Dungeons.PlayerInside(ctx, a.quest) end
+		return not isDg
 	end
 	local pick
-	for _, a in ipairs(plan.turnIns or {}) do if usable(a) then pick = a break end end
+	if not insideDungeon then for _, a in ipairs(plan.turnIns or {}) do if usable(a) then pick = a break end end end
 	if not pick then
 		for _, a in ipairs(plan.objectives or {}) do
 			if a.kind == "OBJECTIVE" and usable(a) and #unfinished(a) + (a.objectiveState and a.objectiveState.known and 0 or 1) > 0 then
@@ -329,8 +332,10 @@ local function buildCard(plan, ctx)
 	end
 	local offers = Pr.Offers(plan)
 	card.timers = ns.QuestTimers and ns.QuestTimers.List(ctx) or {}          -- TIMED QUEST: the game's own countdown, shown whatever NOW is
-	if not (plan and plan.now) then
-		local g = Pr.Guidance(plan, ctx)
+	-- INSIDE a dungeon the player is working in, that dungeon's objectives lead (outdoor routing means nothing in there: the arrow is withheld): guidance, in the quest log's own words
+	local inDungeon = plan and Pr.Guidance(plan, ctx, true) or nil
+	if inDungeon or not (plan and plan.now) then
+		local g = inDungeon or Pr.Guidance(plan, ctx)
 		if not g and offers[1] then
 			-- nothing to route, but the game is offering a quest: say so, with the NPC, and no place
 			local o = offers[1]
@@ -344,7 +349,9 @@ local function buildCard(plan, ctx)
 			card.now, card.guidance = g, true
 			card.also = offers
 			card.ready = {}
-			for _, r in ipairs(ns.Overlap and ns.Overlap.Ready(plan, ctx) or {}) do
+			-- (the planner's own NOW is not shown while a dungeon leads: it must not vanish, so READY is built as if it were not NOW)
+			local rplan = inDungeon and setmetatable({ now = false }, { __index = plan }) or plan
+			for _, r in ipairs(ns.Overlap and ns.Overlap.Ready(rplan, ctx) or {}) do
 				if r.quest ~= g.quest or g.kind ~= "TURN_IN" then card.ready[#card.ready + 1] = r end
 			end
 			card.slots = Pr.Slots(ctx)
