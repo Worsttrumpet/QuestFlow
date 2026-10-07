@@ -36,3 +36,9 @@ The Q5730 screenshot on 0.9.3 showed the overlay working (4 of 4 annotated) and 
 - The verdict line covered the game's own "Choose one of these rewards" text. It now sits under the lowest row of strips.
 
 Geometry is still judged only from real-client screenshots; the tests check content, not pixels. Advisor, rules and display data are unchanged.
+
+## 0.9.5: verdict line moved; tooltip diagnostics
+
+The 0.9.4 screenshot showed the strips fit (tags only, below each button), but the verdict line, placed under the last row, covered the game's "You will also receive" text. It now sits right-aligned on the game's own "Choose your reward" line above the top row, sized to its text.
+
+The hover tooltip showed none of the Codex lines on a real client. Cause not established (the game may rebuild the tooltip after our hook runs, or the hook is not reached). 0.9.5 only adds counters to the report (hover hook ran / extra lines added) so the next report says which; no behaviour change to the tooltip yet.

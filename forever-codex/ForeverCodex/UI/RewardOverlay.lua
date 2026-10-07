@@ -28,7 +28,7 @@ local COLORS = {
 local PICK = { 0.45, 0.95, 0.45 }
 local EDGE = { 1, 0.82, 0.20 }
 
-local state = { shown = false, display = nil, attached = {}, summary = nil, since = 0, settled = false, backoff = 0 }
+local state = { tipHooks = 0, tipLines = 0, shown = false, display = nil, attached = {}, summary = nil, since = 0, settled = false, backoff = 0 }
 RO.state = state
 local cache = setmetatable({}, { __mode = "k" })           -- button -> its strip (created once, reused)
 
@@ -141,7 +141,8 @@ function RO.Hide() clear(); state.settled, state.backoff = false, 0 end
 function RO.Apply(d)
 	clear()
 	if not d or not d.rows or #d.rows == 0 then return 0 end
-	local first, n, lowest, lowestAt = nil, 0, nil, nil
+	local first, n = nil, 0
+	local rightmost, rightAt, topAt
 	local byIndex = {}
 	for _, row in ipairs(d.rows) do byIndex[row.index] = row end
 	local attached = {}
@@ -149,9 +150,11 @@ function RO.Apply(d)
 		local btn, name = RO.FindButton(row.index)
 		if btn then
 			first = first or btn
-			-- the lowest button (smallest bottom edge; the first one when the client cannot say): the verdict line goes under its strip
-			local bottom = type(btn.GetBottom) == "function" and safe(btn.GetBottom, btn) or nil
-			if not lowest or (type(bottom) == "number" and (type(lowestAt) ~= "number" or bottom < lowestAt - 1)) then lowest, lowestAt = btn, bottom end
+			-- the right-most button of the TOP row (the first button's row; the first button when the client cannot say): the verdict sits on the header line above it
+			local top = type(btn.GetTop) == "function" and safe(btn.GetTop, btn) or nil
+			local right = type(btn.GetRight) == "function" and safe(btn.GetRight, btn) or nil
+			if first == btn then topAt = top; rightmost, rightAt = btn, right
+			elseif type(top) == "number" and type(topAt) == "number" and math.abs(top - topAt) <= 2 and type(right) == "number" and (type(rightAt) ~= "number" or right > rightAt) then rightmost, rightAt = btn, right end
 			local s = stripFor(btn)
 			place(s, btn)
 			s.text:SetText(RO.StripText(row))
@@ -167,9 +170,10 @@ function RO.Apply(d)
 	if first then
 		local sm = summaryFont()
 		pcall(sm.frame.ClearAllPoints, sm.frame)
-		pcall(sm.frame.SetPoint, sm.frame, "TOPLEFT", lowest or first, "BOTTOMLEFT", 0, -11)    -- (under the last strip: above the first row it covered the game's own "Choose" line)
-		pcall(sm.frame.SetWidth, sm.frame, 260)
+		pcall(sm.frame.SetPoint, sm.frame, "BOTTOMRIGHT", rightmost or first, "TOPRIGHT", 0, 1)    -- (right-aligned on the game's own "Choose your reward" line: under the last row it covered "You will also receive")
 		sm.text:SetText(d.verdict.text)
+		local sw = type(sm.text.GetStringWidth) == "function" and safe(sm.text.GetStringWidth, sm.text) or nil
+		pcall(sm.frame.SetWidth, sm.frame, (type(sw) == "number" and sw > 0) and (sw + 10) or 190)
 		local c = d.verdict.kind == "none" and COLORS.yellow or PICK
 		sm.text:SetTextColor(c[1], c[2], c[3])
 		pcall(sm.frame.Show, sm.frame)
@@ -180,6 +184,7 @@ end
 
 --- The advisor's full reason as extra tooltip lines on the game's own item tooltip (added after the game has filled it in).
 function RO.Tooltip(btn)
+	state.tipHooks = state.tipHooks + 1
 	local s = cache[btn]
 	local row = s and s.row
 	if not (state.shown and row and rawget(_G, "GameTooltip")) then return end
@@ -194,6 +199,7 @@ function RO.Tooltip(btn)
 		pcall(tip.AddLine, tip, cv, 0.7, 0.7, 0.7, true)
 	end
 	pcall(tip.Show, tip)
+	state.tipLines = state.tipLines + 1
 end
 
 --- Recomputes from the advisor and redraws (or hides). opts as for Advisor.Display (a test passes a fake dialog).
@@ -269,6 +275,7 @@ function RO.ReportLines()
 		local n = 0
 		for _ in pairs(state.attached) do n = n + 1 end
 		L[#L + 1] = string.format("  showing: %d of %d choices annotated | %s", n, #state.display.rows, state.display.verdict.text)
+		L[#L + 1] = string.format("  tooltip: hover hook ran %d time(s), extra lines added %d time(s) (0 and 0 after hovering a choice means the hook is not reached; 1+ and 0 means the tooltip was not ready)", state.tipHooks, state.tipLines)
 	else
 		L[#L + 1] = "  not showing (no reward dialog with a choice is open)"
 	end
