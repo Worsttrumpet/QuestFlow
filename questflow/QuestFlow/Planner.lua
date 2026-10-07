@@ -88,6 +88,11 @@ Pl.DEFER_PICKUPS = true              -- a distant new pickup waits while objecti
 Pl.PICKUP_DEFER_RANGE_YD = 900       -- ...and that work is within this many yards
 Pl.LOCAL_MIN_NET = 0
 
+-- PROGRESSION. "Available" is not "recommended": every quest action is classified (level band, goal, chain reasons; Progression.lua) before it is valued. A pickup that is gray, far
+-- above the player, or (with a goal) low, and has no REASON to be there, is rejected with the reason recorded; the others are scaled by their band. Pl.PROGRESSION = false switches the
+-- whole stage off (tests use it to prove the stage is what changes the result).
+Pl.PROGRESSION = true
+
 -- QUEST-STATE PRIORITY. What the player has already earned comes before new work: (1) a FINISHED quest that can be handed in, (2) objectives of
 -- quests in progress, (3) new pickups, (4) farther, new progression. Priced by the real walking time, never forced:
 --   * inside one stop the order is by state (hand-in, then objectives, then pickups), not by policy value, and a remembered NOW does not hold
@@ -226,6 +231,8 @@ Pl.UNCONFIRMED_MAX_YD = 500
 --- Why this ACCEPT may only be a POSSIBLE pickup, or nil when it may be routed. `pos` is its location, `S` the planning state.
 function Pl.PossibleOnly(a, pos, S)
 	if a.kind ~= "ACCEPT" or a.pinned or not (S and S.player and pos) then return nil end
+	-- a seasonal / event quest is only possible while its event runs, which no data here can tell: it is routed only on the client's own offer (even when the player opted in)
+	if a.seasonal and Pl.OfferState(a) ~= "OBSERVED" then return "SEASONAL_UNPROVEN", E.Distance(S.ctx, S.player, pos) end
 	if S.env and S.env.routeMap and S.env.routeMap == pos.map then return nil end      -- the player chose to quest there
 	if Pl.OfferState(a) == "OBSERVED" then return nil end
 	local d = E.Distance(S.ctx, S.player, pos)
@@ -416,8 +423,25 @@ local function gather(S, c)
 		-- A DUNGEON objective is not what to do NOW from outside that dungeon: it stays a known candidate (counted, listed in DUNGEON QUESTS, usable as an on-the-way extra) but never competes with
 		-- open-world progress for NOW. Inside the dungeon it is an ordinary action. The tag is the game's own (Dungeons.IsDungeon); nothing here detects a dungeon any other way.
 		local outsideDungeon = a.kind == "OBJECTIVE" and a.quest and ns.Dungeons and ns.Dungeons.IsDungeon(ctx, a.quest) and not ns.Dungeons.PlayerInside(ctx, a.quest)
+		-- CLASSIFICATION + RELEVANCE (Progression.lua): a pickup with no reason to be recommended is rejected here, with the reason kept for the report
+		local judged = Pl.PROGRESSION and ns.Progression and a.type == "QUEST" and ns.Progression.Judge(a, ctx, S.goal) or nil
+		if judged then
+			local f = diag.funnel
+			f.judged = f.judged + 1
+			f.bands[judged.band or "UNKNOWN"] = (f.bands[judged.band or "UNKNOWN"] or 0) + 1
+			if judged.verdict == "EXCLUDED" then f.excluded = f.excluded + 1 elseif judged.verdict == "PENALIZED" then f.penalized = f.penalized + 1 elseif judged.verdict == "BOOSTED" then f.boosted = f.boosted + 1 end
+			if (judged.verdict ~= "NORMAL" or #judged.reasons > 0) and #f.list < ns.Progression.LIST_CAP then
+				f.list[#f.list + 1] = { id = a.id, title = a.title, verdict = judged.verdict, band = judged.band, why = judged.why, reasons = judged.reasons }
+			end
+			S.judgement[a.id] = judged
+			if judged.verdict == "EXCLUDED" then
+				diag.filtered["progression:" .. tostring(judged.why)] = (diag.filtered["progression:" .. tostring(judged.why)] or 0) + 1
+				return
+			end
+		end
 		local possible, pd = Pl.PossibleOnly(a, pos, S)
 		local val, comps = valueOf(a, pos, ctx, env, par)
+		if judged and judged.mult ~= 1 then val = val * judged.mult comps.progression = judged.mult end
 		local timerInfo
 		if a.timer and a.kind == "OBJECTIVE" then
 			local walk = (S.player and seconds(ctx, S.player, pos)) or 0
@@ -985,6 +1009,10 @@ function Pl.Compute(ctx, c, opts)
 		"value: policy points (not XP); walking: distance/RUN_SPEED (estimated); doing: policy seconds" }
 	local plan = { reminders = {}, diag = diag }
 	local S = { ctx = ctx, env = env, par = par, lam = par.timeValue, diag = diag, trace = opts.trace }
+	S.judgement = {}
+	diag.funnel = { judged = 0, bands = {}, excluded = 0, penalized = 0, boosted = 0, list = {} }
+	S.goal = Pl.PROGRESSION and ns.Progression and ns.Progression.Goal(ctx) or nil
+	diag.goal = S.goal and { kind = S.goal.kind, dungeons = S.goal.dungeons, count = S.goal.count, inside = S.goal.inside } or nil
 	S.player = env.player and { map = env.player.map, x = env.player.x, y = env.player.y, world = env.player.world } or nil
 	if not S.player then diag.warnings[#diag.warnings + 1] = "no player position: the first leg is free" end
 
@@ -1156,6 +1184,7 @@ function Pl.Compute(ctx, c, opts)
 
 	addReasons(S, seqStops, firstList, nowIt, thenIt, also, alsoCost)
 	summarize(S, pick)
+	diag.nowJudgement = S.judgement and S.judgement[plan.now.id] or nil
 	diag.nowId, diag.alsoDoId, diag.thenId = plan.now.id, plan.alsoDo and plan.alsoDo.id or nil, plan.thenAction and plan.thenAction.id or nil
 	return plan
 end

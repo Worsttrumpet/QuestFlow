@@ -2,6 +2,20 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.12.0] - what comes next is what is worth doing, not what is closest
+
+### Better recommendations
+- Being available no longer makes a quest a recommendation. Quests are now judged by level (current, low, gray, above) and by whether they serve what you are doing before they are valued.
+- Gray quests (far below your level) and quests far above you are left out unless there is a reason: you added them, they are dungeon quests, or they lead to a quest you hold or a fitting one. Low quests are discounted.
+- If your quest log holds dungeon quests, those hand-ins and the quests leading to them now count for more, and low quests need a reason to be suggested.
+- Seasonal and holiday quests are left out of the normal route. `/qflow seasonal on` includes them, and they are still only suggested when the game itself offers them.
+
+### Explains itself
+- `/qflow report` gains a PLANNER FUNNEL section: the quests rejected (with the reason), penalised or boosted, your current goal, and why NOW was chosen.
+
+### Compatibility
+- No setting, saved data or command changed except the new `/qflow seasonal`. Quests with no known level are not judged by level.
+
 ## [0.11.0] - world and travel knowledge
 
 ### Flight paths and travel

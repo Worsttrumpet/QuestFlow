@@ -89,6 +89,10 @@ function P.Root() return root() end
 function P.Char() return ensureChar(charKey) end
 function P.UI() return root().ui end
 
+--- Whether seasonal / holiday / world-event quests may enter the normal pool (per character; default OFF). Even when on they are only routed on a client offer.
+function P.IncludeSeasonal() return P.Char().includeSeasonal == true end
+function P.SetIncludeSeasonal(on) P.Char().includeSeasonal = on and true or false end
+
 --- Whether Codex may read quest knowledge from the QuestieDB addon when it is installed (account-wide; default ON, the way Codex has always worked). QuestieDB is third-party data: it is never copied
 -- into Codex and never treated as confirmed on Forever (see docs/CODEX_DATA_SOURCES.md). Turning it off makes Codex use only its own observed data and its ATT-derived packs.
 function P.UseQuestieDB() return root().ui.useQuestieDB ~= false end

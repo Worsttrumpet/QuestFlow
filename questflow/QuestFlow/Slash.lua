@@ -30,6 +30,7 @@ local function helpLines()
 	say("  /qflow feedback [status|list]   REPORT A PROBLEM (also the Feedback button in the window); /qflow report is the full diagnostic")
 	say("  /qflow professions [hide <name>|restore]   PROFESSIONS: what the client reported")
 	say("  /qflow services [vendor|trainer|flight|inn|repair|dungeon]   what Quest Flow has seen of services, flights and dungeon entrances from your own visits;  /qflow travel = same")
+	say("  /qflow seasonal [on|off]   include seasonal / holiday quests in the route (default off)")
 	say("  /qflow where | reset | help")
 end
 
@@ -256,6 +257,13 @@ local function handle(msg)
 			lines[#lines + 1] = "/qflow professions hide fishing|cooking|firstaid  or  restore"
 			showLines(lines)
 		end
+	elseif cmd == "seasonal" then
+		local on = onOff(restLower)
+		if on ~= nil then
+			P.SetIncludeSeasonal(on)
+			ns.State.Recompute()
+		end
+		say("Seasonal / holiday quests are " .. (P.IncludeSeasonal() and "INCLUDED (and still only routed when the game itself offers them)." or "left out of the normal route.") .. " Usage: /qflow seasonal on|off")
 	elseif cmd == "services" or cmd == "travel" then
 		-- what Quest Flow has seen of the world's services and your flights (read-only; the same facts as the report's world and travel section)
 		local kinds = { vendor = "vendor", trainer = "trainer", flight = "flightmaster", flightmaster = "flightmaster", inn = "innkeeper", innkeeper = "innkeeper", repair = "repair" }

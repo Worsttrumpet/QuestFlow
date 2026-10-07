@@ -143,9 +143,11 @@ function Kn.Categories(ctx)
 		{ label = "Spells you can learn", status = "partly known", text = "Read from an open class trainer: what is learnable, locked or already known." },
 	})
 	cat("planner", "Planner", {
-		{ label = "How it chooses", status = "known", text = "Value, turn-ins first, quest chains, prerequisites, level fit, grey quests, overlap, quest-log pressure, detours and how long the trip takes: not simply the nearest quest." },
-		{ label = "Trip time", status = "partly known", text = "Walking by default. A flight or hearth is used for the estimate only when it is evidenced as yours (see Travel)." },
-		{ label = "Reward usefulness and later quests", status = "partly known", text = "Quests that unlock a next quest nearby count extra. How good a reward is does not change the route yet." },
+		{ label = "How it chooses", status = "known", text = "First is it available, then may it be considered, then what kind of quest is it for you, then does it serve what you are doing, then is it worth the time. Being available never makes a quest a recommendation." },
+		{ label = "Low and high level quests", status = "partly known", text = "A quest far below you (the game's grey range) or far above you is left out unless it has a reason: you added it, it is a dungeon quest, or it leads to a quest you hold or a fitting one. Quests with only a required level in the data are not judged by level." },
+		{ label = "Your goal", status = "partly known", text = "If your log holds dungeon quests (as the game tags them), those quests and the ones that lead to them count for more and low quests need a reason. With no tag from the game there is no goal." },
+		{ label = "Seasonal quests", status = "partly known", text = "Left out of the normal route (/qflow seasonal on to include them). Identified only by QuestieDB's holiday and world-event categories, and only routed when the game itself offers them." },
+		{ label = "Trip time and rewards", status = "partly known", text = "Walking by default; a flight or hearth only when it is evidenced as yours. Quests that unlock a next quest count extra. Reward usefulness does not change the route yet." },
 	})
 	cat("navigation", "Navigation", {
 		{ label = "Where to go", status = "known", text = "The map waypoint, minimap and arrow follow the step you are on, not a separate list." },

@@ -963,6 +963,13 @@ function D.PlaytestLines(snap, lines)
 			add("REWARD ADVISOR: error: " .. tostring(alines))
 		end
 	end
+	if ns.Progression then
+		local okP, err = pcall(function()
+			local c = ns.State and ns.State.ctx
+			for _, l in ipairs(ns.Progression.ReportLines(c, ns.State and ns.State.plan)) do add(l) end
+		end)
+		if not okP then add("PLANNER FUNNEL: error: " .. tostring(err)) end
+	end
 	do
 		local okW, err = pcall(function()
 			add("WORLD AND TRAVEL KNOWLEDGE (taxi, services, travel; PASS / FAIL / PENDING are about THIS client)")

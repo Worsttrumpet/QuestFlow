@@ -29,7 +29,7 @@ Selected stops:
   3. Accept: A Peon's Burden   (308 yd)
 
 Planner diagnostics:
-  Candidates: 16 located (+84 optional hints, 3 without a location)
+  Candidates: 16 located (+67 optional hints, 3 without a location)
   Stops: 12   Considered: 6   Sequences scored: 156   Selected stops: 3
   Estimated sequence time: 165s (about 105s walking + 60s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 40.6   ALSO DO interruption: 8.5s   Unknown legs: 0
@@ -60,7 +60,7 @@ Selected stops:
   3. Accept: Your Place In The World + Accept: Lazy Peons   (186 yd)
 
 Planner diagnostics:
-  Candidates: 18 located (+84 optional hints, 1 without a location)
+  Candidates: 18 located (+67 optional hints, 1 without a location)
   Stops: 14   Considered: 8   Sequences scored: 400   Selected stops: 3
   Estimated sequence time: 226s (about 61s walking + 165s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 45.6   ALSO DO interruption: 8.5s   Unknown legs: 0
@@ -91,7 +91,7 @@ Selected stops:
   3. Accept: Sarkoth   (151 yd)
 
 Planner diagnostics:
-  Candidates: 19 located (+83 optional hints, 1 without a location)
+  Candidates: 19 located (+66 optional hints, 1 without a location)
   Stops: 15   Considered: 8   Sequences scored: 400   Selected stops: 3
   Estimated sequence time: 101s (about 41s walking + 60s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 56.2   ALSO DO interruption: 0s   Unknown legs: 0
@@ -122,7 +122,7 @@ Selected stops:
   3. Accept: Sarkoth   (151 yd)
 
 Planner diagnostics:
-  Candidates: 20 located (+83 optional hints, 0 without a location)
+  Candidates: 20 located (+66 optional hints, 0 without a location)
   Stops: 16   Considered: 8   Sequences scored: 400   Selected stops: 3
   Estimated sequence time: 207s (about 42s walking + 165s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 47.6   ALSO DO interruption: 0s   Unknown legs: 0
@@ -154,7 +154,7 @@ Selected stops:
   3. Accept: Sarkoth   (186 yd)
 
 Planner diagnostics:
-  Candidates: 16 located (+84 optional hints, 2 without a location)
+  Candidates: 16 located (+67 optional hints, 2 without a location)
   Stops: 12   Considered: 6   Sequences scored: 156   Selected stops: 3
   Estimated sequence time: 165s (about 105s walking + 60s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 40.5   ALSO DO interruption: 8.5s   Unknown legs: 0
@@ -183,7 +183,7 @@ Selected stops:
   3. Accept: Sarkoth   (151 yd)
 
 Planner diagnostics:
-  Candidates: 13 located (+83 optional hints, 0 without a location)
+  Candidates: 13 located (+50 optional hints, 0 without a location)
   Stops: 10   Considered: 4   Sequences scored: 40   Selected stops: 3
   Estimated sequence time: 102s (about 42s walking + 60s doing; walking = yards / 7, an estimate)
   Sequence value (net policy points, not XP): 56.7   ALSO DO interruption: 0s   Unknown legs: 0
@@ -686,5 +686,5 @@ OPPDEBUG Q:4:ACCEPT cost=86.710739789676 rel=RECONNECTING_DETOUR cls=EXPENSIVE d
 OPPDEBUG Q:5:ACCEPT cost=92.681194649676 rel=RECONNECTING_DETOUR cls=EXPENSIVE dec=TOO_FAR from=Q:101:ACCEPT to=Q:102:ACCEPT stop=Q:3:ACCEPT/3 net=-7.6
 OPPDEBUG hub	Q:3:ACCEPT	3	85.714285714286	35.035714285714
 
-5400 passed, 0 failed
+5474 passed, 0 failed
 ```

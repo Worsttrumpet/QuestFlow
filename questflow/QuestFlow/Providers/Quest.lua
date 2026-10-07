@@ -40,8 +40,8 @@ function Q.Eligibility(view, ctx, strategy)
 	local ch = ctx.char
 	if view.repeatable then return false, "repeatable" end
 	-- a holiday / world-event quest is only possible while its event is on, and Codex cannot tell that: it is not offered. (A quest in the
-	-- log, or one the player added, never comes through here, so those still show.)
-	if view.event then return false, "event" end
+	-- log, or one the player added, never comes through here, so those still show. The player can opt in to seasonal quests (/qflow seasonal on); they are then only routed on a client offer.)
+	if view.event and not (P.IncludeSeasonal and P.IncludeSeasonal()) then return false, "event" end
 	if view.faction and ch.faction and view.faction ~= ch.faction then return false, "faction" end
 	if view.races and ch.raceKey and not contains(view.races, ch.raceKey) then return false, "race" end
 	if view.classes and ch.classToken and not contains(view.classes, ch.classToken:upper()) then return false, "class" end
@@ -241,7 +241,7 @@ local function acceptAction(view, pinned, ctx)
 	return attach(R.NewAction({
 		id = "Q:" .. view.id .. ":ACCEPT", type = "QUEST", kind = "ACCEPT", quest = view.id, skipKey = "Q:" .. view.id, name = view.name,
 		title = "Accept: " .. (view.name or ("quest " .. view.id)), reqLevel = view.req, level = view.level,
-		breadcrumb = view.breadcrumb, target = t, pinned = pinned or false, lines = lines,
+		breadcrumb = view.breadcrumb, target = t, pinned = pinned or false, lines = lines, seasonal = view.event or nil,
 		src = t and t.src or view.src, verified = t and t.verified or false, nameSrc = view.prov.name,
 		giver = (not fromThing) and view.giverName or nil,
 		sourceKind = view.startKind, sourceItem = view.startItemName, sourceObject = view.startObject,

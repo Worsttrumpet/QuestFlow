@@ -118,6 +118,18 @@ Do these in the real client with the ZIP. After each, run `/qflow report` and lo
 - [ ] H9. Report: "the Hearthstone state is readable" and "money is readable" PASS.
 - [ ] H10. Appendices > What Quest Flow knows: the seven buttons switch categories, text is not clipped, counts match what you did.
 
+## Part I. What comes next (0.12.0): the level 16 / Ruins of Lordaeron test
+
+Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
+
+- [ ] I1. Before anything else: the funnel shows `Green range N (client)` or `(default ...)`. If it says default, `GetQuestGreenRange` does not exist on Forever: note it, no action needed.
+- [ ] I2. With your level 16 character and a Ruins of Lordaeron quest in your log: `Goal: dungeon ...` is listed. If it says `Goal: none known ... quest-tag API did not answer`, paste the report: the goal logic cannot work until the game tags those quests.
+- [ ] I3. NOW is not a level 6 quest or a donation quest. In the funnel, every low-level quest is listed as `EXCLUDED ... GRAY` (or `PENALIZED ... LOW`), with its band.
+- [ ] I4. If "A Donation of Wool" is still NOW: paste the report. The line `NOW is ...: band X (basis)` says whether the level was known. `UNKNOWN (only a required level ...)` means the data gave no quest level and the planner cannot judge it (see docs/PLANNER_FUNNEL.md, Not solved).
+- [ ] I5. A hand-in for a Ruins of Lordaeron quest, if you have one finished, is NOW or next, listed `BOOSTED ... GOAL_QUEST`.
+- [ ] I6. `/qflow seasonal` says seasonal quests are left out; a holiday quest is not suggested. `/qflow seasonal on` then `off` returns to that.
+- [ ] I7. A quest you added with `/qflow add` appears even if it is gray (reason PINNED).
+
 ## Evidence to keep (screenshots)
 1. AddOns list (A2). 2. A normal NOW / ALSO COMPLETE screen (D1). 3. Reward window with all icon rows (C1). 4. A second-column reward (C2). 5. The recommended reward with the golden border and star (C5). 6. A vendor reward with its price (C8). 7. A tooltip with the Quest Flow line (C9). 8. Each icon type (C7). 9. One `/qflow report` (F1).
 
