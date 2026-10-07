@@ -2,6 +2,10 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.15.1] - report: does the game's quest map know quests in other zones?
+
+- Read-only probe, report only. For quests Quest Flow cannot place, the report now also asks the game's own quest map about every Kalimdor and Eastern Kingdoms zone map (not only the zone you stand in) and lists where the game puts each quest. Nothing reaches the planner yet: this only shows whether the game can fill the gap.
+
 ## [0.15.0] - boats and zeppelins you ride become routes
 
 - Quest Flow ships no boat or zeppelin data, so it could never plan one. It now learns them from rides you make: when a loading screen takes you to another continent and nothing else explains it (no Hearthstone, flight, summon, spell, instance or death), you had been carried after standing still, and you stand still again at the far end, the ride is recorded (start place, dock place, shortest time, how often). Each recorded ride is offered to the planner as a transport, in the direction you rode it, only when it beats walking. The way back stays unknown until you ride it.

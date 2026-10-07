@@ -836,6 +836,36 @@ function D.PlaytestLines(snap, lines)
 				poiState = okP and "returned nothing usable" or "error"
 			end
 		end
+		-- (0.15.1) read-only probe: does the game's quest map answer for OTHER zones, not just the one you are on? Nothing here reaches the planner.
+		local scan = { maps = 0, answered = 0, empty = 0, failed = 0, byQuest = {} }
+		if #unplaced > 0 and type(C_Map) == "table" and type(C_Map.GetMapChildrenInfo) == "function" and type(C_QuestLog) == "table" and type(C_QuestLog.GetQuestsOnMap) == "function" then
+			local seen, queue = {}, {}
+			local function want(id, name) if type(id) == "number" and not seen[id] and #queue < 90 then seen[id] = true queue[#queue + 1] = { id = id, name = name } end end
+			for _, cont in ipairs({ 1414, 1415 }) do   -- Kalimdor, Eastern Kingdoms (classic map numbers; only used to find the zone maps below)
+				local okC, kids = pcall(C_Map.GetMapChildrenInfo, cont, 3, true)
+				if okC and type(kids) == "table" then for _, k in ipairs(kids) do if type(k) == "table" then want(k.mapID, k.name) end end end
+			end
+			for _, m in ipairs(queue) do
+				scan.maps = scan.maps + 1
+				local okQ, list = pcall(C_QuestLog.GetQuestsOnMap, m.id)
+				if not okQ then scan.failed = scan.failed + 1
+				elseif type(list) ~= "table" then scan.empty = scan.empty + 1
+				else
+					scan.answered = scan.answered + 1
+					for _, e in ipairs(list) do
+						if type(e) == "table" and type(e.questID) == "number" then
+							local t = scan.byQuest[e.questID] or {}
+							scan.byQuest[e.questID] = t
+							t[#t + 1] = string.format("%s (map %d) %s, %s", tostring(m.name or "?"), m.id, num(e.x, "%.3f"), num(e.y, "%.3f"))
+						end
+					end
+				end
+			end
+			local found = 0
+			for _ in pairs(scan.byQuest) do found = found + 1 end
+			add(string.format("game quest-map scan of every Kalimdor / Eastern Kingdoms zone map (UNPROVEN on this client; nothing here changes the plan): %d map(s) tried, %d answered with a list, %d gave nothing usable, %d errored; %d quest(s) from your log have a point on some map",
+				scan.maps, scan.answered, scan.empty, scan.failed, found))
+		end
 		if #unplaced > 0 then add("(objective slot meaning is unverified on Forever: a number that is really an item id can coincide with an NPC id, so the NPC counts are a ceiling, not a fact)") end
 		if #unplaced > 0 then add(string.format("game quest-map points on map %s (C_QuestLog.GetQuestsOnMap): %s, %d quest(s)", tostring(l.map), poiState, poiCount)) end
 		for _, id in ipairs(unplaced) do
@@ -843,6 +873,10 @@ function D.PlaytestLines(snap, lines)
 			local qid = tonumber(tostring(id):match("^Q:(%d+)"))
 			local v = qid and R.Quest(qid) or nil
 			local pe = qid and poi[qid] or nil
+			if scan.maps > 0 and qid then
+				local hits = scan.byQuest[qid]
+				add("    game map points on other zone maps: " .. (hits and table.concat(hits, "; ") or "none on any map tried"))
+			end
 			add("    game map point: " .. (pe and string.format("%s, %s", num(pe.x, "%.3f"), num(pe.y, "%.3f")) or (poiState == "ok" and "none on this map" or poiState)))
 			if not v then
 				add("    Quest Flow data: no pack (observed, QuestieDB, ATT) knows this quest")

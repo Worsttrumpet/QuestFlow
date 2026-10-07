@@ -521,6 +521,16 @@ do
 	rawset(ns.UI, "ShowReport", function(t) text = t end)
 	H.slash("report")
 	check(text and text:find("NOT PLACED", 1, true) and text:find("Q:2", 1, true), "the report still has them, with where the missing location could come from")
+	-- (0.15.1) the report also tries the game's quest map on other zones, read only
+	local keep = { gm = _G.C_Map.GetMapChildrenInfo, q = _G.C_QuestLog and _G.C_QuestLog.GetQuestsOnMap }
+	_G.C_QuestLog = _G.C_QuestLog or {}
+	_G.C_Map.GetMapChildrenInfo = function(m) if m == 1414 then return { { mapID = 7777, name = "Fixture Zone" } } end return {} end
+	_G.C_QuestLog.GetQuestsOnMap = function(m) if m == 7777 then return { { questID = 2, x = 0.25, y = 0.75 } } end return {} end
+	local text2
+	rawset(ns.UI, "ShowReport", function(t) text2 = t end)
+	H.slash("report")
+	check(text2 and text2:find("quest-map scan of every", 1, true) and text2:find("Fixture Zone (map 7777) 0.250, 0.750", 1, true), "the report names where the game puts a quest that Quest Flow could not place, on a zone map you are not in")
+	_G.C_Map.GetMapChildrenInfo, _G.C_QuestLog.GetQuestsOnMap = keep.gm, keep.q
 	-- the minimap button
 	local MM = ns.MinimapButton
 	check(MM.ICON == "Interface\\AddOns\\QuestFlow\\Media\\QuestFlowLogo.tga", "its picture is the Quest Flow logo, a file shipped inside the addon")

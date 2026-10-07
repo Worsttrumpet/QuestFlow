@@ -201,3 +201,7 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 - [ ] Take a zeppelin or boat to another continent (for example Orgrimmar to Undercity). Do not cast anything while waiting. Stand still on the dock after you arrive for a few seconds.
 - [ ] Report: "a boat or zeppelin ride recorded (1 ...)" PASS and a line "<from> -> <to>: N s shortest".
 - [ ] If it says "not recorded because ...", send the report: the reason names what blocked it.
+
+## Part P - game quest map on other zones (0.15.1, probe only)
+
+- [ ] With quests in the log that have no place (the NOT PLACED list), run /qflow report. The "game quest-map scan" line says how many maps answered. Each unplaced quest shows "game map points on other zone maps": a zone and position, or "none on any map tried".
