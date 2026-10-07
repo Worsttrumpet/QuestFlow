@@ -86,3 +86,7 @@ Policy (`Planner.UNKNOWN_PICKUPS_ROUTABLE = false`):
 The offer-evidence storage and its staleness rules are unchanged. The generic test harness sets the switch to the old behaviour for the hundreds of fixture quests that have no offer evidence (as it already did for `UNCONFIRMED_MAX_YD`); `availability_policy_tests.lua` runs in production mode, and `pickup_tests`, `stale_evidence_tests` and `offerprobe_secret_tests` keep their assertions by opting into the old routing (`legacyUnknown`) because their subject is the rules beneath the policy. No golden file changed.
 
 Trade-off. A character with no recorded offers has no committed pickups: the plan is empty until the player talks to an NPC, then the offered quest becomes plannable. Objectives and hand-ins plan as before. The empty tracker card says how many pickups are waiting to be offered.
+
+## 0.14.1: "work here" needs progress
+
+`Planner.StartedWork`: a located-nowhere OBJECTIVE only counts as local work (`localWork`, which makes `StayLocal` pre-empt trips and hand-ins elsewhere) when the quest log shows an objective finished or a count above zero. The 0.14.0 report had "The Sacred Flame" 0/1 with no place and six ready hand-ins: NOW was the placeless quest, the sequence empty. Quests with progress keep the original rule. Real-client note: objective places for such quests are a data gap (QuestieDB lists none and the game's quest map gives none); nothing here invents one.

@@ -417,6 +417,16 @@ local function copyTable(v)
 	return out
 end
 
+--- True when the quest log shows progress on this OBJECTIVE action: some objective finished or a count above zero. Unknown progress (an unreadable log) is not progress.
+function Pl.StartedWork(a)
+	local os = a.objectiveState
+	if not (os and os.known) then return false end
+	for _, o in ipairs(os.list or {}) do
+		if o.finished or (type(o.have) == "number" and o.have > 0) then return true end
+	end
+	return false
+end
+
 --- Stage 1: which actions can be sequenced. Fills S.items (route actions), S.extras (optional hints), S.reminders.
 local function gather(S, c)
 	local ctx, env, par, diag = S.ctx, S.env, S.par, S.diag
@@ -514,7 +524,9 @@ local function gather(S, c)
 	local localWork = {}
 	if S.player and S.player.map then
 		for _, a in ipairs(reminders) do
-			if a.kind == "OBJECTIVE" and a.areaMap and a.areaMap == S.player.map and not a.unknown then localWork[#localWork + 1] = a end
+			-- (0.14.1) only work the quest log shows has STARTED counts as "work here": a quest with no known place and no progress (0.14.0 report: "The Sacred Flame" 0/1, no place) is not underway,
+			-- and must not pre-empt hand-ins and other located work with an instruction that has no destination
+			if a.kind == "OBJECTIVE" and a.areaMap and a.areaMap == S.player.map and not a.unknown and Pl.StartedWork(a) then localWork[#localWork + 1] = a end
 		end
 		local function done(a)                         -- how far along: the average of each objective's have / need (counts the quest log reported)
 			local os, n, d = a.objectiveState, 0, 0

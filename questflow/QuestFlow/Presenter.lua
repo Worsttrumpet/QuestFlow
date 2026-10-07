@@ -195,6 +195,8 @@ local function describe(a, plan, ctx, icon)
 		end
 	elseif a.kind == "OBJECTIVE" then
 		it.title = "Finish " .. name
+		-- no place to point at: say so, and leave the game's own objective text and counts (below) as the guidance
+		if not pos0 then it.whereShort, it.noPlace = "Place not known: see your quest log", true end
 		local todo = unfinished(a)
 		local first = todo[1] and Pr.CleanObjective(todo[1].text)
 		if first then

@@ -2,6 +2,12 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.14.1] - flights confirmed; a quest with no place no longer outranks real work
+
+- **Flights work on the real client.** A Thunder Bluff to Orgrimmar flight was recorded end to end (selected, started, completed, 207 s measured) and is now an observed route the planner uses with its real time.
+- **A quest with no known place and no progress no longer becomes NOW ahead of your hand-ins.** Before, an unstarted quest such as one whose objective Quest Flow cannot place counted as "work in this area", so six ready hand-ins waited behind an instruction with no destination. Only work the quest log shows you have started now counts as work in the area.
+- The NOW row for a quest with no known place now says "Place not known: see your quest log", next to the game's own objective counts.
+
 ## [0.14.0] - unknown pickups are suggestions, not route steps
 
 - **Quest Flow no longer plans a route through a quest the game has not offered you.** A pickup is a committed step (NOW / THEN) only when the game itself offered it. One Quest Flow merely knows about from its data stays an optional suggestion: it can still appear as an ALSO DO beside your route, marked "not offered yet", or be listed in the report, but you are never sent somewhere as if it were available.

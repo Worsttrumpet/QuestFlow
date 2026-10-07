@@ -293,3 +293,35 @@ do
 	check(N.Assess(far(850, nil, false), ctx).pin == false, "an approximate point that is not an assumed NPC spot: still limited to MAX_APPROX_YD")
 	check(N.MAX_ASSUMED_YD > N.MAX_APPROX_YD and N.MAX_ASSUMED_YD < N.MAX_EXACT_YD, "the assumed reach sits between the approximate and the exact reach")
 end
+
+section("local work: a quest with no known place and no progress is not 'work here' (the 0.14.0 Sacred Flame report)")
+do
+	H.defMap(9401, 0, 3000, 0, 1000, 1000)       -- a map 2500+ yd away: not the player's neighbourhood
+	-- player on map 9001 with a ready hand-in far away, and an in-log quest whose objective has no place (no objCoords, no turn-in place) and NO progress
+	local function setup(progress)
+		return function(ns) end
+	end
+	local function build(started)
+		cleanup()
+		local ns = boot({ char = { level = 20 }, synthetic = true, production = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Test" } })
+		H.attPack(ns, { { id = 1, name = "Placeless Work", map = 9001, x = 0.5, y = 0.5, req = 1, level = 20, areaId = nil, zoneMap = 9001 },
+			{ id = 2, name = "Ready Hand In", map = 9401, x = 0.5, y = 0.5, req = 1, level = 20, objCoords = { { map = 9401, x = 0.5, y = 0.5 } } } }, nil)
+		H.world().log = { { questID = 1, title = "Placeless Work", complete = false }, { questID = 2, title = "Ready Hand In", complete = true } }
+		H.world().objectives = { [1] = { { text = "Thing", type = "item", finished = false, numFulfilled = started and 1 or 0, numRequired = 5 } },
+			[2] = { { text = "Done", type = "item", finished = true, numFulfilled = 1, numRequired = 1 } } }
+		ns.Prefs.FinishSetup()
+		ns.State.Recompute()
+		return ns
+	end
+	local ns = build(false)
+	local a = ns.State.plan
+	check(a.now and a.now.id == "Q:2:TURN_IN", "no progress on the placeless quest: the located hand-in is NOW, not an instruction with no destination  [" .. tostring(a.now and a.now.id) .. "]")
+	check(ns.Planner.StartedWork({ objectiveState = { known = true, list = { { have = 0, finished = false } } } }) == false and ns.Planner.StartedWork({ objectiveState = { known = true, list = { { have = 2, finished = false } } } }) == true
+		and ns.Planner.StartedWork({ objectiveState = { known = true, list = { { finished = true } } } }) == true and ns.Planner.StartedWork({}) == false, "StartedWork: counts above zero or a finished objective; nothing known is not progress")
+	local card = ns.Presenter.Card(a, ns.State.ctx)
+	check(card.now and card.now.kind == "TURN_IN", "and the card shows the hand-in")
+	local started = build(true)
+	check(started.State.plan.now and started.State.plan.now.id == "Q:1:OBJECTIVE" and started.State.plan.diag.reason == "LOCAL_WORK", "MUTATION-pair: once the log shows progress on it, the placeless quest IS local work again (the original rule, unchanged)")
+	local sc = started.Presenter.Card(started.State.plan, started.State.ctx)
+	check(sc.now and sc.now.noPlace == true and sc.now.whereShort:find("not known", 1, true), "and its NOW row says the place is not known")
+end

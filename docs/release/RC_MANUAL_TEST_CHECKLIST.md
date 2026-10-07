@@ -155,6 +155,12 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 - [ ] K4. A quest you hold (objective or hand-in) is planned as always. A quest you added with `/qflow add` is planned as always.
 - [ ] K5. Mura Runetotem-style case: a quest the game offered is still NOW, and is labelled AVAILABLE in the report.
 
+## Part L. 0.14.1
+
+- [ ] L1. With ready hand-ins and an untouched quest whose objective has no known place (for example The Sacred Flame 0/1): NOW is a hand-in with an arrow, not the placeless quest.
+- [ ] L2. Make progress on that placeless quest (a count above zero): it can be NOW again, and the NOW row says "Place not known: see your quest log".
+- [ ] L3. Fly the Orgrimmar to Thunder Bluff route: the report shows a second measured edge; the route back is priced by the measured time only for the direction you flew.
+
 ## Evidence to keep (screenshots)
 1. AddOns list (A2). 2. A normal NOW / ALSO COMPLETE screen (D1). 3. Reward window with all icon rows (C1). 4. A second-column reward (C2). 5. The recommended reward with the golden border and star (C5). 6. A vendor reward with its price (C8). 7. A tooltip with the Quest Flow line (C9). 8. Each icon type (C7). 9. One `/qflow report` (F1).
 
