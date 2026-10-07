@@ -96,7 +96,7 @@ Built for the WoW Forever client (interface 16001) and tested on client 1.60.1, 
 
 ## Reporting bugs
 
-Use the **Feedback** button in the window and paste the text into a new GitHub issue; it contains your class, level, faction, race, position and quest log but not your character name, realm or account. For a fuller report type `/qflow report`, copy the text (Ctrl+C) and attach it; **that report does include your character name**, so edit it out first if you prefer. Nothing is ever sent for you.
+Use the **Feedback** button in the window and paste the text into a new GitHub issue; it contains your class, level, faction, race, position and quest log but not your character name, realm or account. For a fuller report type `/qflow report`, copy the text (Ctrl+C) and attach it; **that report does include your character name and realm** (in the first line, the character line and the saved-data line), so edit them out first if you prefer. Nothing is ever sent for you.
 
 ## Contributing
 
