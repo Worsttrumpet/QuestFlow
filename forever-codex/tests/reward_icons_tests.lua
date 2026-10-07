@@ -125,7 +125,7 @@ do
 	end
 	local sp = RO.state.summary.frame.__points
 	check(sp and sp[1] == "BOTTOMRIGHT" and sp[3] == "TOPRIGHT", "the verdict sits right-aligned on the line above the top row")
-	check(RO.state.summary.frame.__w <= RO.VERDICT_MAX and #RO.state.summary.text.__text <= 30, "the verdict is short and capped in width  [" .. RO.state.summary.text.__text .. "]")
+	check(RO.state.summary.frame.__w <= RO.VERDICT_MAX and #RO.state.summary.text.__text <= 34, "the verdict is short and capped in width  [" .. RO.state.summary.text.__text .. "]")
 	-- the tooltip carries the words
 	local lines = {}
 	GameTooltip.AddLine = function(_, text) lines[#lines + 1] = text end
@@ -133,6 +133,44 @@ do
 	local all = table.concat(lines, "|")
 	check(all:find("tentative pick", 1, true) and all:find("Compared with what you wear", 1, true) and all:find("Codex: MIXED", 1, true), "the tooltip says the pick in words, with the stat comparison and the reason")
 	GameTooltip.AddLine = nil
+end
+
+section("codex icons: placement clear of the window edge, and the tooltip repair")
+do
+	local b = buttons(2)
+	local a = w(1, "Good Dagger", { [DPS] = 12, [AGI] = 5 }, U)
+	local c = w(2, "Poor Dagger", { [DPS] = 5, [AGI] = 1 }, U)
+	RO.Update(dialog({ c, a }))
+	for i = 1, 2 do
+		local pt = RO.Strip(b[i]).frame.__points
+		check(pt and pt[4] == -RO.INSET and RO.INSET >= 10, "button " .. i .. ": the icon row stays " .. RO.INSET .. " px in from the button's right edge (the scroll area clips the right column)")
+	end
+	local sp = RO.state.summary.frame.__points
+	check(sp and sp[5] == RO.VERDICT_RISE and sp[4] < 0, "the verdict sits on the heading line above 'Choose your reward', not on top of it")
+	-- the game rebuilds its tooltip after our hook: the lines are added again, a few times at most
+	local lines = {}
+	GameTooltip.AddLine = function(_, text) lines[#lines + 1] = text end
+	GameTooltip.NumLines = function() return #lines end
+	for n = 1, 12 do
+		_G["GameTooltipTextLeft" .. n] = { GetText = function() return lines[n] end }
+	end
+	b[2].hooks.OnEnter(b[2])
+	check(RO.state.hover == b[2] and RO.state.tipHooks >= 1, "hovering records the button")
+	local before = #lines
+	RO.CheckTooltip()
+	check(RO.state.tipScan == "readable" and #lines == before and RO.state.tipKept >= 1, "our lines present: nothing is added again")
+	for i = #lines, 1, -1 do lines[i] = nil end              -- the game rebuilt its tooltip
+	local lostBefore = RO.state.tipLost
+	RO.CheckTooltip()
+	check(RO.state.tipLost == lostBefore + 1 and #lines > 0 and table.concat(lines, "|"):find("Codex: ", 1, true), "our lines gone: they are added again")
+	for n = 1, 20 do for i = #lines, 1, -1 do lines[i] = nil end; RO.CheckTooltip() end
+	check(RO.state.hoverFixes <= 5, "at most five repairs per hover  [" .. RO.state.hoverFixes .. "]")
+	b[2].hooks.OnLeave(b[2])
+	check(RO.state.hover == nil, "leaving the button stops the checking")
+	local rep = table.concat(RO.ReportLines(), "\n")
+	check(rep:find("tooltip check:", 1, true), "the report says what the tooltip check saw")
+	GameTooltip.AddLine, GameTooltip.NumLines = nil, nil
+	for n = 1, 12 do _G["GameTooltipTextLeft" .. n] = nil end
 end
 
 section("codex icons: a plain recommendation, and more than four classifications")

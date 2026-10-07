@@ -803,9 +803,9 @@ function A.Display(opts)
 	local sel = rec.selected
 	local verdict
 	if rec.state == "RECOMMEND" and sel then
-		verdict = { kind = "pick", text = string.format("CODEX: RECOMMENDED - CHOICE %d", sel.index), short = string.format("CODEX: PICK - CHOICE %d", sel.index) }
+		verdict = { kind = "pick", text = string.format("CODEX: RECOMMENDED - CHOICE %d", sel.index), short = string.format("CODEX: RECOMMENDED - CHOICE %d", sel.index) }
 	elseif rec.state == "TENTATIVE" and sel then
-		verdict = { kind = "tentative", text = string.format("CODEX: TENTATIVE PICK - CHOICE %d (evidence incomplete)", sel.index), short = string.format("CODEX: TENTATIVE - CHOICE %d", sel.index) }
+		verdict = { kind = "tentative", text = string.format("CODEX: TENTATIVE PICK - CHOICE %d (evidence incomplete)", sel.index), short = string.format("CODEX: TENTATIVE PICK - CHOICE %d", sel.index) }
 	else
 		verdict = { kind = "none", text = "CODEX: NO CLEAR PICK" }
 	end

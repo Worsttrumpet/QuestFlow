@@ -18,7 +18,9 @@ local addonName, ns = ...
 local RO = {}
 ns.RewardOverlay = RO
 
-RO.VERDICT_MAX = 170                 -- the verdict shares the game's "Choose your reward" line: never wider than this (longer is cut, not spilled past the window edge)
+RO.VERDICT_RISE = 22                 -- up past the game's "Choose your reward" line onto the "Rewards" heading line, whose right side is empty
+RO.INSET = 12                        -- the right-hand column of buttons runs to the edge of the game's scroll area, which clips anything drawn on it: stay this far in
+RO.VERDICT_MAX = 245                 -- the verdict shares the game's "Choose your reward" line: never wider than this (longer is cut, not spilled past the window edge)
 RO.EVENTS = { "QUEST_COMPLETE", "QUEST_ITEM_UPDATE", "GET_ITEM_INFO_RECEIVED", "PLAYER_EQUIPMENT_CHANGED" }
 -- the names a choice button may have, by choice number (Classic family of clients; unproven on Forever)
 RO.CANDIDATES = { "QuestInfoRewardsFrameQuestInfoItem%d", "QuestInfoItem%d" }
@@ -30,7 +32,7 @@ local COLORS = {
 local PICK = { 0.45, 0.95, 0.45 }
 local EDGE = { 1, 0.82, 0.20 }
 
-local state = { tipHooks = 0, tipLines = 0, shown = false, display = nil, attached = {}, summary = nil, since = 0, settled = false, backoff = 0 }
+local state = { tipHooks = 0, tipLines = 0, tipKept = 0, tipLost = 0, hoverT = 0, hoverFixes = 0, shown = false, display = nil, attached = {}, summary = nil, since = 0, settled = false, backoff = 0 }
 RO.state = state
 local cache = setmetatable({}, { __mode = "k" })           -- button -> its strip (created once, reused)
 
@@ -69,6 +71,7 @@ local function stripFor(btn)
 	cache[btn] = s
 	if type(btn.HookScript) == "function" then
 		pcall(btn.HookScript, btn, "OnEnter", function(self) RO.Tooltip(self) end)
+		pcall(btn.HookScript, btn, "OnLeave", function() state.hover = nil end)
 	end
 	return s
 end
@@ -78,7 +81,7 @@ local function place(s, btn)
 	pcall(f.ClearAllPoints, f)
 	-- BOTTOM-RIGHT corner of the button, right-aligned: the item's name wraps greedily, so its second line is the short one and the corner under it is the free part. The row is
 	-- only as wide as its badges (Draw sets the width), so it never reaches the icon. (The gap BETWEEN the rows is too small for a badge.)
-	pcall(f.SetPoint, f, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
+	pcall(f.SetPoint, f, "BOTTOMRIGHT", btn, "BOTTOMRIGHT", -RO.INSET, 3)
 	local e = s.edges
 	local function edge(t, p1, p2, w, h)
 		pcall(t.ClearAllPoints, t)
@@ -205,7 +208,7 @@ function RO.Apply(d)
 	if first then
 		local sm = summaryFont()
 		pcall(sm.frame.ClearAllPoints, sm.frame)
-		pcall(sm.frame.SetPoint, sm.frame, "BOTTOMRIGHT", rightmost or first, "TOPRIGHT", 0, 1)    -- (right-aligned on the game's own "Choose your reward" line: under the last row it covered "You will also receive")
+		pcall(sm.frame.SetPoint, sm.frame, "BOTTOMRIGHT", rightmost or first, "TOPRIGHT", -8, RO.VERDICT_RISE)    -- (right-aligned on the game's own "Choose your reward" line: under the last row it covered "You will also receive")
 		sm.text:SetText(d.verdict.short or d.verdict.text)
 		local sw = type(sm.text.GetStringWidth) == "function" and safe(sm.text.GetStringWidth, sm.text) or nil
 		pcall(sm.frame.SetWidth, sm.frame, math.min(RO.VERDICT_MAX, (type(sw) == "number" and sw > 0) and (sw + 10) or 150))
@@ -218,13 +221,9 @@ function RO.Apply(d)
 end
 
 --- The advisor's full reason as extra tooltip lines on the game's own item tooltip (added after the game has filled it in).
-function RO.Tooltip(btn)
-	state.tipHooks = state.tipHooks + 1
-	local s = cache[btn]
-	local row = s and s.row
-	if not (state.shown and row and rawget(_G, "GameTooltip")) then return end
+--- The advisor's words as extra lines on the game's item tooltip.
+local function addLines(row)
 	local tip = GameTooltip
-	if type(tip.AddLine) ~= "function" then return end
 	pcall(tip.AddLine, tip, " ")
 	if row.recommended then pcall(tip.AddLine, tip, ns.CodexIcons.WORD[RO.StarGlyph(row)], 1, 0.82, 0.2) end
 	pcall(tip.AddLine, tip, "Codex: " .. table.concat(row.tags, " / "), 1, 0.82, 0.2)
@@ -235,7 +234,57 @@ function RO.Tooltip(btn)
 		pcall(tip.AddLine, tip, cv, 0.7, 0.7, 0.7, true)
 	end
 	pcall(tip.Show, tip)
+end
+
+--- OnEnter of a reward button. `again` = a repair (the game rebuilt the tooltip after our lines): not counted as a hover.
+function RO.Tooltip(btn, again)
+	local s = cache[btn]
+	local row = s and s.row
+	if not again then
+		state.tipHooks = state.tipHooks + 1
+		state.hover, state.hoverT, state.hoverFixes = btn, 0, 0
+	end
+	if not (state.shown and row and rawget(_G, "GameTooltip")) then return end
+	local tip = GameTooltip
+	if type(tip.AddLine) ~= "function" then return end
+	addLines(row)
 	state.tipLines = state.tipLines + 1
+	if not again then
+		state.tipShown = type(tip.IsShown) == "function" and safe(tip.IsShown, tip) or nil
+		local owner = type(tip.GetOwner) == "function" and safe(tip.GetOwner, tip) or nil
+		state.tipOwner = owner == nil and "unknown" or (owner == btn and "the button" or "something else")
+	end
+end
+
+--- Does the game's tooltip hold our lines right now? true / false, or nil when its text cannot be read (no line API).
+local function tipHasOurs()
+	local tip = rawget(_G, "GameTooltip")
+	if not (tip and type(tip.NumLines) == "function") then return nil end
+	local n = safe(tip.NumLines, tip)
+	if type(n) ~= "number" then return nil end
+	for i = 1, n do
+		local fs = rawget(_G, "GameTooltipTextLeft" .. i)
+		local t = fs and type(fs.GetText) == "function" and safe(fs.GetText, fs) or nil
+		if type(t) == "string" and t:find("Codex: ", 1, true) then return true end
+	end
+	return false
+end
+
+--- While the mouse is on a reward, the game may rebuild its tooltip after our hook ran (item data arriving, the comparison tooltip): when our lines are gone, add them again
+-- (at most a few times per hover). Counters go to the report so the next real-client check says what happened.
+function RO.CheckTooltip()
+	local btn = state.hover
+	local tip = rawget(_G, "GameTooltip")
+	if not (btn and tip and state.shown) then return end
+	if type(tip.IsShown) == "function" and not safe(tip.IsShown, tip) then return end
+	local has = tipHasOurs()
+	if has == nil then state.tipScan = "unreadable"; return end
+	state.tipScan = "readable"
+	if has then state.tipKept = state.tipKept + 1
+	else
+		state.tipLost = state.tipLost + 1
+		if state.hoverFixes < 5 then state.hoverFixes = state.hoverFixes + 1; RO.Tooltip(btn, true) end
+	end
 end
 
 --- Recomputes from the advisor and redraws (or hides). opts as for Advisor.Display (a test passes a fake dialog).
@@ -280,6 +329,10 @@ end)
 -- A light check (about 2.5 times a second): it HIDES the annotations when the dialog closes, and it NOTICES a dialog that opened without an event we could use (the reward event
 -- fires before the game's reward frame is shown, so the event handler can see "not open yet"; the first real-client report of 0.9.1 showed exactly that).
 frame:SetScript("OnUpdate", function(_, dt)
+	if state.hover then
+		state.hoverT = state.hoverT + (dt or 0)
+		if state.hoverT >= 0.15 then state.hoverT = 0; RO.CheckTooltip() end
+	end
 	state.since = state.since + (dt or 0)
 	if state.since < 0.4 then return end
 	state.since = 0
@@ -311,7 +364,9 @@ function RO.ReportLines()
 		local n = 0
 		for _ in pairs(state.attached) do n = n + 1 end
 		L[#L + 1] = string.format("  showing: %d of %d choices annotated | %s", n, #state.display.rows, state.display.verdict.text)
-		L[#L + 1] = string.format("  tooltip: hover hook ran %d time(s), extra lines added %d time(s) (0 and 0 after hovering a choice means the hook is not reached; 1+ and 0 means the tooltip was not ready)", state.tipHooks, state.tipLines)
+		L[#L + 1] = string.format("  tooltip: hover hook ran %d time(s), extra lines added %d time(s) (0 and 0 after hovering a choice means the hook is not reached)", state.tipHooks, state.tipLines)
+		L[#L + 1] = string.format("  tooltip check: GameTooltip shown right after the hook: %s | its owner: %s | line text %s | our lines found %d time(s), missing %d time(s) (each miss added them again, at most 5 per hover)",
+			tostring(state.tipShown), tostring(state.tipOwner or "not seen"), tostring(state.tipScan or "not checked"), state.tipKept, state.tipLost)
 	else
 		L[#L + 1] = "  not showing (no reward dialog with a choice is open)"
 	end
