@@ -21,6 +21,8 @@ Legend: PASS / FAIL / N/A. Anything FAIL goes in the table at the end.
 | A3 | Log in with `/console scriptErrors 1`. | Watch chat. | A load line naming Quest Flow and `/qflow` (a new character also gets a short welcome line). No Lua error popup. | Welcome shown, zero errors. | Any Lua error, or the words "Forever Codex" / "Codex" anywhere in the welcome line. | Copy the welcome line. |
 | A4 | Fresh character data (no earlier settings). | `/qflow`. | Setup page "Welcome to Quest Flow"; Start works; the tracker fills in. | Works, no errors. | Blank page, cut-off text, errors. | **SHOT** of the setup page. |
 
+| A5 | Logged in. | Look at the minimap button, the button on the world map (open the map), and the Quest Flow entry in the AddOns list. | All three show the **Quest Flow logo** (the compass-and-map badge), not the old "C on a book". The minimap and map buttons are round, with no square corners showing. | Right logo in all three, clean round edge. | The old logo anywhere, a square background, a blank or white box. | **SHOT** of the minimap button (zoomed) and the AddOns list. |
+
 ## Part B. Reload, relog, state
 
 | # | State | Do | Expect | PASS if | FAIL if | Capture |

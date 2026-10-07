@@ -523,12 +523,12 @@ do
 	check(text and text:find("NOT PLACED", 1, true) and text:find("Q:2", 1, true), "the report still has them, with where the missing location could come from")
 	-- the minimap button
 	local MM = ns.MinimapButton
-	check(MM.ICON == "Interface\\AddOns\\QuestFlow\\Media\\CodexLogo.tga", "its picture is a file shipped inside the addon")
-	local f = io.open(H.addonDir .. "/Media/CodexLogo.tga", "rb")
+	check(MM.ICON == "Interface\\AddOns\\QuestFlow\\Media\\QuestFlowLogo.tga", "its picture is the Quest Flow logo, a file shipped inside the addon")
+	local f = io.open(H.addonDir .. "/Media/QuestFlowLogo.tga", "rb")
 	local bytes = f and f:read("*a") or ""
 	if f then f:close() end
-	check(#bytes == 18 + 64 * 64 * 4 and bytes:byte(3) == 2 and bytes:byte(13) == 64 and bytes:byte(15) == 64 and bytes:byte(17) == 32, "the file is a 64 x 64, 32-bit uncompressed TGA (a power of two, with alpha)")
-	check(bytes:byte(18 + 4) == 0, "and its corners are transparent, so the button is a circle")
+	check(#bytes == 18 + 128 * 128 * 4 and bytes:byte(3) == 2 and bytes:byte(13) == 128 and bytes:byte(15) == 128 and bytes:byte(17) == 32 and bytes:byte(18) == 0x28, "the file is a 128 x 128, 32-bit uncompressed top-left TGA (a power of two, with alpha), like the other textures")
+	check(bytes:byte(18 + 4) == 0 and bytes:byte(18 + (128 * 128 - 1) * 4 + 4) == 0 and bytes:byte(18 + (64 * 128 + 64) * 4 + 4) == 255, "and its corners are transparent and its centre opaque, so the button is a circle")
 	local btn = MM.button
 	check(btn and btn.__w == MM.SIZE and MM.SIZE == 31 and btn.icon and btn.icon.__texture == MM.ICON, "the button is the usual 31 px and shows that picture")
 	check(not btn.label and btn.border and btn.border.__texture == "Interface\\Minimap\\MiniMap-TrackingBorder" and btn.background.__texture == "Interface\\Minimap\\UI-Minimap-Background", "the old yellow square and letter are gone: the game's own ring and disc surround the logo")
@@ -745,7 +745,7 @@ do
 	check(r.status == "shown" and btn and btn.__shown and btn.__parent == _G.WorldMapFrame or (btn and btn.__shown), "it is built on the world map and shown")
 	local p = btn.__points
 	check(p[1] == "TOPRIGHT" and p[3] == "TOPRIGHT" and p[4] == -4, "it sits in the first slot of the map's top-right corner")
-	check(btn.icon.__texture:find("CodexLogo", 1, true) and btn.border.__texture == "Interface\\Minimap\\MiniMap-TrackingBorder", "it wears the Quest Flow logo in the game's ring")
+	check(btn.icon.__texture:find("QuestFlowLogo", 1, true) and btn.border.__texture == "Interface\\Minimap\\MiniMap-TrackingBorder", "it wears the Quest Flow logo in the game's ring")
 	_G.Questie = {}
 	WM.Apply()
 	check(btn.__points[4] == -36, "with Questie loaded it takes the next slot (it does not sit on top of Questie's button)")

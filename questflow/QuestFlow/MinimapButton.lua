@@ -52,7 +52,7 @@ local addonName, ns = ...
 local DEFAULT = { point = "TOPLEFT", rel = "TOPRIGHT", x = 6, y = -34 }   -- on the Minimap, 34 px down so the Quest Guide's button is not covered
 
 local MM = { DEFAULT = DEFAULT }
-MM.ICON = "Interface\\AddOns\\QuestFlow\\Media\\CodexLogo.tga"
+MM.ICON = "Interface\\AddOns\\QuestFlow\\Media\\QuestFlowLogo.tga"
 ns.MinimapButton = MM
 
 -- ON THE EDGE. When the minimap's geometry can be read, the button does not float freely: dragging slides it round the minimap's edge (it
@@ -160,7 +160,7 @@ local function build()
 	btn:SetFrameStrata("MEDIUM")
 
 	-- the same pieces every minimap button is made of: the game's own dark disc, gold ring and hover glow (they exist on this client: other
-	-- addons' buttons use them), with Codex's own logo (a "C" on an open book, Media/CodexLogo.tga, drawn by generator/make_art.py) inside.
+	-- addons' buttons use them), with the Quest Flow logo (Media/QuestFlowLogo.tga, made from docs/release/questflow-logo.png by generator/make_logo.py) inside.
 	btn.background = btn:CreateTexture(nil, "BACKGROUND")
 	btn.background:SetSize(20, 20)
 	btn.background:SetPoint("TOPLEFT", 7, -5)

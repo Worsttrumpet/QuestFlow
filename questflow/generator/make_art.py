@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draws Forever Codex's own small pictures as 32-bit TGAs (pure Python, no dependencies, deterministic, all original shapes):
 
-  Media/CodexLogo.tga     the "C on an open book" logo (no ring: the minimap button draws the game's ring around it), 64 x 64
+  (the logo itself, Media/QuestFlowLogo.tga, is made from the Quest Flow artwork by make_logo.py, not drawn here)
   Media/ArrowHead.tga     a bold arrowhead, white with a dark outline, pointing UP (the game rotates and tints it), 64 x 64
   Media/ArrowPointer.tga  an arrow with a shaft, same style, 64 x 64
   Media/IconBang.tga      "!" (a quest to pick up), white with a dark outline (tinted by the addon), 32 x 32
@@ -200,7 +200,6 @@ def icon_check():
 
 
 ART = {
-    "CodexLogo.tga": logo,
     "ArrowHead.tga": arrow_head,
     "ArrowPointer.tga": arrow_pointer,
     "IconBang.tga": icon_bang,

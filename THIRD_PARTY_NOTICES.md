@@ -38,7 +38,7 @@ Quest Flow labels everything it takes from these files as unverified (`src=att, 
 `Data/Pack_Observed.lua` holds quest facts that were observed on a live WoW Forever client by this project's own recorder. It is the project's own data (MIT). Quest names and text in it belong to Blizzard Entertainment.
 
 ### Quest Flow art
-`Media/*.tga` (the logo, the arrow and the small icons) were made for this project (MIT). The reward icons are drawn in code.
+`Media/*.tga` (the arrow and the small icons) were made for this project (MIT). `Media/QuestFlowLogo.tga` is the Quest Flow logo, the project owner's own artwork. The reward icons are drawn in code.
 
 ## Read at runtime, never distributed
 

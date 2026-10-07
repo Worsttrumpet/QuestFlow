@@ -12,7 +12,7 @@ Nothing here was uploaded. Screenshots are taken later from the finished client 
 | License | MIT (repository `LICENSE`, confirmed by the owner) |
 | Source | https://github.com/Worsttrumpet/questflow (after the repository is renamed: see below) |
 | File to upload | `questflow/dist/<major>.<minor>/QuestFlow-<version>.zip` (top folder `QuestFlow/`, `QuestFlow.toc` inside it) |
-| Logo / icon | made by hand later; the addon has no logo requirement |
+| Logo / icon | `docs/release/questflow-logo.png` (1254 x 1254, the owner's logo) is the source for the project icon you upload by hand; the in-game button and add-on list icon are `QuestFlow/Media/QuestFlowLogo.tga`, made from it by `questflow/generator/make_logo.py` |
 
 ## Project description (long)
 **Quest Flow: a questing companion for WoW Forever.** *See what's available. Choose what comes next.*

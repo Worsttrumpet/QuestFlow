@@ -103,6 +103,34 @@ def test_public_metadata_is_present():
     assert "development build" not in toc.lower() and "dev build" not in toc.lower()
 
 
+def test_logo_is_the_quest_flow_one_everywhere_a_player_sees_it():
+    toc = (P.ADDON / "QuestFlow.toc").read_text(encoding="utf-8")
+    assert "## IconTexture: Interface\\AddOns\\QuestFlow\\Media\\QuestFlowLogo.tga" in toc
+    assert (P.ADDON / "Media" / "QuestFlowLogo.tga").is_file()
+    assert not (P.ADDON / "Media" / "CodexLogo.tga").exists(), "the old logo must not ship"
+    for lua in ("MinimapButton.lua", "WorldMapButton.lua"):
+        text = (P.ADDON / lua).read_text(encoding="utf-8")
+        assert "QuestFlowLogo.tga" in text and "CodexLogo" not in text, lua
+    head = (P.ADDON / "Media" / "QuestFlowLogo.tga").read_bytes()[:18]
+    assert head[2] == 2 and head[16] == 32 and head[17] == 0x28 and (head[12] | head[13] << 8) == 128 and (head[14] | head[15] << 8) == 128
+
+
+def test_every_addon_path_in_the_toc_and_code_points_at_a_shipped_file():
+    """Wired up, not just present: each Interface\\AddOns\\QuestFlow\\... path the .toc (the add-on list icon) or any Lua file (the buttons, the arrow, the small icons) hands to the game
+    names a file that is in the package. A missing file would show as a green box or the generic question mark in game."""
+    import re
+    names = {p.relative_to(P.ADDON).as_posix().lower() for p in P.addon_files()}
+    sources = [(P.ADDON / "QuestFlow.toc")] + [p for p in P.addon_files() if p.suffix == ".lua" and not p.name.startswith("Pack_")]
+    found = 0
+    for src in sources:
+        for m in re.finditer(r"Interface\\+AddOns\\+QuestFlow\\+([A-Za-z0-9_./\\-]+)", src.read_text(encoding="utf-8")):
+            path = re.sub(r"[\\\\/]+", "/", m.group(1)).lower()
+            if path.endswith((".tga", ".blp", ".png", ".ttf")):
+                found += 1
+                assert path in names, f"{src.name} refers to Media that does not ship: {m.group(0)}"
+    assert found >= 8, found      # the add-on list icon, two logo buttons, two arrows, three small icons
+
+
 def test_committed_package_matches_the_addon_folder():
     dist = P.default_out() / f"QuestFlow-{P.version()}.zip"
     if not dist.exists():
