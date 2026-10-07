@@ -186,6 +186,14 @@ S.HEARTH_WAIT = 90              -- seconds after the cast in which the arrival i
 S.HEARTH_MOVED = 0.04           -- map-fraction jump (same map) that counts as having arrived somewhere else
 local hearthCast                -- { point, t }
 
+--- Is `map` a zone-level (or smaller) map, not a continent / world map? Unknown stays acceptable only when the client cannot say.
+function S.IsAreaMap(map)
+	if type(map) ~= "number" or type(C_Map) ~= "table" or type(C_Map.GetMapInfo) ~= "function" then return type(map) == "number" end
+	local ok, info = pcall(C_Map.GetMapInfo, map)
+	if not ok or type(info) ~= "table" or type(info.mapType) ~= "number" then return true end
+	return info.mapType >= 3
+end
+
 local function isHearthSpell(spellId)
 	if type(spellId) ~= "number" or isSecret(spellId) then return false end
 	if spellId == S.HEARTH_SPELL then return true end
@@ -212,6 +220,12 @@ function S.CheckHearthArrival()
 	if not (p and h.point) then return false end
 	local moved = p.map ~= h.point.map or math.abs(p.x - h.point.x) + math.abs(p.y - h.point.y) > S.HEARTH_MOVED
 	if not moved then return false end
+	-- While a loading screen is ending the client can answer with the continent map: not a place to record. Keep waiting,
+	-- and only accept an arrival that reads the same, on a zone-level map, twice in a row.
+	if not S.IsAreaMap(p.map) then h.seen = nil return false end
+	local q = h.seen
+	h.seen = p
+	if not (q and q.map == p.map and math.abs(q.x - p.x) + math.abs(q.y - p.y) <= 0.01) then return false end
 	hearthCast = nil
 	local name
 	if type(GetBindLocation) == "function" then local ok, v = pcall(GetBindLocation) if ok then name = text(v) end end

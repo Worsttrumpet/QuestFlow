@@ -381,10 +381,21 @@ do
 	check(S.OnHearthCast(S.HEARTH_SPELL) == true, "a Hearthstone cast is noticed")
 	check(S.CheckHearthArrival() == false and ns.Travel.Bind() == nil, "still standing where it was cast: no bind (no arrival seen)")
 	H2.world().loc.map, H2.world().loc.x, H2.world().loc.y = 9102, 0.4, 0.5
-	check(S.CheckHearthArrival() == true, "arriving somewhere else after the cast is the observed trip")
+	check(S.CheckHearthArrival() == false and ns.Travel.Bind() == nil, "the first reading of a new place is not trusted yet")
+	check(S.CheckHearthArrival() == true, "the same place read twice in a row is the observed trip")
 	local b = ns.Travel.Bind()
 	check(b and b.map == 9102 and b.x == 0.4 and b.src == "hearth", "the bind point is where the character arrived, marked as learned from the trip")
 	check(S.CheckHearthArrival() == false, "one trip is used once")
+	-- a loading screen can answer with the continent map: never recorded, and an old record of that kind is ignored
+	S._Reset()
+	local saveInfo = _G.C_Map.GetMapInfo
+	_G.C_Map.GetMapInfo = function(m) return { mapType = (m == 9102) and 2 or 3 } end
+	H2.world().loc.map, H2.world().loc.x, H2.world().loc.y = 9101, 0.05, 0.05
+	S.OnHearthCast(S.HEARTH_SPELL)
+	H2.world().loc.map, H2.world().loc.x, H2.world().loc.y = 9102, 0.4, 0.5
+	check(S.CheckHearthArrival() == false and S.CheckHearthArrival() == false, "a continent-level reading is never accepted as an arrival, however often it repeats")
+	check(ns.Travel.Bind() == nil, "and the earlier record on that same continent-level map is ignored as a bind point")
+	_G.C_Map.GetMapInfo = saveInfo
 	-- a stale cast never produces a bind
 	S._Reset()
 	local ns2 = ns

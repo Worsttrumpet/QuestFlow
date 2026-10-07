@@ -90,7 +90,11 @@ function Tr.Bind()
 	if not (P and P.Char) then return nil end
 	local c = P.Char()
 	local b = type(c) == "table" and type(c.travel) == "table" and c.travel.bind or nil
-	if type(b) == "table" and type(b.map) == "number" and type(b.x) == "number" and type(b.y) == "number" then return b end
+	if type(b) == "table" and type(b.map) == "number" and type(b.x) == "number" and type(b.y) == "number" then
+		-- 0.14.4 could record a trip's arrival while the client still answered with the continent map: not a usable place.
+		if b.src == "hearth" and ns.Services and ns.Services.IsAreaMap and not ns.Services.IsAreaMap(b.map) then return nil end
+		return b
+	end
 	return nil
 end
 

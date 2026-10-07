@@ -2,6 +2,10 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.14.5] - a Hearthstone trip no longer records the loading-screen position
+
+- The first real Hearthstone trip recorded the bind point on the whole-continent map (the client answers that way while the loading screen ends), not on the zone you arrived in. An arrival is now accepted only on a zone-level map, and only when it reads the same place twice in a row. An old record of that kind is ignored, so the bind point is learned again from the next trip (or from binding at an innkeeper).
+
 ## [0.14.4] - the bind point can be learned from a Hearthstone trip
 
 - A character bound long ago never shows Quest Flow the innkeeper, so the Hearthstone route could never be offered. Now, when a Hearthstone cast completes and the character then arrives somewhere else, that arrival place is recorded as the bind point (marked as learned from the trip). Binding at an innkeeper still works as before.
