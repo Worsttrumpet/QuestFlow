@@ -60,3 +60,11 @@ PRIORITY        Planner sequencing (value minus time and travel)
 ## Real-client validation
 
 `/qflow report`, section **PLANNER FUNNEL**: the green range and its source, seasonal status, the goal, the count of judged actions by band, every rejected / penalised / boosted quest with its reason, and NOW's band, basis, verdict and reasons. See Part I of `docs/release/RC_MANUAL_TEST_CHECKLIST.md` for the Ruins of Lordaeron test.
+
+## 0.12.1 additions (from the first real-client reports)
+
+* **Locality was a map-id test.** `Planner.rankStops` kept only stops on the player's own map when any local work existed. Undercity and the Tirisfal ground by the Ruins of Lordaeron entrance are different map ids 240 yards apart, so the dungeon hand-ins never reached the sequencer ("2 considered" of 6 stops). Locality is now `isLocal`: same map, or within `LOCAL_NEAR_YD` (600) by world distance; a stop holding goal work (a boosted action) is always kept.
+* **The arrow rule withheld a hand-in at 850 yards.** `Navigation.MAX_APPROX_YD` (600) applied to every non-exact point, including an assumed hand-in at a named NPC. That case now uses `MAX_ASSUMED_YD` (1500). Objective areas and the game's own quest-map points keep 600.
+* **Chain reasons were too generous.** `LEADS_TO_FIT` now needs a successor within `FIT_GAP` (3) levels, and such a survivor is worth `FIT_MULT` (0.7) of a normal pickup.
+* Reading the Hearthstone: the item-count function may be absent on Forever; the bag scan is the fallback.
+* Taxi: Forever's `C_TaxiMap.GetAllTaxiNodes` lists every node, with undiscovered ones as unreachable. Quest Flow keeps those as LISTED (exist, not yours) and routes only over nodes the map shows as current or reachable.

@@ -10,10 +10,11 @@ local NAMES = { "C_GossipInfo", "UnitName", "UnitGUID", "GetQuestID", "GetTitleT
 local function cleanup() for _, n in ipairs(NAMES) do _G[n] = nil end end
 
 -- q: { id, name, dx, dy (yards from the player), level, req, prereq, event, giverNpc }
+H.defMap(9201, 0, 1000, 0, 1000, 1000)       -- the map next door: its west edge is 500 yd from the player's spot on map 9001 (one neighbourhood, two map ids)
 local function rec(q)
-	local r = { id = q.id, name = q.name or ("Quest " .. q.id), map = 9001, x = 0.5 + (q.dx or 0) / 1000, y = 0.5 + (q.dy or 0) / 1000, req = q.req or 1, level = q.level,
+	local r = { id = q.id, name = q.name or ("Quest " .. q.id), map = q.map or 9001, x = q.x or (0.5 + (q.dx or 0) / 1000), y = q.y or (0.5 + (q.dy or 0) / 1000), req = q.req or 1, level = q.level,
 		prereq = q.prereq, event = q.event, giverNpc = q.giverNpc, giverName = q.giverName }
-	r.objCoords = { { map = 9001, x = r.x, y = r.y } }
+	r.objCoords = { { map = r.map, x = r.x, y = r.y } }
 	return r
 end
 local function world(quests, o)
@@ -225,6 +226,34 @@ do
 	check(ns6.State.plan.diag.funnel.judged == 0 and ns6.State.plan.diag.goal == nil, "MUTATION: with the stage off nothing is judged and there is no goal (the boost above came from the stage)")
 end
 
+section("progression: a neighbouring map is part of the neighbourhood (the 0.12.0 Ruins of Lordaeron report)")
+do
+	-- junk beside the player on map 9001; a finished dungeon quest to hand in 520 yd away on the NEXT map. The old test (same map id) dropped that stop from the plan.
+	local quests = { { id = 1, dx = -60, dy = 0, level = 16 }, { id = 2, dx = 0, dy = -60, level = 16 }, { id = 9, name = "Crypt Report", map = 9201, x = 0.02, y = 0.5, level = 17 } }
+	-- the planner's whole chosen sequence (the plan's own list shows only NOW / ALSO DO / THEN)
+	local function ids(ns) local t = {} for _, id in ipairs(ns.State.plan.diag.sequence or {}) do t[#t + 1] = id end return " " .. table.concat(t, " ") .. " " end
+	local ns = world(quests, { log = { { id = 9, complete = true } }, tags = { [9] = DUNGEON } })
+	check(ids(ns):find("Q:9:TURN_IN", 1, true) ~= nil, "with a goal, a hand-in on the next map is in the plan  [" .. ids(ns) .. "]")
+	local ns2 = world(quests, { log = { { id = 9, complete = true } } })
+	check(ids(ns2):find("Q:9:TURN_IN", 1, true) ~= nil, "even with no goal, work 520 yd away on the next map is within the neighbourhood and is planned")
+	local ns3 = world(quests, { log = { { id = 9, complete = true } }, setup = function(n) n.Planner.LOCAL_NEAR_YD = 0 end })
+	check(not ids(ns3):find("Q:9:TURN_IN", 1, true) and ns3.State.plan.diag.localOnly == true, "MUTATION: with the neighbourhood radius at 0 (the old map-id rule) the same hand-in is dropped as 'not local'")
+	local ns4 = world(quests, { log = { { id = 9, complete = true } }, tags = { [9] = DUNGEON }, setup = function(n) n.Planner.LOCAL_NEAR_YD = 0 end })
+	check(ids(ns4):find("Q:9:TURN_IN", 1, true) ~= nil, "but goal work is never dropped for being on another map, whatever the radius")
+end
+
+section("progression: a quest that survives only by leading to a weakly fitting quest is not a reason")
+do
+	local Pg = world({}).Progression
+	check(Pg.FIT_GAP < Pg.LOW_FROM and Pg.FIT_MULT < 1, "the fit needed for a chain reason is tighter than a LOW band, and such a survivor is discounted")
+	-- successor 4 below the player (LOW, not a fit): the gray starter has no reason
+	local ns = world({ { id = 1, name = "Old Start", dx = 15, level = 6 }, { id = 2, name = "Weak Finish", dx = 400, level = 12, prereq = { 1 } } })
+	check(funnelOf(ns, "Q:1:ACCEPT").verdict == "EXCLUDED", "a gray quest whose successor is only 4 levels below is EXCLUDED")
+	local ns2 = world({ { id = 1, name = "Old Start", dx = 15, level = 6 }, { id = 2, name = "Good Finish", dx = 400, level = 14, prereq = { 1 } } })
+	local e = funnelOf(ns2, "Q:1:ACCEPT")
+	check(e and e.verdict == "PENALIZED" and table.concat(e.reasons, ","):find("LEADS_TO_FIT", 1, true), "one whose successor is 2 below survives, PENALIZED (worth less than the fitting quest itself)")
+end
+
 section("progression: the report explains itself")
 do
 	local ns = world({ { id = 1, name = "Gray Errand", dx = 20, level = 6 }, { id = 2, name = "Fitting Work", dx = 300, level = 15 } })
@@ -243,4 +272,24 @@ do
 	check(nowId(ns) == "Q:1:ACCEPT" and ns.State.plan.diag.funnel.excluded == 0, "an ordinary appropriate quest is untouched")
 	check(#ns.errors == 0, "no errors")
 	cleanup()
+end
+
+section("navigation: an assumed hand-in at a named NPC gets an arrow from farther away than an objective area (the 0.12.0 report: none at 850 yd)")
+do
+	local ns = world({ { id = 1, dx = 20, level = 16 } })
+	local N, ctx = ns.Navigation, ns.State.ctx
+	-- (the fixture map is 1000 yd wide: use a second, wide map for long distances)
+	H.defMap(9301, 0, 5000, 0, 10000, 10000)
+	local function far(yd, kind, assumed)
+		ctx.loc.map, ctx.loc.x, ctx.loc.y, ctx.loc.world = 9301, 0.1, 0.5, nil
+		ctx.loc.world = ctx.worldOf(9301, 0.1, 0.5)
+		return { id = "T", kind = "TURN_IN", contract = true, targets = { { assumed = assumed, where = { status = "approx", kind = kind, points = { { map = 9301, x = 0.1 + yd / 10000, y = 0.5 } } } } } }
+	end
+	check(N.Assess(far(850, nil, true), ctx).pin == true, "assumed hand-in at 850 yd: arrow")
+	check(N.Assess(far(1400, nil, true), ctx).pin == true, "assumed hand-in at 1400 yd: arrow")
+	local r = N.Assess(far(1700, nil, true), ctx)
+	check(r.pin == false and r.reason == "APPROX_FAR", "beyond MAX_ASSUMED_YD: no arrow, and it says why")
+	check(N.Assess(far(850, "area", false), ctx).pin == false, "an objective AREA at 850 yd: still no arrow (an area centre is not a place)")
+	check(N.Assess(far(850, nil, false), ctx).pin == false, "an approximate point that is not an assumed NPC spot: still limited to MAX_APPROX_YD")
+	check(N.MAX_ASSUMED_YD > N.MAX_APPROX_YD and N.MAX_ASSUMED_YD < N.MAX_EXACT_YD, "the assumed reach sits between the approximate and the exact reach")
 end

@@ -135,6 +135,9 @@ end
 -- Quest text, location and the plan are untouched: this only decides whether to POINT. Thresholds are design values, not game facts.
 N.MAX_EXACT_YD = 2500
 N.MAX_APPROX_YD = 600
+-- A hand-in the data places at a NAMED NPC (the turn-in NPC is the giver, or the data's single known spot for them) is "assumed", not an area: the point is where that NPC stands, only trusted a little less.
+-- It gets a longer reach than an objective area or the game's quest-map point (0.12.0 report: Tabitha Heartweaver's hand-in showed no arrow until the player was within about 650 yd).
+N.MAX_ASSUMED_YD = 1500
 N.MAX_PLAYER_POS_YD = 150
 N.STRAIGHT_NOTE_YD = 1000
 N.TRAVEL_NEAR_YD = 300       -- a target this close is walked to even when its text names a vehicle (the vehicle is probably right there)
@@ -202,10 +205,10 @@ function N.Assess(a, ctx)
 	local out = { pin = false }
 	if not a then return out end
 	local pos, status
-	local kind
+	local kind, assumed
 	for _, t in ipairs(a.targets or {}) do
 		local w = t.where
-		if w and w.status ~= "unknown" and w.points and w.points[1] then pos, status, kind = w.points[1], w.status, w.kind break end
+		if w and w.status ~= "unknown" and w.points and w.points[1] then pos, status, kind, assumed = w.points[1], w.status, w.kind, t.assumed == true break end
 	end
 	if not pos then
 		local p, st = Pl.Locate(a)
@@ -240,7 +243,8 @@ function N.Assess(a, ctx)
 	if kind == "player_position" then
 		if d > N.MAX_PLAYER_POS_YD then return withheld(out, "PLAYER_POSITION_FAR", ctx, pos) end
 	elseif status ~= "known" then
-		if d > N.MAX_APPROX_YD then return withheld(out, "APPROX_FAR", ctx, pos) end
+		local limit = (assumed and kind ~= "area") and N.MAX_ASSUMED_YD or N.MAX_APPROX_YD
+		if d > limit then return withheld(out, "APPROX_FAR", ctx, pos) end
 	elseif d > N.MAX_EXACT_YD then
 		return withheld(out, "UNMEASURED", ctx, pos)                      -- farther than a straight line means anything
 	end

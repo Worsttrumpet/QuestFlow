@@ -409,7 +409,19 @@ do
 	_G.GetItemCount = function() return 0 end
 	check(ns.Context.DefaultReader.character().hearth.has == false, "no Hearthstone in the bags")
 	_G.GetItemCount, _G.GetMoney, _G.GetItemCooldown, _G.GetTime = nil, nil, nil, nil
-	check(ns.Context.DefaultReader.character().hearth == nil, "with no item API the state is simply unknown")
+	-- no count function: the bag scan answers instead (0.12.0 report: the Hearthstone was in the bags but unreadable)
+	ns.Context._hsScan = nil
+	_G.GetContainerNumSlots = function(b) return b == 0 and 2 or 0 end
+	_G.GetContainerItemLink = function(b, sl) if b == 0 and sl == 2 then return "|cffffffff|Hitem:6948::::::::17:::::::|h[Hearthstone]|h|r" end end
+	local scanned = ns.Context.DefaultReader.character().hearth
+	check(scanned and scanned.has == true, "with no item-count function the bag scan finds the Hearthstone")
+	ns.Context._hsScan = nil
+	_G.GetContainerItemLink = function() return nil end
+	local none = ns.Context.DefaultReader.character().hearth
+	check(none and none.has == false, "and a bag scan that finds none says it is absent")
+	_G.GetContainerNumSlots, _G.GetContainerItemLink = nil, nil
+	ns.Context._hsScan = nil
+	check(ns.Context.DefaultReader.character().hearth == nil, "with no item API and no bag API the state is simply unknown")
 end
 
 -- ================================================================ Knowledge page and report

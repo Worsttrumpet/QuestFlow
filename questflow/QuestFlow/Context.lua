@@ -82,12 +82,25 @@ function reader.character()
 	local money, okM = try(GetMoney)
 	if okM and type(money) == "number" then c.money = money end
 	local hs = ns.Travel and ns.Travel.HEARTHSTONE_ITEM or 6948
-	local count, okC = try(GetItemCount, hs)
+	local countFn = (type(GetItemCount) == "function" and GetItemCount) or (type(C_Item) == "table" and type(C_Item.GetItemCount) == "function" and C_Item.GetItemCount) or nil
+	local count, okC = try(countFn, hs)
+	if not (okC and type(count) == "number") and ns.Items and ns.Items.Bags then
+		-- no item-count function on this client (0.12.0 report: the Hearthstone was in the bags but unreadable): look for it in the bag scan, at most once every 10 seconds
+		local t = type(GetTime) == "function" and GetTime() or 0
+		if not Ctx._hsScan or t - Ctx._hsScan.t >= 10 then
+			local list, why = ns.Items.Bags()
+			local n = 0
+			if not why then for _, e in ipairs(list) do if type(e.link) == "string" and e.link:find("item:" .. hs .. ":", 1, true) then n = n + (e.count or 1) end end end
+			Ctx._hsScan = { t = t, n = (not why) and n or nil }
+		end
+		if Ctx._hsScan.n then count, okC = Ctx._hsScan.n, true end
+	end
 	if okC and type(count) == "number" then
 		c.hearth = { has = count > 0 }
 		if count > 0 then
 			local start, dur
-			local cd = (type(C_Container) == "table" and type(C_Container.GetItemCooldown) == "function") and C_Container.GetItemCooldown or GetItemCooldown
+			local cd = (type(C_Container) == "table" and type(C_Container.GetItemCooldown) == "function" and C_Container.GetItemCooldown)
+				or (type(C_Item) == "table" and type(C_Item.GetItemCooldown) == "function" and C_Item.GetItemCooldown) or GetItemCooldown
 			if type(cd) == "function" then
 				local okD, s1, d1 = pcall(cd, hs)
 				if okD then start, dur = s1, d1 end

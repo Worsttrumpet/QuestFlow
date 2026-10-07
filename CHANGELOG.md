@@ -2,6 +2,13 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.12.1] - fixes from the first level 17 dungeon test
+
+- **Dungeon hand-ins are no longer dropped for being on the next map.** Quest Flow treated only the map you stand on as "here", so the Ruins of Lordaeron hand-ins just outside Undercity (a different map, about 240 yards away) were left out of the plan. "Here" is now your map or anything within 600 yards, and work toward your dungeon goal is never dropped for being on another map.
+- **The arrow now shows for a hand-in at a named NPC from up to 1500 yards** (it appeared only inside about 650 yards before). Objective areas still need 600 yards, because an area's centre is not a place.
+- **Weak chain links are no longer a reason.** A low quest now survives only if it leads to a quest within 3 levels of yours (or one you hold, or a dungeon quest), and is then worth less than that quest.
+- **Hearthstone:** if the client has no item-count function, Quest Flow now finds the Hearthstone by scanning your bags.
+
 ## [0.12.0] - what comes next is what is worth doing, not what is closest
 
 ### Better recommendations

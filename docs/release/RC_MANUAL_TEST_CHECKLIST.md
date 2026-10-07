@@ -129,6 +129,8 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 - [ ] I5. A hand-in for a Ruins of Lordaeron quest, if you have one finished, is NOW or next, listed `BOOSTED ... GOAL_QUEST`.
 - [ ] I6. `/qflow seasonal` says seasonal quests are left out; a holiday quest is not suggested. `/qflow seasonal on` then `off` returns to that.
 - [ ] I7. A quest you added with `/qflow add` appears even if it is gray (reason PINNED).
+- [ ] I8. (0.12.1) With a Ruins of Lordaeron hand-in ready and you in Undercity: the hand-in is in the plan (NOW or the sequence), not left out. Walk away to about 1000 yards: the arrow and waypoint are present for a hand-in at a named NPC.
+- [ ] I9. (0.12.1) `/qflow report`: the Hearthstone line reads PASS (the Hearthstone is found, even if the game has no item-count function).
 
 ## Evidence to keep (screenshots)
 1. AddOns list (A2). 2. A normal NOW / ALSO COMPLETE screen (D1). 3. Reward window with all icon rows (C1). 4. A second-column reward (C2). 5. The recommended reward with the golden border and star (C5). 6. A vendor reward with its price (C8). 7. A tooltip with the Quest Flow line (C9). 8. Each icon type (C7). 9. One `/qflow report` (F1).

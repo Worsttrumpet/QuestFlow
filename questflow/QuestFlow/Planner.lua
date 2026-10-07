@@ -87,6 +87,9 @@ Pl.LOCAL_FIRST = true
 Pl.DEFER_PICKUPS = true              -- a distant new pickup waits while objective work of quests already in the log is waiting on the player's map (see Compute)
 Pl.PICKUP_DEFER_RANGE_YD = 900       -- ...and that work is within this many yards
 Pl.LOCAL_MIN_NET = 0
+-- "Here" is the player's map OR anything within this many yards (world distance), and always any stop that holds goal work. Adjacent maps are one neighbourhood: Undercity and the
+-- Tirisfal Glades ground around the Ruins of Lordaeron entrance are different map ids 239 yards apart (0.12.0 report: the dungeon hand-ins were dropped from the plan by a map-id test).
+Pl.LOCAL_NEAR_YD = 600
 
 -- PROGRESSION. "Available" is not "recommended": every quest action is classified (level band, goal, chain reasons; Progression.lua) before it is valued. A pickup that is gray, far
 -- above the player, or (with a goal) low, and has no REASON to be there, is rejected with the reason recorded; the others are scaled by their band. Pl.PROGRESSION = false switches the
@@ -354,6 +357,14 @@ local function seconds(ctx, a, b)
 	return walk
 end
 
+--- Is `pos` part of the player's neighbourhood: the same map, or within LOCAL_NEAR_YD by world distance?
+local function isLocal(S, pos)
+	if not (S.player and pos) then return false end
+	if pos.map == S.player.map then return true end
+	local d = E.Distance(S.ctx, S.player, pos)
+	return d ~= nil and d ~= E.DIFFERENT_CONTINENT and d <= Pl.LOCAL_NEAR_YD
+end
+
 -- ---------------------------------------------------------------- compute
 
 local function byId(x, y) return x.id < y.id end
@@ -525,6 +536,7 @@ local function makeStops(S)
 		end
 		table.insert(home.items, it)
 		home.val, home.dwell = home.val + it.val, home.dwell + it.dwell
+		if it.comps and it.comps.progression and it.comps.progression > 1 then home.goal = true end     -- goal work is never dropped for being on the next map
 		if it.a.pinned or it.urgent then home.pinned = true end          -- (a quest about to run out of time is a must-do-first stop, like one the player added)
 		it.stop = home
 	end
@@ -584,9 +596,10 @@ local function rankStops(S)
 	if Pl.LOCAL_FIRST and not env.routeMap and S.player and S.player.map then
 		local here, anyUseful = {}, false
 		for i, s in ipairs(stops) do
-			if s.pos.map == S.player.map or s.pinned then
+			local near = isLocal(S, s.pos)
+			if near or s.pinned or s.goal then
 				here[#here + 1] = s
-				if s.pos.map == S.player.map and not s.pinned then
+				if near and not s.pinned then
 					local t = S.leg(0, i)
 					if t ~= nil and s.val - lam * (t + s.dwell) > Pl.LOCAL_MIN_NET then anyUseful = true end
 				end
@@ -1143,7 +1156,7 @@ function Pl.Compute(ctx, c, opts)
 		end
 	end
 	-- work already underway in this area comes before a trip somewhere else (a route zone the player chose, or a quest they added, still wins)
-	if Pl.LOCAL_FIRST and S.localWork[1] and not diag.pinnedFirst and S.player and S.stops[pick.stops[1]].pos.map ~= S.player.map
+	if Pl.LOCAL_FIRST and S.localWork[1] and not diag.pinnedFirst and S.player and not isLocal(S, S.stops[pick.stops[1]].pos)
 		and not (env.routeMap ~= nil and S.stops[pick.stops[1]].pos.map == env.routeMap) then
 		return Pl.StayLocal(S, plan, S.localWork[1])
 	end

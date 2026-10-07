@@ -41,6 +41,8 @@ Pg.LOW_FROM = 6                 -- gap at which a quest is "low" (below this it 
 Pg.ABOVE_FROM = 5               -- quest levels over the player's at which a quest is "above"
 Pg.ABOVE_FAR_FROM = 8
 Pg.CHAIN_DEPTH = 3
+Pg.FIT_GAP = 3                  -- a chain successor counts as "fitting" only this close to the player (a weak fit is not a reason)
+Pg.FIT_MULT = 0.7               -- a quest that survives only because it leads to a fitting quest is worth less than the fitting quest
 Pg.MULT = { CURRENT = 1, LOW = 0.5, GRAY = 0.15, ABOVE = 0.6, ABOVE_FAR = 0.3, UNKNOWN = 1 }
 Pg.GOAL_BOOST = 2.5             -- value multiplier for the goal's own objectives and hand-ins
 Pg.GOAL_CHAIN_BOOST = 2         -- ... and for the quests that lead to them
@@ -116,7 +118,7 @@ local function chainReasons(a, ctx, band)
 					local v = R.Quest(sid)
 					if v and not v.event and not v.repeatable and not ctx.isCompleted(sid) then
 						local b = Pg.Band({ level = v.level, reqLevel = v.req }, ctx.char.level)
-						if b.band == "CURRENT" then out.LEADS_TO_FIT = out.LEADS_TO_FIT or sid end
+						if b.band == "CURRENT" and b.gap and b.gap <= Pg.FIT_GAP then out.LEADS_TO_FIT = out.LEADS_TO_FIT or sid end
 					end
 				end
 			end
@@ -163,7 +165,10 @@ function Pg.Judge(a, ctx, goal)
 		return j
 	end
 	-- a quest that survives only because of a reason is valued by that reason, not by its poor level band
-	if needReason and reasoned then mult = 1 end
+	if needReason and reasoned then
+		local strong = a.pinned or isDungeon or chain.LEADS_TO_LOG or chain.LEADS_TO_DUNGEON or inGoal
+		mult = strong and 1 or Pg.FIT_MULT
+	end
 	if goal and (chain.LEADS_TO_DUNGEON or isDungeon) then mult = math.max(mult, 1) * Pg.GOAL_CHAIN_BOOST end
 	j.mult = mult
 	if mult < 1 then j.verdict, j.why = "PENALIZED", b.band elseif mult > 1 then j.verdict = "BOOSTED" end
