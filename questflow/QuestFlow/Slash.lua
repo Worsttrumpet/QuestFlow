@@ -10,7 +10,7 @@ local say = ns.Say
 local function helpLines()
 	say("Quest Flow commands:")
 	say("  /qflow                 show / hide the Quest Flow tracker;  /qflow options | world | journey | appendices opens that tab of the options window (right click the minimap button too)")
-	say("  /qflow setup           run the first-time setup again;  /qflow dev = the advanced window")
+	say("  /qflow setup           show the welcome / setup again (nothing is reset);  /qflow dev = the advanced window")
 	say("  /qflow arrow [on|off|flip|reset|test]   Quest Flow's own small direction arrow")
 	say("  /qflow tracker [on|off]   hide the game's quest tracker so Quest Flow's replaces it")
 	say("  /qflow nav [on|off]    the waypoint that follows what Quest Flow recommends")

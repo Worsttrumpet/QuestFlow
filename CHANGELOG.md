@@ -2,6 +2,12 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.13.0] - a proper welcome for new characters
+
+- **A first-run welcome in three short steps.** (1) What Quest Flow is, with NOW and ALSO DO explained in a line each, and a note that it uses what the game itself offers rather than assuming every quest it knows is available. (2) How it looks and what is on screen: the theme (the window changes as you pick), the quest tracker, the map waypoint and the direction arrow. (3) Your route: where to level, how to play, and what else to look out for, then **Get Started**.
+- Each character gets its own welcome. A character that used Quest Flow before this version sees it once, and nothing it saved is touched. `/qflow setup` (or "Run setup again" in Options) shows it again without resetting anything.
+- Quest Flow works normally while the welcome is open.
+
 ## [0.12.2] - real flights are now recorded
 
 - **A flight you take is now measured and remembered.** Before, a completed flight was missed because Quest Flow could not tell which destination the game's flight call meant. It now follows each flight from selection to landing, records the real time, and the planner uses that time for that flight from then on (other flights still use a labelled estimate).

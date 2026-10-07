@@ -135,6 +135,18 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 - [ ] I8. (0.12.1) With a Ruins of Lordaeron hand-in ready and you in Undercity: the hand-in is in the plan (NOW or the sequence), not left out. Walk away to about 1000 yards: the arrow and waypoint are present for a hand-in at a named NPC.
 - [ ] I9. (0.12.1) `/qflow report`: the Hearthstone line reads PASS (the Hearthstone is found, even if the game has no item-count function).
 
+## Part J. The welcome (0.13.0)
+
+- [ ] J1. A brand-new character (or one that has never run this version): Quest Flow loads and the welcome opens by itself, with the logo and "See what's available. Choose what comes next." Check it at your normal resolution: nothing runs off the window.
+- [ ] J2. Step 1 is short and readable: NOW, ALSO DO, and the line about what the game itself offers. No technical words.
+- [ ] J3. Step 2: the theme dropdown changes the look of the window as you pick; the tracker, waypoint and arrow checks do what they say.
+- [ ] J4. Step 3: Where to level / How to play / the extras still work. **Get Started** closes the welcome and opens the tracker (or just closes it if you turned the tracker off).
+- [ ] J5. `/reload`, then log out and in, then (if practical) restart the game: the welcome does not come back. Open and close the Quest Flow windows: it does not come back.
+- [ ] J6. Log in with a second character: it gets its own welcome. Log back to the first: none.
+- [ ] J7. An existing character with Quest Flow data (for example Codex Runner): the welcome shows once; afterwards its style, skips, journey and theme are exactly as before.
+- [ ] J8. `/qflow setup` shows the welcome again; your settings are unchanged; finishing it returns to normal.
+- [ ] J9. After Get Started: the plan, tracker, arrow, a reward dialog, and `/qflow report` all still work.
+
 ## Evidence to keep (screenshots)
 1. AddOns list (A2). 2. A normal NOW / ALSO COMPLETE screen (D1). 3. Reward window with all icon rows (C1). 4. A second-column reward (C2). 5. The recommended reward with the golden border and star (C5). 6. A vendor reward with its price (C8). 7. A tooltip with the Quest Flow line (C9). 8. Each icon type (C7). 9. One `/qflow report` (F1).
 

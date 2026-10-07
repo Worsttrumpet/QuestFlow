@@ -199,8 +199,17 @@ end
 
 -- ---------------------------------------------------------------- setup, notifications, navigation, window (Phase 3)
 
-function P.SetupDone() return P.Char().setupDone == true end
-function P.FinishSetup() P.Char().setupDone = true end
+-- FIRST-RUN SETUP. Per character (the same character key every other choice uses). `setupDone` is the long-standing flag; `onboarded` is the version of the welcome the character completed
+-- (0.13.0). A character saved before the welcome existed has setupDone = true and no `onboarded`: it is shown the welcome ONCE (nothing it has saved is touched), and finishing it records the
+-- version. Reopening setup (/qflow setup, "Run setup again") only clears setupDone: no choice, skip, journey or evidence is reset, and the welcome records itself again when finished.
+P.ONBOARDING_VERSION = 1
+function P.SetupDone() local c = P.Char() return c.setupDone == true and c.onboarded == P.ONBOARDING_VERSION end
+function P.FinishSetup()
+	local c = P.Char()
+	c.setupDone = true
+	c.onboarded = P.ONBOARDING_VERSION
+	c.onboardedAt = type(time) == "function" and time() or nil
+end
 function P.ReopenSetup() P.Char().setupDone = false end
 
 P.PARTY_MODES = { "off", "ui" }
