@@ -183,6 +183,11 @@ local function boot(opts)
 	-- (0.7.1) the "unknown availability is not available" distance limit (Planner.UNCONFIRMED_MAX_YD) is OFF in the generic harness: the long-route, travel and routing tests
 	-- use far pickups with no client evidence on purpose. pickup_tests.lua turns it on (opts.production) and tests it; the restriction-knowledge limit stays on everywhere.
 	if not opts.production then ns.Planner.UNCONFIRMED_MAX_YD = math.huge end
+	-- (0.14.0) likewise the "an unknown pickup is only an OPTIONAL extra, never a committed stop" policy (Planner.UNKNOWN_PICKUPS_ROUTABLE): the hundreds of fixture quests in the generic harness have no
+	-- client offer evidence on purpose. progression_tests / availability_policy_tests / pickup_tests run with opts.production and test the policy itself.
+	-- opts.legacyUnknown keeps the OLD routing of unknown pickups for the three production-mode files whose subject is the distance / restriction / evidence-state rules that sit beneath the policy
+	-- (pickup_tests, stale_evidence_tests, offerprobe_secret_tests): their assertions are unchanged. The policy itself is tested in availability_policy_tests.lua.
+	if not opts.production or opts.legacyUnknown then ns.Planner.UNKNOWN_PICKUPS_ROUTABLE = true end
 	if opts.synthetic then ns.Registry.ClearPacks() else layoutMaps(ns) end
 	_G.ForeverCodexDB = opts.savedVars     -- SavedVariables are restored AFTER the files run, BEFORE ADDON_LOADED (M8.12)
 	ns._selftest.boot.onEvent(nil, "ADDON_LOADED", "QuestFlow")
@@ -1333,7 +1338,7 @@ do
 		defMap = defMap, world = function() return W end, addonDir = ADDON, readFile = readFile }
 	local dir = arg[0]:match("^(.*)[/\\]") or "."
 	H.fake = dofile(dir .. "/fake_questiedb.lua")
-	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua", "spell_lifecycle_tests.lua", "spell_purchase_tests.lua", "ui_roles_tests.lua", "saved_data_tests.lua", "recompute_tests.lua", "skip_tests.lua", "offerprobe_secret_tests.lua", "instance_tests.lua", "quest_detail_tests.lua", "turnin_evidence_tests.lua", "availability_evidence_tests.lua", "dungeon_now_tests.lua", "reward_overlay_tests.lua", "reward_tradeoff_tests.lua", "reward_icons_tests.lua", "branding_tests.lua", "timer_tests.lua", "area_tests.lua", "planner_flow_tests.lua", "quest_source_tests.lua", "travel_tests.lua", "progression_tests.lua", "onboarding_tests.lua" }) do
+	for _, name in ipairs({ "contract_tests.lua", "planner_tests.lua", "planner_eval.lua", "phase3_tests.lua", "phase4_tests.lua", "bridge_tests.lua", "ui_polish_tests.lua", "local_progress_tests.lua", "cleanup_tests.lua", "item_probe_tests.lua", "eligibility_tests.lua", "evidence_tests.lua", "advisor_tests.lua", "spell_training_tests.lua", "guidance_tests.lua", "pickup_tests.lua", "nav_safety_tests.lua", "professions_tests.lua", "feedback_tests.lua", "identity_tests.lua", "stale_evidence_tests.lua", "spell_lifecycle_tests.lua", "spell_purchase_tests.lua", "ui_roles_tests.lua", "saved_data_tests.lua", "recompute_tests.lua", "skip_tests.lua", "offerprobe_secret_tests.lua", "instance_tests.lua", "quest_detail_tests.lua", "turnin_evidence_tests.lua", "availability_evidence_tests.lua", "dungeon_now_tests.lua", "reward_overlay_tests.lua", "reward_tradeoff_tests.lua", "reward_icons_tests.lua", "branding_tests.lua", "timer_tests.lua", "area_tests.lua", "planner_flow_tests.lua", "quest_source_tests.lua", "travel_tests.lua", "progression_tests.lua", "onboarding_tests.lua", "availability_policy_tests.lua" }) do
 		local chunk, err = loadfile(dir .. "/" .. name)
 		assert(chunk, err)
 		chunk(H)

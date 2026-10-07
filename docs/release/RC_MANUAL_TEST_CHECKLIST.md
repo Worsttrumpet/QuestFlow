@@ -147,6 +147,14 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 - [ ] J8. `/qflow setup` shows the welcome again; your settings are unchanged; finishing it returns to normal.
 - [ ] J9. After Get Started: the plan, tracker, arrow, a reward dialog, and `/qflow report` all still work.
 
+## Part K. Unknown pickups (0.14.0)
+
+- [ ] K1. Find a quest Quest Flow knows (its giver is in the report's quest data) that you have not been offered. `/qflow report`, "PLANNER FUNNEL": it is listed `OPTIONAL: unknown availability`, and it is NOT the NOW or THEN pickup. If it sits right beside your route it may show as ALSO DO, marked "not offered yet".
+- [ ] K2. Walk to the giver and open the dialog so the game offers the quest. After that the report says `AVAILABLE: client offered` and the quest can be NOW or THEN like any pickup.
+- [ ] K3. A quest whose giver was asked and did not offer it shows under HELD, not as optional. Level up or hand in a quest: it is released (optional again).
+- [ ] K4. A quest you hold (objective or hand-in) is planned as always. A quest you added with `/qflow add` is planned as always.
+- [ ] K5. Mura Runetotem-style case: a quest the game offered is still NOW, and is labelled AVAILABLE in the report.
+
 ## Evidence to keep (screenshots)
 1. AddOns list (A2). 2. A normal NOW / ALSO COMPLETE screen (D1). 3. Reward window with all icon rows (C1). 4. A second-column reward (C2). 5. The recommended reward with the golden border and star (C5). 6. A vendor reward with its price (C8). 7. A tooltip with the Quest Flow line (C9). 8. Each icon type (C7). 9. One `/qflow report` (F1).
 

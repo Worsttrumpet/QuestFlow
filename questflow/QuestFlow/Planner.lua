@@ -232,8 +232,21 @@ Pl.RESTRICTION_UNKNOWN_MAX_YD = 200
 Pl.UNCONFIRMED_MAX_YD = 500
 
 --- Why this ACCEPT may only be a POSSIBLE pickup, or nil when it may be routed. `pos` is its location, `S` the planning state.
+-- UNKNOWN IS NOT A ROUTE STEP (0.14.0). The distance limit above only demoted a far unknown pickup; a near one was still a normal stop, at 0.9 of full value, and was placed in the committed
+-- sequence (0.13.0 report: THEN "The Glowing Shard", availability UNKNOWN, no dialog ever recorded for its giver). Availability is now a gate, not a discount:
+--   AVAILABLE   the client offered it (OBSERVED)            -> may be NOW / THEN / any stop
+--   UNKNOWN     no client offer evidence                    -> OPTIONAL: listed, priced as an on-the-way extra / ALSO DO, labelled "not offered yet"; never a committed stop
+--   HELD        a fresh not-offered observation             -> held back (gather), not a candidate
+-- A quest the player added (their call), a quest already in the log (objective / hand-in: not a pickup) and a quest a pack lists as the observed layer are unaffected: only ACCEPT actions come here.
+-- Pl.UNKNOWN_PICKUPS_ROUTABLE = true restores the old behaviour (the generic test harness sets it, exactly as it does for UNCONFIRMED_MAX_YD; production tests leave it off).
+Pl.UNKNOWN_PICKUPS_ROUTABLE = false
+
 function Pl.PossibleOnly(a, pos, S)
-	if a.kind ~= "ACCEPT" or a.pinned or not (S and S.player and pos) then return nil end
+	if a.kind ~= "ACCEPT" or a.pinned or not (S and pos) then return nil end
+	if not Pl.UNKNOWN_PICKUPS_ROUTABLE and Pl.OfferState(a) ~= "OBSERVED" then
+		return "UNKNOWN_AVAILABILITY", (S.player and E.Distance(S.ctx, S.player, pos) or nil)
+	end
+	if not S.player then return nil end
 	-- a seasonal / event quest is only possible while its event runs, which no data here can tell: it is routed only on the client's own offer (even when the player opted in)
 	if a.seasonal and Pl.OfferState(a) ~= "OBSERVED" then return "SEASONAL_UNPROVEN", E.Distance(S.ctx, S.player, pos) end
 	if S.env and S.env.routeMap and S.env.routeMap == pos.map then return nil end      -- the player chose to quest there
@@ -451,6 +464,11 @@ local function gather(S, c)
 			end
 		end
 		local possible, pd = Pl.PossibleOnly(a, pos, S)
+		if a.kind == "ACCEPT" and not a.pinned then
+			local av = diag.availability
+			if Pl.OfferState(a) == "OBSERVED" then av.available = av.available + 1 else av.unknown = av.unknown + 1 end
+			if possible == "UNKNOWN_AVAILABILITY" then av.optional = av.optional + 1 end
+		end
 		local val, comps = valueOf(a, pos, ctx, env, par)
 		if judged and judged.mult ~= 1 then val = val * judged.mult comps.progression = judged.mult end
 		local timerInfo
@@ -1023,6 +1041,7 @@ function Pl.Compute(ctx, c, opts)
 	local plan = { reminders = {}, diag = diag }
 	local S = { ctx = ctx, env = env, par = par, lam = par.timeValue, diag = diag, trace = opts.trace }
 	S.judgement = {}
+	diag.availability = { available = 0, unknown = 0, optional = 0 }      -- pickups by availability: client offered / no client offer evidence / of those kept OPTIONAL
 	diag.funnel = { judged = 0, bands = {}, excluded = 0, penalized = 0, boosted = 0, list = {} }
 	S.goal = Pl.PROGRESSION and ns.Progression and ns.Progression.Goal(ctx) or nil
 	diag.goal = S.goal and { kind = S.goal.kind, dungeons = S.goal.dungeons, count = S.goal.count, inside = S.goal.inside } or nil

@@ -33,7 +33,7 @@ local function removeSecrets()
 end
 
 local function world()
-	local ns = boot({ char = { level = 10, class = "Rogue", classToken = "ROGUE" }, synthetic = true, production = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	local ns = boot({ char = { level = 10, class = "Rogue", classToken = "ROGUE" }, synthetic = true, production = true, legacyUnknown = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
 	for _, n in ipairs({ "C_GossipInfo", "GetQuestID", "GetTitleText", "UnitGUID" }) do _G[n] = nil end
 	H.attPack(ns, { rec(1, "Hub Quest", 0.55, 0.5, { giverNpc = 7001, giverName = "Hub Giver" }), rec(2, "Far Quest", 0.95, 0.95, { giverNpc = 7002, giverName = "Far Giver" }) }, { { key = "zone-a", label = "A", map = 9001, quests = 2 } })
 	ns.Prefs.FinishSetup()

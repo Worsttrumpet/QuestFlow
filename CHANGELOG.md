@@ -2,6 +2,13 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.14.0] - unknown pickups are suggestions, not route steps
+
+- **Quest Flow no longer plans a route through a quest the game has not offered you.** A pickup is a committed step (NOW / THEN) only when the game itself offered it. One Quest Flow merely knows about from its data stays an optional suggestion: it can still appear as an ALSO DO beside your route, marked "not offered yet", or be listed in the report, but you are never sent somewhere as if it were available.
+- If the NPC was asked recently and did not offer the quest, it is held back as before; an old "not offered" answer expires when you progress, as before. Quests already in your log, hand-ins and quests you added yourself are not affected.
+- The report says why: `AVAILABLE: client offered`, `UNKNOWN: no client offer evidence`, `HELD: fresh not-offered evidence`, `OPTIONAL: unknown availability`, with the counts.
+- With nothing offered yet (for example a new character), the tracker says how many pickups it knows of that have not been offered to you, and that talking to their givers lets Quest Flow plan them.
+
 ## [0.13.0] - a proper welcome for new characters
 
 - **A first-run welcome in three short steps.** (1) What Quest Flow is, with NOW and ALSO DO explained in a line each, and a note that it uses what the game itself offers rather than assuming every quest it knows is available. (2) How it looks and what is on screen: the theme (the window changes as you pick), the quest tracker, the map waypoint and the direction arrow. (3) Your route: where to level, how to play, and what else to look out for, then **Get Started**.

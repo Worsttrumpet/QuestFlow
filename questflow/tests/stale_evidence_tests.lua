@@ -11,7 +11,7 @@ local function rec(id, name, x, y, o)
 end
 local function clearApis() for _, n in ipairs({ "C_GossipInfo", "GetQuestID", "GetTitleText", "UnitGUID" }) do _G[n] = nil end end
 local function world(db)
-	local ns = boot({ char = { level = 10, class = "Rogue", classToken = "ROGUE" }, synthetic = true, production = true, savedVars = db, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	local ns = boot({ char = { level = 10, class = "Rogue", classToken = "ROGUE" }, synthetic = true, production = true, legacyUnknown = true, savedVars = db, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
 	clearApis()
 	H.attPack(ns, { rec(1, "Hub Quest", 0.55, 0.5, { giverNpc = 7001, giverName = "Hub Giver" }), rec(2, "Far Quest", 0.95, 0.95, { giverNpc = 7002, giverName = "Far Giver" }) }, { { key = "zone-a", label = "A", map = 9001, quests = 2 } })
 	ns.Prefs.FinishSetup()
@@ -55,7 +55,7 @@ do
 	check(text:find("no progression stamp stored on that dialog: treated as STALE", 1, true) ~= nil or text:find("no comparison possible: stale", 1, true) ~= nil, "the report says an unstamped dialog is treated as stale")
 	-- a brand-new character of another name loading the same account-wide store
 	local db = _G.ForeverCodexDB
-	local ns2 = boot({ char = { level = 2, name = "Newbie", class = "Hunter", classToken = "HUNTER", race = "Tauren", raceToken = "Tauren" }, synthetic = true, production = true, savedVars = db, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
+	local ns2 = boot({ char = { level = 2, name = "Newbie", class = "Hunter", classToken = "HUNTER", race = "Tauren", raceToken = "Tauren" }, synthetic = true, production = true, legacyUnknown = true, savedVars = db, loc = { map = 9001, x = 0.5, y = 0.5, zone = "F" } })
 	H.attPack(ns2, { rec(1, "Hub Quest", 0.55, 0.5, { giverNpc = 7001, giverName = "Hub Giver" }) }, { { key = "zone-a", label = "A", map = 9001, quests = 1 } })
 	ns2.Prefs.FinishSetup(); ns2.State.Recompute()
 	check(ns2.Planner.OfferState(pickup(1)) == "UNKNOWN" and ns2.State.plan.now and ns2.State.plan.now.id == "Q:1:ACCEPT", "a new character is not blocked by another character's old unstamped dialog")

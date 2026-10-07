@@ -68,3 +68,21 @@ PRIORITY        Planner sequencing (value minus time and travel)
 * **Chain reasons were too generous.** `LEADS_TO_FIT` now needs a successor within `FIT_GAP` (3) levels, and such a survivor is worth `FIT_MULT` (0.7) of a normal pickup.
 * Reading the Hearthstone: the item-count function may be absent on Forever; the bag scan is the fallback.
 * Taxi: Forever's `C_TaxiMap.GetAllTaxiNodes` lists every node, with undiscovered ones as unreachable. Quest Flow keeps those as LISTED (exist, not yours) and routes only over nodes the map shows as current or reachable.
+
+## 0.14.0: availability is a gate, not a discount
+
+Cause. `Planner.PossibleOnly` only demoted an unknown pickup beyond `UNCONFIRMED_MAX_YD` (500 yd), and a chosen route zone lifted even that. A nearer unknown pickup was an ordinary stop valued at 0.9 of a confirmed one, so it entered the committed sequence (the 0.13.0 report: NOW offered, THEN unknown, "no dialog recorded for the giver").
+
+Policy (`Planner.UNKNOWN_PICKUPS_ROUTABLE = false`):
+
+| State | Evidence | Planner |
+|---|---|---|
+| AVAILABLE | the game offered it (OfferProbe OBSERVED) | normal candidate: NOW / THEN / any stop |
+| UNKNOWN | no client offer evidence (also: an old negative that went stale) | OPTIONAL: `diag.possible`, an on-the-way ALSO DO, labelled "not offered yet"; never a stop |
+| HELD | a fresh not-offered answer from the giver | held back (unchanged) |
+| in your log | objective / hand-in | not a pickup: unaffected |
+| added by you | your choice | unaffected |
+
+The offer-evidence storage and its staleness rules are unchanged. The generic test harness sets the switch to the old behaviour for the hundreds of fixture quests that have no offer evidence (as it already did for `UNCONFIRMED_MAX_YD`); `availability_policy_tests.lua` runs in production mode, and `pickup_tests`, `stale_evidence_tests` and `offerprobe_secret_tests` keep their assertions by opting into the old routing (`legacyUnknown`) because their subject is the rules beneath the policy. No golden file changed.
+
+Trade-off. A character with no recorded offers has no committed pickups: the plan is empty until the player talks to an NPC, then the offered quest becomes plannable. Objectives and hand-ins plan as before. The empty tracker card says how many pickups are waiting to be offered.

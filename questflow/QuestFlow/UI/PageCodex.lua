@@ -459,7 +459,9 @@ local function drawAlso(c, items)
 			local head = c.alsoHeads[headsUsed]
 			if head then
 				-- the title, then (dim) how far, who, and why: "Here - Aamelia Windfield - Same stop."
-				local sub = ns.Presenter.Join(it.dist or it.where, it.npc, it.caution and it.caution:gsub("%.$", ""):lower() or (it.why and it.why:gsub("%.$", ""):lower() or nil))
+				local why = it.caution and it.caution:gsub("%.$", ""):lower() or (it.why and it.why:gsub("%.$", ""):lower() or nil)
+				if it.unconfirmed then why = (why and (why .. ", ") or "") .. "not offered yet" end      -- an optional extra: the game has not offered this quest
+				local sub = ns.Presenter.Join(it.dist or it.where, it.npc, why)
 				head:SetText(it.title)
 				st:Add(head, sub and 0 or 3)
 				if sub then

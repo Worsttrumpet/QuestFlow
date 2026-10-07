@@ -185,6 +185,8 @@ local function describe(a, plan, ctx, icon)
 		local st, ev = Pl.OfferState(a)
 		it.offerState = st
 		if st == "NOT_OFFERED" then it.caution = "Not offered by " .. tostring((ev and ev.npc) or a.giver or "its quest giver") .. " the last time you asked." end
+		-- no client offer evidence: say so on the card (an optional extra, never a promise that the quest is available)
+		if st == "UNKNOWN" and not a.pinned then it.unconfirmed = true end
 		local view = a.quest and R.Quest(a.quest)
 		local obj = view and view.objectives and Pr.CleanObjective(view.objectives[1])
 		it.detail = obj and ("Goal: " .. obj .. ".") or (a.giver and ("Talk to " .. a.giver .. ".") or nil)
@@ -370,7 +372,11 @@ local function buildCard(plan, ctx)
 			lines[1] = "Quest Flow has no higher-priority action for you right now. Explore or pick up a quest and it will take it from there."
 		end
 		local pn = plan and plan.diag and plan.diag.possible and plan.diag.possible.n or 0
-		if pn > 0 then lines[#lines + 1] = string.format("%d pickup%s Quest Flow knows of %s far away and not confirmed by the game; /qflow report lists %s.", pn, pn == 1 and "" or "s", pn == 1 and "is" or "are", pn == 1 and "it" or "them") end
+		if pn > 0 and not Pl.UNKNOWN_PICKUPS_ROUTABLE then
+			lines[#lines + 1] = string.format("%d pickup%s Quest Flow knows of %s not been offered to you yet. Talk to %s giver and the game's own offer lets Quest Flow plan %s; /qflow report lists them.", pn, pn == 1 and "" or "s", pn == 1 and "has" or "have", pn == 1 and "its" or "their", pn == 1 and "it" or "them")
+		elseif pn > 0 then
+		lines[#lines + 1] = string.format("%d pickup%s Quest Flow knows of %s far away and not confirmed by the game; /qflow report lists %s.", pn, pn == 1 and "" or "s", pn == 1 and "is" or "are", pn == 1 and "it" or "them")
+		end
 		for _, w in ipairs(plan and plan.warnings or {}) do
 			if #lines < 3 and not w:find("^Not available on this client") then lines[#lines + 1] = w end
 		end

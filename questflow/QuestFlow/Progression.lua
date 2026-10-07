@@ -193,6 +193,19 @@ function Pg.ReportLines(ctx, plan)
 	else
 		L[#L + 1] = "  Goal: none known (no dungeon quest in your log, as the game tags them" .. ((ctx and ctx.questTag) and "" or "; the client's quest-tag API did not answer") .. ")."
 	end
+	local av = d.availability
+	if av then
+		local held = d.held and d.held.n or 0
+		L[#L + 1] = string.format("  Pickup availability: AVAILABLE (client offered) %d | UNKNOWN (no client offer evidence) %d, of which OPTIONAL (listed, not a committed step) %d | HELD (fresh not-offered evidence) %d.", av.available, av.unknown, av.optional, held)
+		L[#L + 1] = "  Policy: a pickup becomes NOW / THEN only when the game itself offered it; an unknown one stays OPTIONAL (an ALSO DO on the way, or listed); a fresh not-offered answer holds it back; quests in your log are not pickups."
+		local shown = 0
+		for _, e in ipairs(d.possible and d.possible.list or {}) do
+			if e.why == "UNKNOWN_AVAILABILITY" and shown < 5 then
+				shown = shown + 1
+				L[#L + 1] = string.format("    OPTIONAL: unknown availability: %s%s", e.title or e.id, e.giver and (" (giver " .. e.giver .. ", no offer recorded)") or "")
+			end
+		end
+	end
 	if f then
 		local parts = {}
 		for _, b in ipairs({ "CURRENT", "LOW", "GRAY", "ABOVE", "ABOVE_FAR", "UNKNOWN" }) do if (f.bands[b] or 0) > 0 then parts[#parts + 1] = b .. "=" .. f.bands[b] end end
@@ -202,6 +215,18 @@ function Pg.ReportLines(ctx, plan)
 		end
 	else
 		L[#L + 1] = "  No planner funnel recorded yet (the planner is off or has not run)."
+	end
+	local function stateText(a)
+		if not a or a.kind ~= "ACCEPT" then return nil end
+		if a.pinned then return "ADDED by you (your choice, not an availability claim)" end
+		local st = ns.Planner.OfferState(a)
+		if st == "OBSERVED" then return "AVAILABLE: client offered" end
+		if st == "NOT_OFFERED" then return "HELD: fresh not-offered evidence" end
+		return "UNKNOWN: no client offer evidence"
+	end
+	for _, role in ipairs({ { "NOW", plan and plan.now }, { "THEN", plan and plan.thenAction }, { "ALSO DO", plan and plan.alsoDo } }) do
+		local t = stateText(role[2])
+		if t then L[#L + 1] = string.format("  %s is the pickup %s: %s.", role[1], role[2].title or role[2].id, t) end
 	end
 	local nowJ = d.nowJudgement
 	if plan and plan.now then

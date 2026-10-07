@@ -22,7 +22,7 @@ end
 local function world(att, observed, char)
 	local c = { level = 10, class = "Rogue", classToken = "ROGUE" }
 	for k, v in pairs(char or {}) do c[k] = v end
-	local ns = boot({ char = c, synthetic = true, production = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Fixture" } })
+	local ns = boot({ char = c, synthetic = true, production = true, legacyUnknown = true, loc = { map = 9001, x = 0.5, y = 0.5, zone = "Fixture" } })
 	clearApis()
 	H.attPack(ns, att or {}, { { key = "zone-a", label = "Zone A", map = 9001, quests = #(att or {}) } })
 	if observed then
