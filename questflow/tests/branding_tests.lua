@@ -78,12 +78,31 @@ do
 	check(manifest:find("^Quest Flow data manifest") ~= nil, "the shipped data manifest is titled Quest Flow")
 end
 
-section("character name: Quest Flow shows exactly what the client's UnitName gives, including a two-word name")
+section("character name: a first and last name (UnitName returns two values on Forever) is shown in full, and the saved-data key is untouched")
 do
-	local ns = boot({ char = { level = 16, class = "Rogue", classToken = "ROGUE", name = "Codex Runner" }, synthetic = true })
-	local text
-	rawset(ns.UI, "ShowReport", function(t) text = t end)
-	H.slash("report")
-	check(type(text) == "string" and text:find("\nCodex Runner | level 16", 1, true) ~= nil, "the report's first line carries the full two-word name  [" .. tostring(text and text:match("\n([^\n]*)\n")) .. "]")
+	local function report(ns)
+		local text
+		rawset(ns.UI, "ShowReport", function(t) text = t end)
+		H.slash("report")
+		return text
+	end
+	-- the real client: UnitName("player") -> "Codex", "Runner"
+	local ns = boot({ char = { level = 16, class = "Rogue", classToken = "ROGUE", name = "Codex", second = "Runner" }, synthetic = true })
+	local text = report(ns)
+	check(text:find("\nCodex Runner | level 16", 1, true) ~= nil, "the report's first line carries the full name  [" .. tostring(text:match("\n([^\n]*)\n")) .. "]")
 	check(text:find("Character: Codex Runner level 16", 1, true) ~= nil, "and so does the Character line")
+	local ctx = ns.State.Recompute and ns.Context.Build and ns.Context.Build() or nil
+	local char = ctx and ctx.char or {}
+	check(char.name == "Codex" and char.fullName == "Codex Runner", "the context keeps name = the first value and fullName = both  [" .. tostring(char.name) .. " | " .. tostring(char.fullName) .. "]")
+	check(ns.Prefs.CharKey() == "Codex-Forever" or tostring(ns.Prefs.CharKey()):find("^Codex%-") ~= nil, "the saved-data key still uses the first name only  [" .. tostring(ns.Prefs.CharKey()) .. "]")
+	check(char.key == nil or tostring(char.key):find("^Codex%-") ~= nil, "(and so does the context key)")
+
+	-- a client that returns the REALM as the second value changes nothing
+	local ns2 = boot({ char = { level = 16, class = "Rogue", classToken = "ROGUE", name = "Thrall", second = "Forever" }, synthetic = true })
+	local t2 = report(ns2)
+	check(t2:find("\nThrall | level 16", 1, true) ~= nil and not t2:find("Thrall Forever", 1, true), "a realm in the second value is not taken for a last name")
+
+	-- a single-word name is unchanged
+	local ns3 = boot({ char = { level = 16, class = "Rogue", classToken = "ROGUE", name = "Thrall" }, synthetic = true })
+	check(report(ns3):find("\nThrall | level 16", 1, true) ~= nil, "a one-word name is shown as it is")
 end

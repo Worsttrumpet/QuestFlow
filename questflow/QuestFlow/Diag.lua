@@ -71,7 +71,7 @@ function D.Snapshot()
 		snap.choices.systems[#snap.choices.systems + 1] = { key = s.key, on = c.systems[s.key] == true, planned = s.planned }
 	end
 	if ctx then
-		snap.character = { name = ctx.char.name, realm = ctx.char.realm, class = ctx.char.classToken, race = ctx.char.raceToken,
+		snap.character = { name = ctx.char.name, fullName = ctx.char.fullName, realm = ctx.char.realm, class = ctx.char.classToken, race = ctx.char.raceToken,
 			raceKey = ctx.char.raceKey, faction = ctx.char.faction, level = ctx.char.level, missing = ctx.char.missing }
 		snap.instance = ctx.instance
 		snap.location = { map = ctx.loc.map, x = ctx.loc.x, y = ctx.loc.y, zone = ctx.loc.zone, subzone = ctx.loc.subzone,
@@ -129,7 +129,7 @@ function D.Lines(s)
 		tostring(s.client.version), tostring(s.client.build), tostring(s.client.interface), tostring(s.addon.expectedInterface))
 	if s.character then
 		local c = s.character
-		L[#L + 1] = string.format("Character: %s level %s %s %s (%s) | race key %s | group %d%s", tostring(c.name), tostring(c.level),
+		L[#L + 1] = string.format("Character: %s level %s %s %s (%s) | race key %s | group %d%s", tostring(c.fullName or c.name), tostring(c.level),
 			tostring(c.race), tostring(c.class), tostring(c.faction), tostring(c.raceKey), s.group.size, s.group.inGroup and " (in group)" or "")
 		if #c.missing > 0 then L[#L + 1] = "  APIs missing for character info: " .. table.concat(c.missing, ", ") end
 	else
@@ -631,7 +631,7 @@ function D.PlaytestLines(snap, lines)
 		return L
 	end
 	local c, l = ctx.char or {}, ctx.loc or {}
-	add(string.format("%s | level %s %s %s (%s) | map %s at %s, %s | %s / %s", tostring(c.name), tostring(c.level), tostring(c.race), tostring(c.class), tostring(c.faction),
+	add(string.format("%s | level %s %s %s (%s) | map %s at %s, %s | %s / %s", tostring(c.fullName or c.name), tostring(c.level), tostring(c.race), tostring(c.class), tostring(c.faction),
 		tostring(l.map), l.x and num(l.x * 100) or "?", l.y and num(l.y * 100) or "?", tostring(l.zone), tostring(l.subzone)))
 
 	-- what the window shows

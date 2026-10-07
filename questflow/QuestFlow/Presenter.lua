@@ -490,5 +490,5 @@ function Pr.Header(ctx)
 	if c.level then parts[#parts + 1] = "level " .. c.level end
 	if c.race then parts[#parts + 1] = c.race end
 	if c.class then parts[#parts + 1] = c.class end
-	return (c.name or "Your character") .. (#parts > 0 and (" - " .. table.concat(parts, " ")) or "")
+	return (c.fullName or c.name or "Your character") .. (#parts > 0 and (" - " .. table.concat(parts, " ")) or "")
 end

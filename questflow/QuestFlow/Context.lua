@@ -50,6 +50,16 @@ function reader.character()
 	if okN and type(name) == "string" then c.name = name else c.missing[#c.missing + 1] = "UnitName" end
 	local realm, okR = try(GetRealmName)
 	if okR and type(realm) == "string" then c.realm = realm else c.missing[#c.missing + 1] = "GetRealmName" end
+	-- On Forever a character can have a first AND a last name, and UnitName returns them as its two values ("Codex", "Runner"), where the second value is normally the realm. c.name stays the
+	-- first value on purpose (it is part of the saved-data key name-realm: changing it would orphan every saved character); c.fullName is the name a player reads. The second value is taken as a
+	-- last name only when it is not the realm (in either spelling), so a client that returns the realm there changes nothing.
+	pcall(function()
+		local _, second = UnitName("player")
+		if type(c.name) ~= "string" or type(second) ~= "string" or second == "" or #second > 24 then return end
+		local normalized = type(GetNormalizedRealmName) == "function" and GetNormalizedRealmName() or nil
+		if second == c.realm or second == normalized then return end
+		c.fullName = c.name .. " " .. second
+	end)
 	if type(UnitClass) == "function" then
 		local ok, loc, token = pcall(UnitClass, "player")
 		if ok and type(token) == "string" then c.class, c.classToken = loc, token else c.missing[#c.missing + 1] = "UnitClass" end

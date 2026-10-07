@@ -97,7 +97,7 @@ local function newWorld(opts)
 	_G.SlashCmdList, _G.ToggleWorldMap = {}, function() W.mapShown = true end
 	_G.CreateVector2D = V
 	_G.UnitLevel = function() return W.char.level end
-	_G.UnitName = function() return W.char.name end
+	_G.UnitName = function() return W.char.name, W.char.second end      -- second: the client's second return value (a last name on Forever; a realm on a cross-realm unit)
 	_G.GetRealmName = function() return W.char.realm end
 	_G.UnitClass = function() return W.char.class, W.char.classToken, 1 end
 	_G.UnitRace = function() return W.char.race, W.char.raceToken, 1 end

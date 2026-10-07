@@ -345,7 +345,7 @@ local function renderCharacter(ctx, plan)
 	end
 	local c = ctx.char
 	if c.name and c.level then
-		w.charFS:SetText(string.format("%s - level %s %s %s%s", c.name, tostring(c.level), tostring(c.race or "?"), tostring(c.class or "?"),
+		w.charFS:SetText(string.format("%s - level %s %s %s%s", c.fullName or c.name, tostring(c.level), tostring(c.race or "?"), tostring(c.class or "?"),
 			c.faction and (" (" .. c.faction .. ")") or ""))
 		W.SetColor(w.charFS, W.WHITE)
 	else

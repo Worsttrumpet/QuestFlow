@@ -336,7 +336,7 @@ local function handle(msg)
 		local ctx = ns.State.Recompute() and ns.State.ctx
 		if ctx then
 			local c, l = ctx.char, ctx.loc
-			say(string.format("%s: level %s %s %s (%s). Race origin: %s. Route zone (your choice): %s. Now in: %s%s.", tostring(c.name),
+			say(string.format("%s: level %s %s %s (%s). Race origin: %s. Route zone (your choice): %s. Now in: %s%s.", tostring(c.fullName or c.name),
 				tostring(c.level), tostring(c.race), tostring(c.class), tostring(c.faction), tostring(c.race), P.GetRouteZone(),
 				tostring(l.zone), l.subzone and (" / " .. l.subzone) or ""))
 		end

@@ -2,7 +2,7 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
-## [0.10.4] - release candidate for the first public release
+## [0.10.5] - release candidate for the first public release
 
 **Quest Flow: a questing companion for WoW Forever.** See what's available. Choose what comes next.
 
@@ -27,4 +27,5 @@ Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`
 - The addon is now **Quest Flow** (folder `QuestFlow`, package `QuestFlow-<version>.zip`). Commands: `/qflow` and `/questflow`; the earlier `/codex` and `/fcodex` still work.
 - Saved settings keep the saved-variable name `ForeverCodexDB`. Because the addon folder changed, the game stores it in a new file (`WTF/Account/<account>/SavedVariables/QuestFlow.lua`); to carry over settings from an earlier test build, copy `ForeverCodex.lua` there under that name while the game is closed.
 - The diagnostic report and the shipped data manifest no longer show the internal data tag or the old working name; a test now scans every command's output, the windows, the report and the feedback text for any leftover "Codex".
+- Characters with a first and last name (WoW Forever returns them as two values) are shown in full, for example in the diagnostic report. Saved settings are still keyed by the first name only, so nothing saved is lost.
 - MIT license and third-party notices (AllTheThings MIT notice, QuestieDB runtime-only note) ship inside the addon. The release packager refuses stray files.
