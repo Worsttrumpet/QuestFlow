@@ -32,7 +32,7 @@ local COLORS = {
 local PICK = { 0.45, 0.95, 0.45 }
 local EDGE = { 1, 0.82, 0.20 }
 
-local state = { tipHooks = 0, tipLines = 0, tipKept = 0, tipLost = 0, hoverT = 0, hoverFixes = 0, shown = false, display = nil, attached = {}, summary = nil, since = 0, settled = false, backoff = 0 }
+local state = { builtFor = nil, postHits = 0, postBuilt = 0, hoverPost = 0, tipHooks = 0, tipLines = 0, tipKept = 0, tipLost = 0, hoverT = 0, hoverFixes = 0, shown = false, display = nil, attached = {}, summary = nil, since = 0, settled = false, backoff = 0 }
 RO.state = state
 local cache = setmetatable({}, { __mode = "k" })           -- button -> its strip (created once, reused)
 
@@ -71,7 +71,7 @@ local function stripFor(btn)
 	cache[btn] = s
 	if type(btn.HookScript) == "function" then
 		pcall(btn.HookScript, btn, "OnEnter", function(self) RO.Tooltip(self) end)
-		pcall(btn.HookScript, btn, "OnLeave", function() state.hover = nil end)
+		pcall(btn.HookScript, btn, "OnLeave", function() state.hover, state.builtFor = nil, nil end)
 	end
 	return s
 end
@@ -222,7 +222,7 @@ end
 
 --- The advisor's full reason as extra tooltip lines on the game's own item tooltip (added after the game has filled it in).
 --- The advisor's words as extra lines on the game's item tooltip.
-local function addLines(row)
+local function addLines(row, noShow)
 	local tip = GameTooltip
 	pcall(tip.AddLine, tip, " ")
 	if row.recommended then pcall(tip.AddLine, tip, ns.CodexIcons.WORD[RO.StarGlyph(row)], 1, 0.82, 0.2) end
@@ -233,7 +233,7 @@ local function addLines(row)
 		if i > 3 then break end
 		pcall(tip.AddLine, tip, cv, 0.7, 0.7, 0.7, true)
 	end
-	pcall(tip.Show, tip)
+	if not noShow then pcall(tip.Show, tip) end
 end
 
 --- OnEnter of a reward button. `again` = a repair (the game rebuilt the tooltip after our lines): not counted as a hover.
@@ -243,16 +243,45 @@ function RO.Tooltip(btn, again)
 	if not again then
 		state.tipHooks = state.tipHooks + 1
 		state.hover, state.hoverT, state.hoverFixes = btn, 0, 0
+		state.hoverPost = state.postHits - (state.builtFor == btn and 1 or 0)     -- (the game builds the tooltip BEFORE our OnEnter hook runs: that build counts)
 	end
 	if not (state.shown and row and rawget(_G, "GameTooltip")) then return end
 	local tip = GameTooltip
 	if type(tip.AddLine) ~= "function" then return end
+	if not again and RO.postCall == "registered" and state.builtFor == btn then
+		state.tipShown = true; state.tipOwner = "the button"; return      -- the build hook already put our lines in this tooltip
+	end
 	addLines(row)
 	state.tipLines = state.tipLines + 1
 	if not again then
 		state.tipShown = type(tip.IsShown) == "function" and safe(tip.IsShown, tip) or nil
 		local owner = type(tip.GetOwner) == "function" and safe(tip.GetOwner, tip) or nil
 		state.tipOwner = owner == nil and "unknown" or (owner == btn and "the button" or "something else")
+	end
+end
+
+--- Called when the game has built an item tooltip (TooltipDataProcessor post-call): when it is the tooltip of one of our annotated reward buttons, our lines go in as part of that
+-- build, so a rebuild (which the real client does constantly) cannot wipe them and nothing flickers.
+function RO.OnTooltipBuilt(tip)
+	state.postBuilt = state.postBuilt + 1
+	if tip ~= rawget(_G, "GameTooltip") or not state.shown then return end
+	local owner = type(tip.GetOwner) == "function" and safe(tip.GetOwner, tip) or nil
+	local s = owner and cache[owner]
+	if not (s and s.row) then return end
+	addLines(s.row, true)
+	state.postHits = state.postHits + 1
+	state.builtFor = owner
+end
+
+--- Registers the build hook when the client has it (TooltipDataProcessor.AddTooltipPostCall and Enum.TooltipDataType.Item). Idempotent. RO.postCall = "registered" | "unavailable".
+function RO.InstallPostCall()
+	if RO.postCall == "registered" then return end
+	local tdp, en = rawget(_G, "TooltipDataProcessor"), rawget(_G, "Enum")
+	if type(tdp) == "table" and type(tdp.AddTooltipPostCall) == "function" and type(en) == "table" and type(en.TooltipDataType) == "table" and en.TooltipDataType.Item then
+		local ok = pcall(tdp.AddTooltipPostCall, en.TooltipDataType.Item, function(tip) RO.OnTooltipBuilt(tip) end)
+		RO.postCall = ok and "registered" or "unavailable"
+	else
+		RO.postCall = "unavailable"
 	end
 end
 
@@ -277,6 +306,7 @@ function RO.CheckTooltip()
 	local tip = rawget(_G, "GameTooltip")
 	if not (btn and tip and state.shown) then return end
 	if type(tip.IsShown) == "function" and not safe(tip.IsShown, tip) then return end
+	if RO.postCall == "registered" and state.postHits > state.hoverPost then return end      -- the build hook is adding them on every rebuild: nothing to repair
 	local has = tipHasOurs()
 	if has == nil then state.tipScan = "unreadable"; return end
 	state.tipScan = "readable"
@@ -312,6 +342,7 @@ local function dialogOpen()
 	return ns.ItemProbe and ns.ItemProbe.DialogOpen and ns.ItemProbe.DialogOpen() or false
 end
 
+RO.InstallPostCall()
 local frame = CreateFrame("Frame")
 RO.frame = frame
 RO.registered = {}
@@ -365,6 +396,7 @@ function RO.ReportLines()
 		for _ in pairs(state.attached) do n = n + 1 end
 		L[#L + 1] = string.format("  showing: %d of %d choices annotated | %s", n, #state.display.rows, state.display.verdict.text)
 		L[#L + 1] = string.format("  tooltip: hover hook ran %d time(s), extra lines added %d time(s) (0 and 0 after hovering a choice means the hook is not reached)", state.tipHooks, state.tipLines)
+		L[#L + 1] = string.format("  tooltip build hook (TooltipDataProcessor): %s | item tooltips built %d | our lines added in a build %d time(s)", tostring(RO.postCall or "not installed"), state.postBuilt, state.postHits)
 		L[#L + 1] = string.format("  tooltip check: GameTooltip shown right after the hook: %s | its owner: %s | line text %s | our lines found %d time(s), missing %d time(s) (each miss added them again, at most 5 per hover)",
 			tostring(state.tipShown), tostring(state.tipOwner or "not seen"), tostring(state.tipScan or "not checked"), state.tipKept, state.tipLost)
 	else

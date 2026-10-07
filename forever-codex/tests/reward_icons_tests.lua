@@ -173,6 +173,56 @@ do
 	for n = 1, 12 do _G["GameTooltipTextLeft" .. n] = nil end
 end
 
+section("codex icons: the tooltip build hook (the real client rebuilds the tooltip constantly)")
+do
+	local b = buttons(2)
+	local a = w(1, "Good Dagger", { [DPS] = 12, [AGI] = 5 }, U)
+	local c = w(2, "Poor Dagger", { [DPS] = 5, [AGI] = 1 }, U)
+	RO.Update(dialog({ c, a }))
+	local lines, hooked = {}, nil
+	_G.Enum = { TooltipDataType = { Item = 0 } }
+	_G.TooltipDataProcessor = { AddTooltipPostCall = function(kind, fn) hooked = fn end }
+	RO.postCall = nil
+	RO.InstallPostCall()
+	check(RO.postCall == "registered" and hooked ~= nil, "the build hook is registered when the client has it")
+	GameTooltip.AddLine = function(_, text) lines[#lines + 1] = text end
+	GameTooltip.NumLines = function() return #lines end
+	GameTooltip.GetOwner = function() return b[2] end
+	for n = 1, 12 do _G["GameTooltipTextLeft" .. n] = { GetText = function() return lines[n] end } end
+	-- the game builds the tooltip (our lines go in during the build), then our OnEnter hook runs
+	hooked(GameTooltip)
+	local after = #lines
+	check(table.concat(lines, "|"):find("Codex: ", 1, true) and RO.state.postHits >= 1, "a build for a reward button gets our lines")
+	b[2].hooks.OnEnter(b[2])
+	check(#lines == after, "the OnEnter hook does not add them a second time  [" .. #lines .. " vs " .. after .. "]")
+	-- the game rebuilds (clears and builds again), over and over: our lines are there every time, nothing needs repairing
+	local lostBefore = RO.state.tipLost
+	for n = 1, 10 do
+		for i = #lines, 1, -1 do lines[i] = nil end
+		hooked(GameTooltip)
+		check(table.concat(lines, "|"):find("Codex: ", 1, true), "rebuild " .. n .. ": our lines are in the build")
+		RO.CheckTooltip()
+	end
+	check(RO.state.tipLost == lostBefore, "the repair loop stayed out of the way (no repair while the build hook works)")
+	-- a tooltip that is not one of ours is left alone
+	for i = #lines, 1, -1 do lines[i] = nil end
+	GameTooltip.GetOwner = function() return {} end
+	hooked(GameTooltip)
+	check(#lines == 0, "a tooltip owned by something else is not touched")
+	hooked({})
+	check(#lines == 0, "and a different tooltip frame is not touched")
+	-- without the hook the OnEnter + repair path still works
+	RO.postCall = "unavailable"
+	GameTooltip.GetOwner = function() return b[1] end
+	b[1].hooks.OnEnter(b[1])
+	check(table.concat(lines, "|"):find("Codex: ", 1, true), "no build hook: the OnEnter path adds the lines")
+	check(table.concat(RO.ReportLines(), "\n"):find("tooltip build hook", 1, true), "the report says whether the build hook is installed")
+	RO.postCall = nil
+	GameTooltip.AddLine, GameTooltip.NumLines, GameTooltip.GetOwner = nil, nil, nil
+	_G.Enum, _G.TooltipDataProcessor = nil, nil
+	for n = 1, 12 do _G["GameTooltipTextLeft" .. n] = nil end
+end
+
 section("codex icons: a plain recommendation, and more than four classifications")
 do
 	local b = buttons(2)
