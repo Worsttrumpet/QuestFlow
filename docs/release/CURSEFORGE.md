@@ -1,47 +1,46 @@
-# CurseForge: copy and metadata (prepared in the repository; the project page itself is created by hand)
+# CurseForge: copy and metadata for Quest Flow (prepared in the repository; the project page itself is created by hand)
 
 Nothing here was uploaded. Screenshots are taken later from the finished client and are not included.
 
 ## Project fields
 | Field | Value |
 |---|---|
-| Name | Forever Codex |
-| Summary (one line) | A free questing and leveling guide for WoW Forever: what to do next, a quest tracker and arrow, and a reward advisor. |
+| Name | Quest Flow |
+| Summary (one line) | A questing companion for WoW Forever. See what's available. Choose what comes next. |
 | Main category | Quests and Leveling (plus Map and Minimap, Tooltip, if you want more tags) |
 | Game / version | WoW Forever client. Addon interface number 16001 (tested on client 1.60.1, build 70245) |
-| License | MIT (the license choice is the owner's; the repository has an MIT `LICENSE`) |
-| Source | https://github.com/Worsttrumpet/wow-forever-guide (change if the repository is renamed) |
-| File to upload | `forever-codex/dist/<major>.<minor>/ForeverCodex-<version>.zip` (top folder `ForeverCodex/`, `.toc` inside it) |
+| License | MIT (repository `LICENSE`, confirmed by the owner) |
+| Source | https://github.com/Worsttrumpet/questflow (after the repository is renamed: see below) |
+| File to upload | `questflow/dist/<major>.<minor>/QuestFlow-<version>.zip` (top folder `QuestFlow/`, `QuestFlow.toc` inside it) |
 | Logo / icon | made by hand later; the addon has no logo requirement |
 
 ## Project description (long)
-**Forever Codex is a free questing and leveling guide for WoW Forever.**
+**Quest Flow: a questing companion for WoW Forever.** *See what's available. Choose what comes next.*
 
-It looks at your character (class, race, faction, level, where you are and what is in your quest log) and tells you what to do next. It never plays for you: it will not accept, complete or turn in quests, and it does not sell or equip anything. Ignore it whenever you like and it simply adapts.
+Quest Flow reads your character and your quest log and shows you what you could do now. It is not a step-by-step leveling guide or an autopilot: you decide what to do, and it keeps up. It never accepts, completes or turns in quests, and it does not sell or equip anything.
 
-**Quest guidance**
-- NOW: the one thing worth doing right now, with a short reason.
-- ALSO COMPLETE and ALSO DO: only when something genuinely fits on the way.
-- READY TO TURN IN, DUNGEON QUESTS and NEW FOR YOU lists.
-- Route styles: Efficient, Fast, Questing only, Completionist. Pick your route zone, skip anything, add quests, mark a Hardcore character.
-- A compact tracker, a direction arrow, a waypoint that follows what Codex recommends, a minimap button and a world-map button.
+**What it shows**
+- **NOW**: the one thing worth doing right now, with a short reason and distance.
+- **ALSO COMPLETE**: other objectives or pickups that fit in the same place.
+- **READY TO TURN IN** and **DUNGEON QUESTS** lists, and **NEW FOR YOU** pickups. Dungeon objectives are not offered as NOW while you are outside the dungeon.
+- A compact tracker (it can replace the game's own), a direction arrow and a waypoint that follows NOW, a minimap button and a world-map button.
+- Route styles (Efficient, Fast, Questing only, Completionist), your own route zone, skip and add quests, and a Hardcore option.
 
-**Honest about its data**
-WoW Forever is new and no complete quest database exists. Codex learns what NPCs really offer you, uses what your game client reports first, labels every other source as unverified, and says "I don't know" instead of guessing a location or turn-in NPC.
-
-**Reward Advisor**
+**Reward advice**
 - Small icons on the game's own quest reward buttons: Upgrade, Not an upgrade, Mixed, Vendor (with the sell price beside the coin), Not usable, Unknown.
-- A golden border and a star on the reward Codex recommends. A hollow star means a tentative recommendation. No recommendation means no border.
-- One short line, such as `CODEX: UPGRADE`, added to the game's tooltip.
-- Handles main-hand, off-hand, one-handed and two-handed items, without stat weights or spec guesses.
+- A golden border and a star on the reward Quest Flow recommends; a hollow star means tentative. No recommendation means no border.
+- One short line, such as `QUEST FLOW: UPGRADE`, added to the game's tooltip.
+- Handles main-hand, off-hand, one-handed and two-handed items, with no stat weights or spec guesses.
 
-**Also included**: spell training reminders, professions status, quest timers, quest-starting items, a journey log, optional party progress cards, and a Report a problem button.
+**Honest about its data.** WoW Forever is new and no complete quest database exists. Quest Flow learns what NPCs really offer you, trusts your game client first, labels every other source as unverified, and says "I don't know" instead of guessing a location or turn-in NPC.
 
-**Install**: unzip into `Interface/AddOns/` so you have `AddOns/ForeverCodex/ForeverCodex.toc`, then type `/codex`.
+**Also included**: spell training reminders, professions status, quest timers, quest-starting items, a journey log, optional party progress cards and a Report a problem button.
+
+**Install**: unzip into `Interface/AddOns/` so you have `AddOns/QuestFlow/QuestFlow.toc`, then type `/qflow`.
 
 **Optional**: the separate QuestieDB addon is used as an extra, unverified quest source if installed. Nothing from it is copied.
 
-**Privacy**: nothing is ever uploaded; everything Codex learns stays in your own saved variables.
+**Privacy**: nothing is uploaded; everything stays in your own saved variables.
 
 **Compatibility**: built for WoW Forever (interface 16001), tested on client 1.60.1 build 70245. Other clients are untested.
 
@@ -51,8 +50,14 @@ WoW Forever is new and no complete quest database exists. Codex learns what NPCs
 Use the matching section of `CHANGELOG.md`.
 
 ## Third-party and licensing statement (for the project page)
-Forever Codex is MIT licensed. It includes quest, flight-path and zone data derived from AllTheThings (MIT; notice included in the download) and quest facts observed on Forever by this project. It optionally reads the separately installed QuestieDB addon at runtime and copies nothing from it. See `THIRD_PARTY_NOTICES.md` (also inside the download).
+Quest Flow is MIT licensed. It includes quest, flight-path and zone data derived from AllTheThings (MIT; notice included in the download) and quest facts observed on Forever by this project. It optionally reads the separately installed QuestieDB addon at runtime and copies nothing from it. See `THIRD_PARTY_NOTICES.md` (also inside the download).
 
 ## Notes
-- No CurseForge-only files are needed in the repository or the ZIP. A `.pkgmeta` / CurseForge packager workflow was considered and not added: the addon lives in a sub-folder and the ZIP is built and checked by `forever-codex/generator/package_addon.py`, so a manual upload keeps one build path.
+- No CurseForge-only files are needed in the repository or the ZIP. A `.pkgmeta` / CurseForge packager workflow was considered and not added: the addon lives in a sub-folder and the ZIP is built and checked by `questflow/generator/package_addon.py`, so a manual upload keeps one build path.
 - The `## X-Curse-Project-ID` (and similar) TOC lines can be added after the project exists; they are optional.
+
+## Manual steps (cannot be done from the repository)
+1. **Rename the GitHub repository** from `wow-forever-guide` to `questflow` (Settings > General > Repository name). GitHub redirects the old address. The README, `QuestFlow.toc` (`X-Website`) and this file already use `https://github.com/Worsttrumpet/questflow`; if you choose a different name, search the repository for `Worsttrumpet/questflow` and change it.
+2. Make the repository public when you are ready (read the history note in `questflow/docs/CODEX_DATA_SOURCES.md` first).
+3. Create the GitHub Release and attach `QuestFlow-<version>.zip`, with the matching `CHANGELOG.md` text.
+4. Create the CurseForge project from the fields above, upload the same ZIP, add screenshots and the logo (made by hand).

@@ -1,8 +1,8 @@
 # Future ideas (not part of the first public release)
 
-These came up during development. None of them is a release blocker, none is promised, and none was started for the release. The long, status-tagged list with reasons is `forever-codex/docs/CODEX_BACKLOG.md`.
+These came up during development. None of them is a release blocker, none is promised, and none was started for the release. The long, status-tagged list with reasons is `questflow/docs/CODEX_BACKLOG.md`.
 
-- **Using quest items from the Codex tracker.** Needs a decision about secure action buttons versus the "no protected functions" rule.
+- **Using quest items from the Quest Flow tracker.** Needs a decision about secure action buttons versus the "no protected functions" rule.
 - **Smarter handling of quests with no known location** (a fallback built from quest description text), once the client's quest text API is proven on Forever.
 - **Quest value and "gray quest" decisions** with a small, explainable model.
 - **Quest-cap and quest-starting-item awareness** (full quest log warnings).
