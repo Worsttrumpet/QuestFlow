@@ -5,7 +5,7 @@ Only things the real client can prove are here. Logic, planner rules, advisor ru
 **Rules for this pass**
 - Test the **release ZIP**, installed fresh (Part A), never the working tree.
 - Do not change anything if a result surprises you. Record exactly what you saw (the **Capture** column), then decide.
-- `/qflow` is the command. `/codex` is kept as an alias; A6 checks it still works.
+- `/qflow` is the command. `/codex` is kept as an alias; F4 checks it still works.
 - Evidence: a screenshot only where marked **SHOT**; `REPORT` means run `/qflow report`, press Ctrl+C and paste it into your notes.
 
 Legend: PASS / FAIL / N/A. Anything FAIL goes in the table at the end.

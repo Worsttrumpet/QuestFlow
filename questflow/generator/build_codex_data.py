@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Forever Codex data generator (First Light).
+"""Quest Flow data generator (developed as Forever Codex).
 
 Reads, READ-ONLY:
   * the local ATT `forever` database (through the existing, frozen foreverdb ATT parser), and
@@ -409,7 +409,7 @@ def build(att_root: Path, observed_path: Path) -> dict[str, str]:
     outputs["Pack_ATT_FlightPaths.lua"] = write_flight_pack(Path("."), [{k: v for k, v in f.items() if not k.startswith("_")} for f in att["flights"].values()], pin)
     outputs["Pack_Observed.lua"] = write_observed_pack(observed, provenance_label(observed_path), sha256_file(observed_path))
     n_att = len(att["quests"])
-    man = ["Forever Codex data manifest (generated; deterministic)", f"generator: {GENERATOR_VERSION}",
+    man = ["Quest Flow data manifest (generated; deterministic)", f"generator: {GENERATOR_VERSION}",
            f"att source: {pin['repo']} @ {pin['sha']} ({pin['license']})",
            f"att quests: {n_att} (with coordinates: {sum(1 for q in att['quests'].values() if 'map' in q)}, "
            f"with giver npc: {sum(1 for q in att['quests'].values() if 'giverNpc' in q)}, "

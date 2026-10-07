@@ -732,7 +732,7 @@ function P.ReportLines()
 	L[#L + 1] = "--- ITEM PROBE (read-only: what the Forever client exposes; no advice is built on it) ---"
 	L[#L + 1] = "PROVEN = a real value was read on this client | UNPROVEN = not seen working yet | FAILED = missing or returned nothing"
 	local n, newest, dialogs = P.RewardStats()
-	L[#L + 1] = string.format("reward dialogs seen: %d | quests with a stored observation (src=CODEX_OBSERVED): %d%s", dialogs, n,
+	L[#L + 1] = string.format("reward dialogs seen: %d | quests with a stored observation (made by Quest Flow while you played): %d%s", dialogs, n,
 		newest and string.format(" | latest Q:%s at %s, %d choice(s), %d guaranteed", tostring(newest.q), tostring(newest.at), #newest.choices, #newest.rewards) or "")
 	local okC, choice = pcall(P.ChoiceLines)
 	if okC then for _, l in ipairs(choice) do L[#L + 1] = l end elseif ns.RecordError then ns.RecordError("itemprobe choices", choice) end

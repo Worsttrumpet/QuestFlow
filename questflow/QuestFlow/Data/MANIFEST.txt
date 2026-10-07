@@ -1,4 +1,4 @@
-Forever Codex data manifest (generated; deterministic)
+Quest Flow data manifest (generated; deterministic)
 generator: codex-data-1
 att source: https://github.com/ATTWoWAddon/AllTheThings.git @ 8e25511677df4ea5c3d0322009eafc18f203ffd3 (MIT)
 att quests: 1041 (with coordinates: 1017, with giver npc: 790, with required level: 888, repeatable/yearly: 44)
