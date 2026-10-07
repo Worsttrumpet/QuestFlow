@@ -77,3 +77,13 @@ do
 	local manifest = H.readFile(H.addonDir .. "/Data/MANIFEST.txt")
 	check(manifest:find("^Quest Flow data manifest") ~= nil, "the shipped data manifest is titled Quest Flow")
 end
+
+section("character name: Quest Flow shows exactly what the client's UnitName gives, including a two-word name")
+do
+	local ns = boot({ char = { level = 16, class = "Rogue", classToken = "ROGUE", name = "Codex Runner" }, synthetic = true })
+	local text
+	rawset(ns.UI, "ShowReport", function(t) text = t end)
+	H.slash("report")
+	check(type(text) == "string" and text:find("\nCodex Runner | level 16", 1, true) ~= nil, "the report's first line carries the full two-word name  [" .. tostring(text and text:match("\n([^\n]*)\n")) .. "]")
+	check(text:find("Character: Codex Runner level 16", 1, true) ~= nil, "and so does the Character line")
+end
