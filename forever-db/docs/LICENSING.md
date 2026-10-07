@@ -24,7 +24,7 @@ QuestieDB addon through its documented public API at runtime, and it must never 
 - The Era baseline flag must come from a client table (an Era QuestV2), never from Questie's GPL data.
 
 ## Decisions left to the project owner
-1. Code license: an MIT `LICENSE` was added at the repository root for the public release preparation (2026-10-07); the owner confirms it (and the copyright line) before publishing.
+1. Code license (none added).
 2. Community-data license and contributor terms.
 3. Whether/when to enable the Wago fetcher (after reading its terms).
 4. Whether to seek Blizzard clarification before publishing any derived client data.

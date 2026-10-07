@@ -1,0 +1,62 @@
+A0 Scorpid / Vile / Cactus, REAL DATA AS IT IS | NOW=Accept: Sarkoth | ALSO DO=Accept: Wayward Weapons | THEN=Accept: Lazy Peons | seq=Q:790:ACCEPT>Q:4641:ACCEPT>Q:2161:ACCEPT | net=40.6351 | secs=164.55 | stops=12 | reminders=3
+A1 Scorpid / Vile / Cactus, with the playtest-observed objective positions | NOW=Continue: Sting of the Scorpid | ALSO DO=Accept: Wayward Weapons | THEN=Accept: Sarkoth | seq=Q:789:OBJECTIVE>Q:790:ACCEPT>Q:4641:ACCEPT | net=45.5873 | secs=225.54 | stops=14 | reminders=1
+A2 Scorpid / Vile / Cactus, standing at the camp turn-ins | NOW=Accept: Lazy Peons | ALSO DO=Accept: Your Place In The World | THEN=Accept: Wayward Weapons | seq=Q:4641:ACCEPT>Q:97279:ACCEPT>Q:790:ACCEPT | net=56.2268 | secs=100.74 | stops=15 | reminders=1
+D1 Lazy Peons density (camp), real data + illustrative objective placement | NOW=Continue: Lazy Peons | ALSO DO=Accept: Your Place In The World | THEN=Accept: Wayward Weapons | seq=Q:4641:ACCEPT>Q:97279:ACCEPT>Q:790:ACCEPT | net=47.6030 | secs=206.99 | stops=16 | reminders=0
+E2 Chain credit on real data: two ready turn-ins | NOW=Accept: A Peon's Burden | ALSO DO=Accept: Wayward Weapons | THEN=Accept: Vile Familiars | seq=Q:2161:ACCEPT>Q:4641:ACCEPT>Q:790:ACCEPT | net=40.5325 | secs=164.89 | stops=12 | reminders=2
+H1 Level 2 vs level 4 at the camp (same place, same log) | NOW=Accept: Vile Familiars | ALSO DO=Accept: Your Place In The World | THEN=Accept: Wayward Weapons | seq=Q:4641:ACCEPT>Q:97279:ACCEPT>Q:790:ACCEPT | net=56.6530 | secs=101.99 | stops=10 | reminders=0
+B Turn-in 300 yd away vs useful work 40 yd away | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Turn in: The ready quest | seq=Q:2:OBJECTIVE>Q:1:TURN_IN | net=35.2143 | secs=309.29 | stops=2 | reminders=0
+C1 Productive travel: pickup 10 yd off the path to a 300 yd destination | NOW=Accept: Pickup on the way | ALSO DO=(none) | THEN=Continue: Destination | seq=Q:2:ACCEPT>Q:1:OBJECTIVE | net=12.6143 | secs=177.95 | stops=2 | reminders=0
+C2 Productive travel: pickup 120 yd off the path (a real detour) | NOW=Accept: Pickup off the path | ALSO DO=(none) | THEN=Continue: Destination | seq=Q:2:ACCEPT>Q:1:OBJECTIVE | net=9.0348 | secs=189.88 | stops=2 | reminders=0
+D2 Local density: five local actions vs one 375 yd away | NOW=Continue: Local objective one | ALSO DO=Accept: Local pickup one | THEN=(none) | seq=Q:1:OBJECTIVE | net=62.5714 | secs=391.43 | stops=2 | reminders=0
+E1 Chain credit: two ready turn-ins 500 yd apart, one unlocks a follow-up | NOW=Turn in: Quest B | ALSO DO=(none) | THEN=(none) | seq=Q:2:TURN_IN | net=30.0714 | secs=86.43 | stops=2 | reminders=0
+F Unknown location | NOW=Accept: Located pickup | ALSO DO=(none) | THEN=(none) | seq=Q:1:ACCEPT | net=10.0714 | secs=26.43 | stops=1 | reminders=2
+G Same-name quests | NOW=Turn in: Simple Parchment | ALSO DO=Accept: Simple Parchment | THEN=(none) | seq=Q:2384:ACCEPT | net=37.9695 | secs=40.10 | stops=1 | reminders=0
+I1 Skip: Q:<id> on an unaccepted quest | NOW=Accept: Other pickup | ALSO DO=(none) | THEN=(none) | seq=Q:2:ACCEPT | net=10.9286 | secs=23.57 | stops=1 | reminders=0
+I2 Skip: QT:<id> (the key the old engine used for quests already in the log) | NOW=Accept: Other pickup | ALSO DO=(none) | THEN=(none) | seq=Q:2:ACCEPT | net=10.9286 | secs=23.57 | stops=1 | reminders=0
+I3 Skip + Add, and a skipped quest already in the log | NOW=Accept: Added after skipping | ALSO DO=Accept: Plain | THEN=(none) | seq=Q:1:ACCEPT | net=205.2857 | secs=35.71 | stops=1 | reminders=0
+J Confidence and provenance | NOW=Turn in: Assumed turn-in | ALSO DO=Continue: Approximate objective area | THEN=Accept: ATT-only pickup | seq=Q:3:TURN_IN>Q:4:ACCEPT>Q:1:ACCEPT | net=40.0925 | secs=99.69 | stops=4 | reminders=0
+K1 Far quest: local work + a quest about 3000 yd away | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=Accept: Local pickup two | seq=Q:1:ACCEPT>Q:2:ACCEPT | net=22.5942 | secs=44.69 | stops=3 | reminders=0
+K2 Far quest: the same, with the far zone chosen as the route zone | NOW=Accept: Far pickup | ALSO DO=Accept: Local pickup one | THEN=(none) | seq=Q:3:ACCEPT | net=-115.0714 | secs=443.57 | stops=3 | reminders=0
+L Only one clearly useful action | NOW=Turn in: The only quest | ALSO DO=(none) | THEN=(none) | seq=Q:1:TURN_IN | net=24.9286 | secs=23.57 | stops=1 | reminders=0
+L2 Two stops, no opportunity: NOW and THEN, ALSO DO stays empty | NOW=Continue: Area east | ALSO DO=(none) | THEN=Continue: Area west | seq=Q:1:OBJECTIVE>Q:2:OBJECTIVE | net=13.7143 | secs=274.29 | stops=2 | reminders=0
+M Same-stop batching, then the next stop | NOW=Accept: Pickup A | ALSO DO=Accept: Pickup B | THEN=Turn in: Turn-in at the next stop | seq=Q:1:ACCEPT>Q:3:TURN_IN | net=34.7857 | secs=110.71 | stops=2 | reminders=0
+
+SWEEP (REVIEW): B: distance of a ready turn-in vs two local objectives
+  turn-in at | plan
+    40 yd | NOW=Turn in: The ready quest | ALSO DO=(none) | THEN=Continue: Local objective one
+   100 yd | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Turn in: The ready quest
+   200 yd | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Turn in: The ready quest
+   300 yd | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Turn in: The ready quest
+   500 yd | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Turn in: The ready quest
+   800 yd | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=(none)
+
+SWEEP (REVIEW): C: how far off the path to a 300 yd destination a pickup lies
+  offset | what the planner does with the pickup | plan
+     5 yd off the path | pickup: NOW (on the way, +0s)              | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
+    10 yd off the path | pickup: NOW (on the way, +0s)              | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
+    20 yd off the path | pickup: NOW (on the way, +0s)              | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
+    40 yd off the path | pickup: NOW (on the way, +1s)              | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
+    80 yd off the path | pickup: NOW (on the way, +6s)              | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
+   120 yd off the path | pickup: NOW (on the way, +12s)             | NOW=Accept: Pickup | ALSO DO=(none) | THEN=Continue: Destination
+   200 yd off the path | pickup: THEN                               | NOW=Continue: Destination | ALSO DO=(none) | THEN=Accept: Pickup
+   300 yd off the path | pickup: rejected as ALSO DO: TOO_FAR       | NOW=Continue: Destination | ALSO DO=(none) | THEN=(none)
+
+SWEEP (REVIEW): K: distance of a far-zone pickup (same continent) next to two local pickups
+  distance | what the planner does with it | plan
+   2500 yd | far pickup: rejected as ALSO DO: TOO_FAR | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=Accept: Local pickup two
+   2600 yd | far pickup: rejected as ALSO DO: TOO_FAR | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=Accept: Local pickup two
+   2750 yd | far pickup: rejected as ALSO DO: TOO_FAR | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=Accept: Local pickup two
+   3000 yd | far pickup: rejected as ALSO DO: TOO_FAR | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=Accept: Local pickup two
+   3250 yd | far pickup: rejected as ALSO DO: TOO_FAR | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=Accept: Local pickup two
+   3500 yd | far pickup: rejected as ALSO DO: TOO_FAR | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=Accept: Local pickup two
+
+SWEEP (REVIEW): K: a pickup on another continent next to one local pickup
+  case | what the planner does with it | plan
+  other continent | pickup: rejected as ALSO DO: UNKNOWN_TRANSIT | NOW=Accept: Local pickup one | ALSO DO=(none) | THEN=(none) | unknown legs in the plan: 0
+
+SWEEP (REVIEW): strategies on one situation (turn-in 300 yd, two local objectives, a pickup 250 yd south)
+  strategy | plan
+  efficient      | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
+  fast           | NOW=Continue: Local objective one | ALSO DO=(none) | THEN=Turn in: The ready quest
+  questing_only  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away
+  completionist  | NOW=Continue: Local objective one | ALSO DO=Continue: Local objective two | THEN=Accept: A pickup 250 yd away

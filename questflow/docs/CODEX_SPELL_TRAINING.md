@@ -1,0 +1,63 @@
+# SPELL TRAINING (0.7.1)
+
+A section of the existing Codex window, below DUNGEON QUESTS. Informational: Codex never trains anything and has no Learn button.
+
+## What it shows
+Class spells (one rank at a time) that the trainer window listed on a past visit, whose level requirement the character has reached, that the character does not know and has not
+marked **Don't Want to Learn**. Name, rank, cost (the project's `Items.Money`, e.g. `12s`), and `Total training: ...` for what is listed. No spells: no section (no empty header).
+
+## Evidence boundary (what is and is not verified)
+* **Not verified on Forever:** nothing in this repository proves the trainer, spell or spellbook APIs work on Forever. Before 0.7.1 the repo said "Forever's spell and trainer APIs are unverified"
+  (`NewForYou.lua`, `Knowledge.lua`); no earlier probe or "What's Training?" integration exists. Every read is behind `pcall`; a missing API means the section stays empty.
+  `/codex spells` and `/codex report` print which functions exist and what the last trainer read returned.
+* **The only source of "what can be trained" is the trainer window the player opens** (`GetNumTrainerServices`, `GetTrainerServiceInfo`, `GetTrainerServiceCost`, `GetTrainerServiceLevelReq`,
+  `GetTrainerServiceItemLink`, `IsTradeskillTrainer`), read at `TRAINER_SHOW` / `TRAINER_UPDATE`. There is no remote trainer query: nothing is listed before the first visit, costs are those
+  shown at the last visit, and a spell becomes listed at its level requirement from the stored visit. Codex ships no spell, rank, cost or trainer data and no locations.
+* **Known spells:** `IsPlayerSpell(id)` / `IsSpellKnown(id)` when the trainer link carries a spell id (`|Hspell:ID|`), otherwise the spellbook by name and rank
+  (`GetNumSpellTabs`, `GetSpellTabInfo`, `GetSpellBookItemName`). A trainer service shown as "used" marks the spell learned.
+* **Learning is noticed automatically:** `TRAINER_UPDATE` (a purchase), `LEARNED_SPELL_IN_TAB` / `SPELLS_CHANGED` (registered optionally; refused events are ignored) and the known-spell
+  check on every recompute. Nothing polls.
+
+## Ranks
+A rank is its own spell id on a Classic-style client, so a new rank is a new entry and a new opportunity. Only the lowest rank still to learn of a spell is shown; a known higher rank retires
+lower ones. If the trainer gives no spell id the key is `name|rank` and is flagged `no spell id` in the report. **Forever may differ**: if Forever merges ranks into one spell id, Codex would
+treat the new rank as the same entry. That is unverified.
+
+## Don't Want to Learn
+Per character (`Prefs.Char().spellTraining.dismissed`, keyed by spell id). Survives recompute, reload, relog; never shared between characters; a new rank (new id) is not covered by an old
+dismissal. `/codex spells restore` brings dismissed spells back. The store is stamped with the class: a deleted-and-recreated character of another class under the same name starts empty.
+
+## Not done / limits
+No trainer locations, no automatic training, no planner input (the planner, adapter and engine do not reference it; a test checks that). Profession trainers are ignored here (they feed PROFESSIONS).
+A profession-trainer check relies on `IsTradeskillTrainer`; when it is absent the snapshot is flagged `trainerKind = unknown`.
+
+## Observed on Forever (build 70205, 0.7.1 playtest, level 23 Hunter)
+* Present: `GetNumTrainerServices`, `GetTrainerServiceInfo`, `GetTrainerServiceCost`, `GetTrainerServiceLevelReq`, `GetTrainerServiceItemLink`, `IsTradeskillTrainer`, `IsPlayerSpell`, `IsSpellKnown`.
+  **Absent:** `GetNumSpellTabs`, `GetSpellBookItemName` (so the spellbook name/rank fallback cannot work on Forever).
+* A class trainer window returned **89 services** and `IsTradeskillTrainer()` false; `GetTrainerServiceItemLink` gave **no spell id for any of them** (0 of 89 matched `spell:<id>`), and **no service was stored**,
+  so the category values Forever returns are not the Classic strings `available` / `unavailable` / `used` (or are not strings). Without ids the known-spell check by `IsPlayerSpell` cannot run either.
+* A profession trainer window read once returned 0 services (probably an empty update as the window closed; `TRAINER_UPDATE` fires many times).
+* 0.7.2 adds diagnostics only (the exact categories, the first six raw services including the link, the latest non-empty read, and which other spell names exist). The next report decides how to read the list; nothing is guessed.
+
+## Observed on Forever, second report (0.7.2 diagnostics, level 23 Hunter)
+`GetTrainerServiceInfo(i)` returns **(name, category, <number>, ...)**: the SECOND value is the category string (`"unavailable"` ...) and the third is a number repeated across spells (an icon file id, not a spell id). There is no rank text
+and `GetTrainerServiceItemLink` is nil for every service. 0.7.3 therefore reads each return after the name by what it is (a known category string in any case = category, another non-empty string = rank, a number = icon),
+keys a spell without an id as `N:<name>|<rank>|L<level requirement>` and orders the ranks of one spell by level requirement (only the lowest unlearned one is listed). **Limitation:** with no spell id and no spellbook API,
+Codex learns that a spell was trained only from the trainer window itself (`TRAINER_UPDATE` after the purchase, or the next visit shows it as used); it cannot notice a spell learned some other way while no trainer window is open.
+
+0.7.4: a spell the trainer shows as already known reports level requirement 0 on Forever (and the trainer window shows its rank text, e.g. "Aspect of the Hawk (Rank 2) - Already known"), so a stored entry is matched to a "used" row by name and cost (or spell id), not by key.
+`/codex spells`, `/codex professions` and `/codex feedback status|list` now open the copyable report window (Ctrl+C) instead of printing to chat.
+
+## 0.7.7: learned state from the purchase itself
+**Real-client finding (0.7.6, Tauren Shaman):** Rockbiter Weapon stayed listed after it was bought. With the trainer's "Already Known" filter off, a learned spell is no longer listed, so the window after the
+purchase held no row to read ("latest read was empty"), and neither the `used` row nor the absence rule (which needs a stored spell to appear in the window) had anything to act on. With the filter on, the row came back as
+`used` and the spell left correctly. A trainer read alone therefore cannot say that a purchase worked.
+
+**What 0.7.7 does:** `SpellTraining.InstallHook` puts a post-hook (`hooksecurefunc`) on `BuyTrainerService`. When it fires, the AVAILABLE class-trainer row at that index is remembered as a pending purchase (session memory only,
+tied to the character that made it). The client's own learn event confirms it: `LEARNED_SPELL_IN_TAB` (the oldest pending purchase whose price was taken), or `SPELLS_CHANGED` when the price was also taken (`GetMoney` fell by the cost).
+A confirmed purchase marks that entry learned (`learnedBy` says how) and marks every lower rank of the same spell learned too (ranks are bought in order; with no rank text the level requirement orders them).
+A refused purchase (not enough money) fires no learn event and is dropped after 20 s. The trainer's `used` row and the absence rule are unchanged and remain the fallback. No spell id is invented and no spell data is added.
+
+**Limitations (not proven on Forever):** `BuyTrainerService` and `hooksecurefunc` being the path of the Train button on this client is UNVERIFIED; `/codex spells` prints the hook state and the counters (purchases seen, matched by a learn event, expired with no
+learn event). If the hook state says "BuyTrainerService absent", or purchases seen stays 0 after buying, the button uses another path and only the fallback applies. Two purchases within seconds, one of them refused, can attach a learn event to the wrong
+one (the price check narrows this). Money that changes for another reason (a vendor sale) in the same few seconds as an unrelated spell change could confirm a refused purchase; that needs a refused buy plus both coincidences.

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "forever-harvest-observation-v0",
+  "title": "Forever harvest export, contract v0 (DESIGN ONLY: nothing implements this yet)",
+  "type": "object",
+  "required": ["contract_version", "recorder", "client", "session", "observations"],
+  "additionalProperties": false,
+  "properties": {
+    "contract_version": {"const": "harvest.v0"},
+    "recorder": {
+      "type": "object", "required": ["name", "version"],
+      "properties": {"name": {"type": "string"}, "version": {"type": "string"}}
+    },
+    "client": {
+      "type": "object", "required": ["product", "game_build", "build_source"],
+      "properties": {
+        "product": {"type": "string", "description": "e.g. wow_classic_beta"},
+        "game_build": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+\\.\\d+$"},
+        "build_source": {"enum": ["client_api", "toc_only", "user_declared"], "description": "Only client_api lets the pipeline set observed_build_id; the others are claims."},
+        "interface_version": {"type": "integer"}
+      }
+    },
+    "session": {
+      "type": "object", "required": ["session_id", "started_at", "locale"],
+      "properties": {
+        "session_id": {"type": "string", "description": "random per export; must not be derived from account or character"},
+        "started_at": {"type": "string", "format": "date-time"},
+        "locale": {"type": "string"}
+      }
+    },
+    "observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}}
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "properties": {
+        "ui_map_id": {"type": "integer"},
+        "map_x": {"type": "number", "description": "0-1 as returned by the client API; the pipeline converts to percent"},
+        "map_y": {"type": "number"},
+        "world": {"type": "object", "properties": {"instance_id": {"type": "integer"}, "x": {"type": "number"}, "y": {"type": "number"}}},
+        "source_api": {"type": "string"}
+      }
+    },
+    "api_return": {
+      "type": "object", "required": ["api", "returns"],
+      "description": "Raw API result, uninterpreted, so field semantics stay attributable.",
+      "properties": {"api": {"type": "string"}, "args": {"type": "array"}, "returns": {"type": "array"}}
+    },
+    "observation": {
+      "type": "object", "required": ["kind", "observed_at", "channel", "data"],
+      "properties": {
+        "kind": {"enum": ["quest_record", "quest_giver_seen", "quest_turnin_seen", "objective_progress", "npc_seen", "object_seen", "taxi_node_seen", "wdb_record"]},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "channel": {"enum": ["api_call", "event", "wdb_cache", "manual_entry"]},
+        "data": {"type": "object"}
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"const": "quest_record"}}}, "then": {"properties": {"data": {"required": ["quest_id", "values"], "properties": {"quest_id": {"type": "integer"}, "values": {"type": "array", "items": {"$ref": "#/$defs/api_return"}}}}}}},
+        {"if": {"properties": {"kind": {"enum": ["quest_giver_seen", "quest_turnin_seen"]}}}, "then": {"properties": {"data": {"required": ["npc_id", "position"], "properties": {"npc_id": {"type": "integer"}, "quest_id": {"type": "integer"}, "position": {"$ref": "#/$defs/position"}}}}}},
+        {"if": {"properties": {"kind": {"const": "objective_progress"}}}, "then": {"properties": {"data": {"required": ["quest_id", "objective_index", "values"], "properties": {"quest_id": {"type": "integer"}, "objective_index": {"type": "integer"}, "values": {"type": "array", "items": {"$ref": "#/$defs/api_return"}}, "position": {"$ref": "#/$defs/position"}}}}}},
+        {"if": {"properties": {"kind": {"enum": ["npc_seen", "object_seen"]}}}, "then": {"properties": {"data": {"required": ["entity_id", "position"], "properties": {"entity_id": {"type": "integer"}, "name": {"type": "string"}, "position": {"$ref": "#/$defs/position"}, "unit_token": {"type": "string"}}}}}},
+        {"if": {"properties": {"kind": {"const": "taxi_node_seen"}}}, "then": {"properties": {"data": {"required": ["node_id"], "properties": {"node_id": {"type": "integer"}, "values": {"type": "array", "items": {"$ref": "#/$defs/api_return"}}}}}}},
+        {"if": {"properties": {"kind": {"const": "wdb_record"}}}, "then": {"properties": {"data": {"required": ["cache_file", "record_type", "record_id", "payload_sha256", "parser_version"], "properties": {"cache_file": {"type": "string"}, "record_type": {"type": "string"}, "record_id": {"type": "integer"}, "payload_sha256": {"type": "string"}, "parser_version": {"type": "string"}}}}}}
+      ]
+    }
+  }
+}

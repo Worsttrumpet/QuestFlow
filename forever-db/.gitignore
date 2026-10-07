@@ -1,0 +1,8 @@
+# Never commit acquired or generated data (Blizzard-derived content, redistribution unresolved)
+data/
+*.sqlite
+*.sqlite-journal
+*.csv
+__pycache__/
+.pytest_cache/
+.venv/

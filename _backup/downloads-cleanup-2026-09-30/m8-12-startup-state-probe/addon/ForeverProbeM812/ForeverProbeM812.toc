@@ -1,8 +1,0 @@
-## Interface: 16001
-## Title: Forever Probe M8.12 (Startup State)
-## Notes: Disposable M8.12 research probe. Records what quest state is readable at each point of addon startup, and whether completed-quest flags are available. Read-only. Remove after the M8.12 test.
-## Author: WoW Forever open database project
-## Version: m8-12-probe-0.2
-## SavedVariables: ForeverProbeM812DB
-
-ForeverProbeM812.lua
