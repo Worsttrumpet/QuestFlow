@@ -2,6 +2,10 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.14.6] - one bind is counted once
+
+- Binding at an innkeeper works on the real client (bind point learned on the right zone map, innkeeper recorded). The client reports one bind twice; the second report was counted as an "unplaced" bind in the report. It is now recognised as the same bind. Report wording only; nothing changes in what is learned or routed.
+
 ## [0.14.5] - a Hearthstone trip no longer records the loading-screen position
 
 - The first real Hearthstone trip recorded the bind point on the whole-continent map (the client answers that way while the loading screen ends), not on the zone you arrived in. An arrival is now accepted only on a zone-level map, and only when it reads the same place twice in a row. An old record of that kind is ignored, so the bind point is learned again from the next trip (or from binding at an innkeeper).

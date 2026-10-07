@@ -152,6 +152,7 @@ function S.OnTaxiMap() S.Observe("flightmaster", S.NpcNow(), S.PlayerPoint()) en
 -- ---------------------------------------------------------------- bind point
 
 local bindOffer          -- { point, t }: the character was asked to bind here
+local lastBound          -- when the last bind was recorded (a duplicate report of it within seconds is not a new bind)
 
 function S.OnBinderOffer() bindOffer = { point = S.PlayerPoint(), npc = S.NpcNow(), t = wall() } end
 
@@ -159,7 +160,10 @@ function S.OnBinderOffer() bindOffer = { point = S.PlayerPoint(), npc = S.NpcNow
 function S.OnBound()
 	local o = bindOffer
 	bindOffer = nil
+	-- the client reports one bind twice (the event and the system message): the second is the same bind, not an unplaced one
+	if not o and lastBound and wall() - lastBound <= 5 then return true end
 	if not (o and o.point and wall() - o.t <= 120) then S.bindUnplaced = (S.bindUnplaced or 0) + 1 return false end
+	lastBound = wall()
 	local name
 	if type(GetBindLocation) == "function" then local ok, v = pcall(GetBindLocation) if ok then name = text(v) end end
 	if ns.Travel then ns.Travel.SetBind(o.point.map, o.point.x, o.point.y, name, "binder") end
@@ -319,7 +323,7 @@ function S.ReportLines()
 		"; bind point " .. (sm.bind and "learned" or "not learned") .. "; entrances not placed=" .. sm.entranceUnplaced .. ", binds not placed=" .. sm.bindUnplaced .. "." }
 end
 
-function S._Reset() hearthCast, bindOffer, lastOutdoor, sinceSample, S.version, S.entranceUnplaced, S.bindUnplaced, S.bindFromHearth = nil, nil, nil, 0, 0, 0, 0, 0 end
+function S._Reset() lastBound, hearthCast, bindOffer, lastOutdoor, sinceSample, S.version, S.entranceUnplaced, S.bindUnplaced, S.bindFromHearth = nil, nil, nil, nil, 0, 0, 0, 0, 0 end
 
 -- ---------------------------------------------------------------- events
 

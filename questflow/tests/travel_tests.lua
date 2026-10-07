@@ -368,6 +368,7 @@ do
 	local b = ns.Travel.Bind()
 	check(b and b.map == 9101, "the bind point is where the offer was made")
 	check(#S.Find("innkeeper") == 0 or true, "an innkeeper record is only made when the NPC is readable")
+	check(S.OnBound() == true and (S.bindUnplaced or 0) == 1, "the same bind reported a second time is not counted as an unplaced bind (only the earlier offer-less one is)")
 	_G.ERR_DEATHBIND_SUCCESS_S = nil
 end
 
