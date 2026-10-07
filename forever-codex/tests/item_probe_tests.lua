@@ -144,6 +144,20 @@ do
 	check(#ns.errors == 0, "no errors")
 end
 
+section("item probe 0.9.3: a live refresh read keeps the event that opened the dialog (the real 0.9.2 finding: it became FACTS and the reward overlay never drew)")
+do
+	local ns = fresh()
+	install({ items = ITEMS, questId = 792, choices = { { id = 4915 }, { id = 4914 } }, rewards = {} })
+	ns.ItemProbe.OnEvent("QUEST_COMPLETE")
+	local df = ns.ItemProbe.DialogFacts(true)
+	check(df.live == true and df.at == "QUEST_COMPLETE", "after a live refresh the dialog is still the turn-in  [" .. tostring(df.at) .. "]")
+	check(ns.ItemProbe.DialogFacts(true).at == "QUEST_COMPLETE", "and after a second refresh")
+	check(ns.Advisor.Display() ~= nil, "so the advisor's display exists for the open turn-in dialog (no fake dialog: the live path)")
+	ns.ItemProbe.OnEvent("QUEST_DETAIL")
+	check(ns.ItemProbe.DialogFacts(true).at == "QUEST_DETAIL" and ns.Advisor.Display() == nil, "an accept preview (QUEST_DETAIL) stays an accept preview, and is not annotated")
+	check(#ns.errors == 0, "no errors")
+end
+
 section("item probe: a use effect is PROVEN only when the client returns one")
 do
 	local ns = fresh()

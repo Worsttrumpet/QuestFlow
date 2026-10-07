@@ -258,7 +258,10 @@ local function readDialog(event, persist)
 	if persist then s.dialogs = s.dialogs + 1 end
 
 	local obs = { src = "CODEX_OBSERVED", q = qid, at = event, last = wall(), build = build(), choices = {}, rewards = {} }
-	local dlg = { q = qid, at = event, t = wall(), choices = {}, rewards = {} }
+	-- A live refresh read ("FACTS", made by DialogFacts) must not erase WHICH dialog this is: the turn-in (QUEST_COMPLETE) or the accept preview (QUEST_DETAIL). It keeps the event that
+	-- opened the same quest's dialog (before 0.9.3 it overwrote it with "FACTS", so the reward overlay never saw a turn-in).
+	local keepAt = event == "FACTS" and P.dialog and P.dialog.q == qid and P.dialog.at or nil
+	local dlg = { q = qid, at = keepAt or event, t = wall(), choices = {}, rewards = {} }
 	P.dialog = dlg
 	local getInfo, getLink = type(GetQuestItemInfo) == "function" and GetQuestItemInfo, type(GetQuestItemLink) == "function" and GetQuestItemLink
 	for _, spec in ipairs({ { "choice", nChoice, obs.choices }, { "reward", nReward, obs.rewards } }) do
