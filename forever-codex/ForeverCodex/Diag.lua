@@ -624,7 +624,7 @@ function D.PlaytestLines(snap, lines)
 	local ctx, plan = ns.State and ns.State.ctx, ns.State and ns.State.plan
 	local function add(s) L[#L + 1] = s end
 	local function num(v, f) return type(v) == "number" and string.format(f or "%.1f", v) or "?" end
-	add(string.format("=== FOREVER CODEX PLAYTEST REPORT v%s ===", tostring(C.VERSION)))
+	add(string.format("=== FOREVER CODEX DIAGNOSTIC REPORT v%s ===", tostring(C.VERSION)))
 	if not (ctx and plan) then
 		add("(the plan has not been computed yet: open /codex once and run the report again)")
 		for _, l in ipairs(lines) do add(l) end

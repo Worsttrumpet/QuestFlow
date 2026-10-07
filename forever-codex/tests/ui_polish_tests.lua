@@ -105,7 +105,7 @@ do
 	rawset(ns.UI, "ShowReport", function(t) text = t end)
 	H.slash("report")
 	check(text and text:find("unfinished: Rot Hide Graverobber slain 4/8", 1, true) and text:find("ALSO COMPLETE: ", 1, true) and text:find("why: Keeps you progressing", 1, true)
-		and text:find("reason=", 1, true) and text:find("Recomputes:", 1, true) and text:find("PLAYTEST REPORT", 1, true), "/codex report keeps the 'why', the reason, the recompute count and now lists the unfinished objectives and the overlap")
+		and text:find("reason=", 1, true) and text:find("Recomputes:", 1, true) and text:find("DIAGNOSTIC REPORT", 1, true), "/codex report keeps the 'why', the reason, the recompute count and now lists the unfinished objectives and the overlap")
 	check(#ns.errors == 0, "no errors")
 end
 
@@ -464,7 +464,7 @@ do
 	local before = ns.State.plan.now and ns.State.plan.now.id
 	H.slash("report")
 	if os.getenv("SHOW_REPORT") then print(captured) end
-	check(type(captured) == "string" and captured:find("PLAYTEST REPORT v" .. ForeverCodex.VERSION, 1, true) ~= nil, "the report opens with the addon version")
+	check(type(captured) == "string" and captured:find("DIAGNOSTIC REPORT v" .. ForeverCodex.VERSION, 1, true) ~= nil, "the report opens with the addon version")
 	for _, head in ipairs({ "WHAT THE WINDOW SHOWS", "WHY (planner trace)", "QUEST LOG", "FULL DIAGNOSTICS", "NEW FOR YOU: hidden" }) do
 		check(captured and captured:find(head, 1, true) ~= nil, "it has the section: " .. head)
 	end

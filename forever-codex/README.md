@@ -1,12 +1,13 @@
-# Forever Codex
+# forever-codex
 
-A dynamic, character-aware progression companion for WoW Classic Forever (0.1 "First Light", local dev build).
-See `docs/CODEX_ARCHITECTURE.md`, `docs/CODEX_PROVENANCE_DECISION.md` and `docs/CODEX_TEST_GUIDE.md`.
+The Forever Codex addon and everything used to build, test and package it. The project overview, installation and usage are in the [repository README](../README.md).
 
 ```
-ForeverCodex/     the addon (copy this folder to Interface\AddOns\)
-generator/        deterministic data-pack generator + tests (reads the local ATT snapshot and the M8.13 observed table)
+ForeverCodex/     the addon (this folder is what a player installs, into Interface\AddOns\)
+generator/        data-pack generator, release packager (package_addon.py) and their tests
 tests/            Lua 5.1 stub-client tests:   lua5.1 run_codex_tests.lua ../ForeverCodex
-docs/             architecture, provenance decision, real-client test guide
-dist/             packaged addon zips for testers, one folder per minor version (dist/0.4/ ...) (built by generator/package_addon.py)
+docs/             design notes, data sources and licences, release process (RELEASING.md)
+dist/             the current release candidate ZIP (built by generator/package_addon.py); older builds are not kept
 ```
+
+Start with `docs/CODEX_ARCHITECTURE.md` (how it fits together), `docs/CODEX_DATA_SOURCES.md` (where data comes from, licences) and `docs/RELEASING.md` (how a release is built). The `docs/CODEX_0xx_*.md` files are development notes kept for history.

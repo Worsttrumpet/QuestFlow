@@ -10,6 +10,14 @@ Every code change that gets packaged for WoW gets a **new patch version** (`0.2.
    -> `forever-codex/dist/0.2/ForeverCodex-0.2.2.zip` (one folder per minor version: `dist/0.2/`, `dist/0.3/`, `dist/0.4/` ...)
 3. If `ForeverCodex-<version>.zip` already exists with different contents the packager stops and tells you to bump the version. Older zips in `dist/` are kept.
 4. Commit the source, the new zip and (when the test count moved) the regenerated `docs/CODEX_PLANNER_EVAL_REPORT.md` together.
+5. Keep only the current build in `dist/`: remove the previous zip (`git rm`) so the repository does not accumulate builds. Public downloads are attached to a GitHub Release (and the CurseForge file), not served from the repository.
+
+## Public release checklist
+1. Version in `ForeverCodex.toc` and `Core.lua`, a `CHANGELOG.md` entry, tests green (all four suites in `CONTRIBUTING.md`).
+2. Package; the packager refuses stray files and the tests check the ZIP holds only the addon, `LICENSE` and `THIRD_PARTY_NOTICES.md`.
+3. Walk `docs/release/RC_MANUAL_TEST_CHECKLIST.md` in the real client with the ZIP itself.
+4. Create the GitHub Release with the ZIP and the changelog text; upload the same ZIP to CurseForge using `docs/release/CURSEFORGE.md`.
+
 
 ## Install
 Unzip `ForeverCodex-<version>.zip` into `World of Warcraft/_classic_/Interface/AddOns/` so you end up with `.../AddOns/ForeverCodex/ForeverCodex.toc`. Replace the old `ForeverCodex` folder; do not merge two builds.

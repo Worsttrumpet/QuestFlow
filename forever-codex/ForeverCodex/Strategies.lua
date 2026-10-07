@@ -1,7 +1,7 @@
 -- ForeverCodex.Strategies: route STYLES. A style is a set of scoring weights and filters applied to the SAME
 -- actions from the SAME data; there is no per-style database. Adding a style = registering one more table.
 --
--- Active in First Light: Efficient, Fast, Questing-only, Completionist.
+-- Active route styles: Efficient, Fast, Questing-only, Completionist.
 -- Planned (listed, greyed, not selectable): Solo, Dungeon-friendly, Hardcore. They need group/dungeon data that
 -- does not exist yet. Hardcore RESTRICTIONS already work independently of the style: the per-character Hardcore
 -- toggle removes RESPAWN_SKIP actions in the engine, so intentional-death shortcuts can never be recommended.

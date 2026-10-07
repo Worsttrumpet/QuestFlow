@@ -191,7 +191,7 @@ do
 	local ns2 = world({})
 	local lines = ns2.Diag.PlaytestLines(ns2.Diag.Snapshot(), {})
 	local text = table.concat(lines, "\n")
-	check(text:find("=== FOREVER CODEX PLAYTEST REPORT", 1, true) and text:find("FEEDBACK (Report a problem", 1, true) and text:find("WHAT THE WINDOW SHOWS", 1, true), "the existing playtest report still works and now says what feedback can do")
+	check(text:find("=== FOREVER CODEX DIAGNOSTIC REPORT", 1, true) and text:find("FEEDBACK (Report a problem", 1, true) and text:find("WHAT THE WINDOW SHOWS", 1, true), "the existing playtest report still works and now says what feedback can do")
 	H.slash("feedback status")
 	H.slash("feedback list")
 	check(#ns2.errors == 0, "the slash commands raise no errors")

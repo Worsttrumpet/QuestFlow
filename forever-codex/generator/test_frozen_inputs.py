@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 FC = Path(__file__).resolve().parent.parent
-LEGACY = FC.parent / "m8-13-progression" / "ForeverQuestGuide"
+LEGACY = FC.parent / "archive" / "m8-13-progression" / "ForeverQuestGuide"
 
 
 def sha(p: Path) -> str:

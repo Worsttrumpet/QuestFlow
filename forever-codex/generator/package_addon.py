@@ -41,12 +41,31 @@ def version() -> str:
     return v
 
 
+# What a player's AddOns folder may contain: the addon's code and data, its textures, its licence and notices. Anything else in ForeverCodex/ stops the build
+# (a stray test report, screenshot, backup or script must never reach a release).
+ALLOWED_SUFFIXES = {".lua", ".toc", ".tga", ".md", ".txt"}
+ALLOWED_NAMES = {"LICENSE"}
+
+
+def addon_files() -> list[Path]:
+    """The files that ship, sorted. Hidden files and Python caches are skipped; any other unexpected file type is an error."""
+    out = []
+    for p in sorted(p for p in ADDON.rglob("*") if p.is_file()):
+        rel = p.relative_to(ADDON)
+        if any(part.startswith(".") or part == "__pycache__" for part in rel.parts):
+            continue
+        if p.suffix.lower() not in ALLOWED_SUFFIXES and p.name not in ALLOWED_NAMES:
+            raise SystemExit(f"{rel.as_posix()}: not a file type a release may contain (allowed: {sorted(ALLOWED_SUFFIXES)} and LICENSE). Remove it from ForeverCodex/.")
+        out.append(p)
+    return out
+
+
 def _zip_bytes() -> bytes:
     import io
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for p in sorted(p for p in ADDON.rglob("*") if p.is_file()):
+        for p in addon_files():
             info = zipfile.ZipInfo("ForeverCodex/" + p.relative_to(ADDON).as_posix(), FIXED_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16

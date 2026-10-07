@@ -15,5 +15,5 @@ Thumbs.db
 *.swo
 *~
 
-# Intentionally NOT ignored: forever-codex/dist/*.zip (versioned release builds), _backup/, _superseded/, archives/, research/ and the
-# generated dataset outputs under m6-dataset-baseline/out/ (kept on purpose). forever-db/.gitignore adds its own data rules.
+# Intentionally NOT ignored: the current release candidate in forever-codex/dist/ (older builds are removed, see forever-codex/docs/RELEASING.md), archive/, research/
+# and the generated dataset outputs under m6-dataset-baseline/out/ (kept on purpose). forever-db/.gitignore adds its own data rules.

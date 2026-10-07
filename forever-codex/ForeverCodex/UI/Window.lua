@@ -1,4 +1,4 @@
--- ForeverCodex.DevUI: the DEVELOPER window (/codex dev): the engineering view with provenance, route pickers and the old buttons.
+-- ForeverCodex.DevUI: the ADVANCED window (/codex dev): the engineering view with provenance, route pickers and the old buttons.
 -- Normal players get the compact window in UI/Main.lua.
 --
 --   header      character, race origin / route zone / current location (three separate things)
@@ -205,7 +205,7 @@ local function buildHeader(frame)
 	local w = UI.w
 	local title = W.Text(frame, W.GOLD)
 	W.Place(title, frame, 12, -10, WIDTH - 60)
-	title:SetText("Forever Codex 0.1 - First Light (dev build)")
+	title:SetText("Forever Codex - advanced view")
 	local close = W.Button(frame, 20, 20, "X", function() frame:Hide() end)
 	close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -6, -6)
 	w.charFS = W.Text(frame, W.WHITE); W.Place(w.charFS, frame, 12, -30, WIDTH - 24)

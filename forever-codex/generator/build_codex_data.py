@@ -13,7 +13,7 @@ Provenance rules (see docs/CODEX_ARCHITECTURE.md):
   * Observed data is written to its own pack with src="observed", verified=true. The engine merges the layers at
     read time; nothing is merged or overwritten here.
   * Output is deterministic: sorted keys/ids, no timestamps, fixed number formatting, input SHA-256s in headers.
-  * Nothing under forever-db/ or m8-13-progression/ is modified; ATT files are only read.
+  * Nothing under forever-db/ or archive/m8-13-progression/ is modified; ATT files are only read.
 
 Usage:  python3 build_codex_data.py [--att-root DIR] [--observed FILE] [--out DIR] [--check]
 """

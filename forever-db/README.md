@@ -20,4 +20,4 @@ python -m foreverdb validate-coords --db ../fdb-data/forever.sqlite
 FOREVERDB_RAW=$RAW python -m pytest tests/integration   # needs the acquired snapshots
 ```
 
-Nothing under `data/` is ever committed. There is no LICENSE file yet: choosing one is the project owner's decision.
+Nothing under `data/` is ever committed. The repository-wide MIT `LICENSE` at the repository root covers the code here (the owner confirms it before publishing); data files are separate and never committed.

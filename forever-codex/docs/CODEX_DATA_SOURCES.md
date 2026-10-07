@@ -20,6 +20,15 @@ Last reviewed: 2026-10-06 (audit hardening pass). If this file and an older docu
 | Game fonts / textures | Referenced by game path, never shipped | n/a | n/a | Blizzard's, used in place |
 | Wago CSVs (`forever-db/data/raw/att-head/.../.wago`) | Local files used by forever-db only; **untracked** (`git ls-files forever-db/data` is empty) | not in the addon | n/a | Blizzard-derived; redistribution unresolved |
 
+## Decision C3: public release preparation (2026-10-07)
+**Context.** The owner asked for the repository and the addon to be prepared for a public release (GitHub and CurseForge) on the licences already in use. Decision C2 listed the conditions for publishing; this records how each stands.
+
+* **Own code and art: MIT.** `LICENSE` at the repository root (copied into the addon). The licence choice and the copyright line ("Forever Codex contributors") are the owner's to confirm before publishing; MIT was chosen because it matches ATT's licence and is the least restrictive.
+* **ATT-derived packs: redistributable under ATT's MIT licence, with the notice.** The MIT text and copyright line now ship inside the addon (`THIRD_PARTY_NOTICES.md`), which the previous zips lacked. Pack headers, the pinned commit and the `verified=false` labels stay. **Residual risk the owner must accept or reject:** ATT's own upstream provenance for its coordinates is unresolved (unchanged since C2); this is not something the repository can settle.
+* **QuestieDB: runtime read only, not shipped, optional, off-switchable.** Unchanged from C1. **Still open:** QuestieDB's licence terms have not been confirmed with its maintainers. Because nothing of it is copied or bundled, this is a courtesy and risk check, not a distribution problem; if the owner prefers zero reliance, flip the default of `Preferences.UseQuestieDB` to false (one line).
+* **Nothing else is added.** No Wowhead, RestedXP, ForeverGuide, Wago or other data is in the addon or the ZIP; `test_data_provenance.py` and the new packaging tests keep it that way.
+* **Repository history** still contains earlier zips and the private research folders. They carry only the data already described here (ATT under MIT). If the owner would rather publish a clean history, create a fresh public repository from the current tree instead of making this one public.
+
 ## Decision C1: the QuestieDB runtime dependency (2026-10-06)
 **Finding.** The addon depends on QuestieDB at runtime (`QuestieBridge.lua`, `## OptionalDeps: QuestieDB`) and, with it present, most of Codex's quest knowledge (about 4,257 of 4,357 quests) comes from it. `docs/LICENSING.md` and `forever-db/docs/LICENSING.md` said
 Questie/QuestieDB was "Not read", which described the dataset pipeline and contradicted the addon.
