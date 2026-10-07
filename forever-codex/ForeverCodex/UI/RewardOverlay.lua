@@ -9,8 +9,8 @@
 --   gives them in the Classic family of clients, CANDIDATES below, and a button is used only when it is shown and, if it says which choice it is (GetID), says the right one. A choice
 --   whose button is not found is simply not annotated (and the report says so: /codex report, REWARD OVERLAY). Nothing is guessed about a frame that is not there.
 --
---   WHEN: it refreshes on the events that change a reward dialog (QUEST_COMPLETE, QUEST_ITEM_UPDATE, late item data, an equipment change) and hides as soon as the dialog is
---   no longer open (a light check, three times a second, only while it is showing).
+--   WHEN: it refreshes on the events that change a reward dialog (QUEST_COMPLETE, QUEST_ITEM_UPDATE, late item data, an equipment change), notices a dialog that is open and not yet
+--   annotated (a light check, about 2.5 times a second), and hides as soon as the dialog is no longer open.
 
 local addonName, ns = ...
 
@@ -28,7 +28,7 @@ local COLORS = {
 local PICK = { 0.45, 0.95, 0.45 }
 local EDGE = { 1, 0.82, 0.20 }
 
-local state = { shown = false, display = nil, attached = {}, summary = nil, since = 0, log = nil }
+local state = { shown = false, display = nil, attached = {}, summary = nil, since = 0, settled = false, backoff = 0 }
 RO.state = state
 local cache = setmetatable({}, { __mode = "k" })           -- button -> its strip (created once, reused)
 
@@ -136,7 +136,7 @@ end
 function RO.Strip(btn) return cache[btn] end
 
 --- Hides every annotation (the dialog closed, or there is nothing to say).
-function RO.Hide() clear() end
+function RO.Hide() clear(); state.settled, state.backoff = false, 0 end
 
 --- Draws a display table (Advisor.Display's result) on the game's choice buttons. Returns how many choices were annotated.
 function RO.Apply(d)
@@ -202,8 +202,15 @@ function RO.Update(opts)
 		clear()
 		return 0
 	end
-	if not d then clear() return 0 end
-	return RO.Apply(d)
+	if not d then
+		clear()
+		state.settled = true                                -- (nothing to annotate in this dialog: do not ask again until it closes or the game sends news)
+		return 0
+	end
+	local n = RO.Apply(d)
+	state.settled = n > 0
+	if n == 0 then state.backoff = 5 end                    -- (the buttons are not there (yet): look again in a couple of seconds, not every tick)
+	return n
 end
 
 --- True while the game's reward dialog looks open (the evidence layer's own check).
@@ -225,12 +232,21 @@ frame:SetScript("OnEvent", function(_, event)
 	end
 	if state.shown or dialogOpen() then RO.Update() end
 end)
+-- A light check (about 2.5 times a second): it HIDES the annotations when the dialog closes, and it NOTICES a dialog that opened without an event we could use (the reward event
+-- fires before the game's reward frame is shown, so the event handler can see "not open yet"; the first real-client report of 0.9.1 showed exactly that).
 frame:SetScript("OnUpdate", function(_, dt)
-	if not state.shown then return end
 	state.since = state.since + (dt or 0)
-	if state.since < 0.3 then return end
+	if state.since < 0.4 then return end
 	state.since = 0
-	if not dialogOpen() then clear() end                    -- the dialog closed (a reward taken, or walked away)
+	local open = dialogOpen()
+	if state.shown then
+		if not open then clear(); state.settled = false end   -- the dialog closed (a reward taken, or walked away)
+	elseif open then
+		if state.backoff > 0 then state.backoff = state.backoff - 1
+		elseif not state.settled then RO.Update() end
+	else
+		state.settled, state.backoff = false, 0
+	end
 end)
 
 --- The report lines: what the overlay could attach to (the first real-client check of the reward frame's structure).

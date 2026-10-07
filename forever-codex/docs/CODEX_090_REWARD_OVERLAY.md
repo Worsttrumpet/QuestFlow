@@ -17,3 +17,9 @@ The player sees the Reward Advisor's result directly on the quest reward choices
 
 ## Not proven on Forever (real-client check needed)
 The reward frame's structure. Choice buttons are looked up as `QuestInfoRewardsFrameQuestInfoItem<n>` then `QuestInfoItem<n>` (Classic-family names), used only when shown and (if they report GetID) the right choice. A choice whose button is not found is not annotated, nothing breaks, and the report says so. Also unverified: the strip and summary geometry (whether they cover item text), and that the tooltip hook runs after the game fills its tooltip.
+
+## 0.9.2: first real-client report (0.9.1, Q5730)
+- **Proven:** the choice buttons are `QuestInfoRewardsFrameQuestInfoItem1..4` (found by the first candidate name), `QuestFrame` and `QuestInfoRewardsFrame` exist, and the reward frame's children include the item buttons, `QuestInfoItemHighlight`, `QuestInfoMoneyFrame` and others.
+- **Bug found:** with the dialog open the report said "not showing". The overlay redrew only on events, and the reward event fires before the game's reward frame is shown, so its "is a dialog open" check saw no and nothing re-checked.
+- **Fix:** a light poll (about 2.5 times a second) also notices a dialog that is open and not yet annotated; it asks the advisor once per dialog (once more after a short back-off when the buttons are not there yet), and keeps hiding on close. No change to the advisor, the display content, the planner or the dungeon system.
+- **Still unverified:** the strip and verdict-line geometry on the real frame (screenshot needed), and the tooltip hook.

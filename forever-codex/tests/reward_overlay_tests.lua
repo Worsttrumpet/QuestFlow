@@ -239,3 +239,44 @@ do
 	check(not u:find("[\128-\255]"), "plain ASCII")
 	check(H.readFile(H.addonDir .. "/ForeverCodex.toc"):find("UI\\RewardOverlay.lua", 1, true) ~= nil, "it is in the .toc")
 end
+
+section("reward overlay: a dialog that opens without a usable event is noticed (the 0.9.1 real-client finding)")
+do
+	local b = buttons(2)
+	RO.Hide()
+	local real = A.Display
+	local calls = 0
+	A.Display = function() calls = calls + 1; return real(dialog({ KRIS(), HAMMER() })) end
+	ns.ItemProbe.DialogOpen = function() return true end
+	check(not RO.state.shown, "(setup) nothing is showing")
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	check(RO.state.shown and calls == 1, "the poll sees the open dialog and draws the annotations, with no event")
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	check(calls == 1 and RO.state.shown, "it does not redraw every tick while the dialog stays open")
+	ns.ItemProbe.DialogOpen = function() return false end
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	check(not RO.state.shown, "and hides when the dialog closes")
+	-- a dialog with nothing to annotate settles: no repeated reads
+	A.Display = function() calls = calls + 1; return nil end
+	ns.ItemProbe.DialogOpen = function() return true end
+	calls = 0
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	check(calls == 1, "a dialog with nothing to annotate is asked about once, not every tick  [" .. calls .. "]")
+	ns.ItemProbe.DialogOpen = function() return false end
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	ns.ItemProbe.DialogOpen = function() return true end
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	check(calls == 2, "and asked again when the next dialog opens")
+	-- buttons not there yet: a few ticks of back-off, then another try
+	RO.Hide()
+	buttons(0)
+	A.Display = function() calls = calls + 1; return real(dialog({ KRIS(), HAMMER() })) end
+	calls = 0
+	RO.frame.__scripts.OnUpdate(RO.frame, 1)
+	for _ = 1, 4 do RO.frame.__scripts.OnUpdate(RO.frame, 1) end
+	check(calls == 1, "no buttons yet: it backs off instead of reading every tick  [" .. calls .. "]")
+	A.Display = real
+	ns.ItemProbe.DialogOpen = nil
+end
