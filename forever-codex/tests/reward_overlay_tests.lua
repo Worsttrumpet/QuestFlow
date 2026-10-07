@@ -66,7 +66,7 @@ local HAMMER = function() return w(2, "Hammer of Orgrimmar", { [DPS] = 12.41, [S
 local AXE = function() return w(3, "Axe of Orgrimmar", { [DPS] = 16.06, [SPI] = 6, [STA] = 6 }, N, { slot = "INVTYPE_2HWEAPON", sub = 1 }) end
 local STAFF = function() return w(4, "Staff of Orgrimmar", { [DPS] = 11.8, [AGI] = 6 }, N, { slot = "INVTYPE_2HWEAPON", sub = 10 }) end
 
-local function rowText(d, i) return RO.StripText(d.rows[i]) end
+local function rowText(d, i) return table.concat(RO.Glyphs(d.rows[i]), ",") end    -- (0.9.7: the icon row as glyph ids)
 
 section("reward overlay: Q5730 (the real four choices): NO CLEAR PICK, nothing recommended")
 do
@@ -75,11 +75,11 @@ do
 	check(d ~= nil and #d.rows == 4, "the display has the four choices")
 	check(d.verdict.kind == "tentative" and d.pick == 2, "the verdict names the Hammer as a TENTATIVE pick (0.9.6)  [" .. tostring(d.verdict.text) .. "]")
 	check(d.rows[1].tags[1] == "MIXED" and d.rows[2].tags[1] == "MIXED", "Kris and Hammer are MIXED")
-	check(d.rows[1].unsure and d.rows[2].unsure and rowText(d, 1):find("usability unclear", 1, true), "and their usability doubt is shown beside it, not hidden")
+	check(d.rows[1].unsure and d.rows[2].unsure and rowText(d, 1):find("UNKNOWN", 1, true), "and their usability doubt is shown beside it as a ? icon, not hidden")
 	check(d.rows[1].short == "+4 stamina, -2 agility", "Kris' short text is the comparison: " .. tostring(d.rows[1].short))
 	check(d.rows[3].tags[1] == "NOT USABLE" and d.rows[3].tags[2] == "VENDOR" and d.rows[4].tags[1] == "NOT USABLE" and d.rows[4].tags[2] == "VENDOR", "Axe and Staff: NOT USABLE and VENDOR, both kept")
 	for i = 1, 4 do check(d.rows[i].recommended == (i == 2 and "tentative" or nil), "choice " .. i .. (i == 2 and " is the tentative pick" or " is not recommended")) end
-	check(rowText(d, 3):find("[NOT USABLE] [VENDOR]", 1, true), "the strip says [NOT USABLE] [VENDOR]")
+	check(rowText(d, 3) == "NOT_USABLE,VENDOR", "the icon row is NOT_USABLE, VENDOR  [" .. rowText(d, 3) .. "]")
 	-- the advisor's own words are what is carried
 	local c = A.Classify(KRIS(), EQ, { character = ROGUE })
 	local reason
@@ -103,9 +103,9 @@ do
 	local d = A.Display(dialog({ poor, good }))
 	check(d.state == "RECOMMEND" and d.pick == 2 and d.verdict.kind == "pick" and d.verdict.text == "CODEX: RECOMMENDED - CHOICE 2", "the advisor recommends choice 2 and the verdict says so  [" .. tostring(d.verdict.text) .. "]")
 	check(d.rows[2].recommended == "pick" and d.rows[1].recommended == nil, "only choice 2 is marked")
-	check(d.rows[2].tags[1] == "UPGRADE" and rowText(d, 2):find("^RECOMMENDED %[UPGRADE%]"), "its strip says RECOMMENDED [UPGRADE] with the stats  [" .. rowText(d, 2) .. "]")
+	check(d.rows[2].tags[1] == "UPGRADE" and rowText(d, 2) == "UPGRADE" and RO.StarGlyph(d.rows[2]) == "RECOMMENDED", "its icon row is UPGRADE plus the recommendation star  [" .. rowText(d, 2) .. "]")
 	check(d.rows[2].short and d.rows[2].short:find("agility", 1, true), "and the stat text")
-	check(not rowText(d, 2):find("agility", 1, true) and #rowText(d, 2) <= 40, "the strip carries tags only: the stat comparison is in the tooltip, so nothing spills past a narrow strip  [" .. rowText(d, 2) .. "]")
+	check(RO.StarGlyph(d.rows[1]) == nil, "the other choice has no star")
 	RO.Update(dialog({ poor, good }))
 	local e1, e2 = RO.state.attached[1], RO.state.attached[2]
 	check(e2 and e2.row.recommended == "pick" and e1 and e1.row.recommended == nil, "the recommendation is attached to choice 2's button, not choice 1's")

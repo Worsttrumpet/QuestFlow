@@ -1,6 +1,7 @@
--- UI: REWARD OVERLAY. Small annotations drawn directly ON the game's own quest reward choices (no Codex window, nothing to move): each choice gets a strip with the advisor's
--- tags and its short stat text, the choice the advisor recommends gets a gold border and the word RECOMMENDED, and one line says CODEX: RECOMMENDED - CHOICE n, or
--- CODEX: NO CLEAR PICK. Hovering a choice adds the advisor's full reason to the game's own item tooltip.
+-- UI: REWARD OVERLAY. Small annotations drawn directly ON the game's own quest reward choices (no Codex window, nothing to move): each choice gets a row of small Codex
+-- ICONS (UI/CodexIcons.lua) under its button, one per classification the advisor gave it (and a ? when usability is unclear); the choice the advisor recommends also gets a gold
+-- border and a star, and one line says CODEX: RECOMMENDED - CHOICE n, or CODEX: NO CLEAR PICK. Hovering a choice adds the advisor's full reason, the stat comparison and the
+-- icons' meaning in words to the game's own item tooltip. (0.9.7: icons replaced the text tags.)
 --
 --   ADVISOR DECIDES, THIS FILE DISPLAYS. Everything shown comes from ns.Advisor.Display() (RewardAdvisor.lua). This file reads no item facts, compares no stats, judges no usability,
 --   and never picks a reward: it cannot click, accept or choose anything, and it never replaces or re-parents the game's reward buttons (the strips are children that take no mouse input).
@@ -49,21 +50,15 @@ end
 
 local function color(c, fam) return c[fam] or c.grey end
 
---- The strip on a choice button (created on first use). It is a child with mouse input off, so the game's button still takes every click and hover.
+--- The icon row on a choice button (created on first use). It is a child with mouse input off, so the game's button still takes every click and hover.
 local function stripFor(btn)
 	local s = cache[btn]
 	if s then return s end
 	local f = CreateFrame("Frame", nil, btn)
 	pcall(f.EnableMouse, f, false)
 	pcall(f.SetFrameLevel, f, ((type(btn.GetFrameLevel) == "function" and safe(btn.GetFrameLevel, btn)) or 1) + 5)
-	pcall(f.SetHeight, f, 12)
-	local bg = f:CreateTexture(nil, "BACKGROUND")
-	pcall(bg.SetAllPoints, bg)
-	pcall(bg.SetColorTexture, bg, 0, 0, 0, 0.72)
-	local fs = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-	pcall(fs.SetPoint, fs, "RIGHT", f, "RIGHT", -3, 0)
-	pcall(fs.SetJustifyH, fs, "RIGHT")
-	s = { frame = f, bg = bg, text = fs, edges = {} }
+	pcall(f.SetHeight, f, ns.CodexIcons and ns.CodexIcons.BadgeSize() or 12)
+	s = { frame = f, badges = {}, edges = {} }
 	for n = 1, 4 do
 		local t = f:CreateTexture(nil, "OVERLAY")
 		pcall(t.SetColorTexture, t, EDGE[1], EDGE[2], EDGE[3], 1)
@@ -96,15 +91,23 @@ local function place(s, btn)
 	edge(e[4], "TOPRIGHT", "BOTTOMRIGHT", 2, nil)
 end
 
---- The text of a strip: "[TAG] [TAG]  (usability unclear)" (a RECOMMENDED choice says RECOMMENDED first). The stat comparison does not fit a strip: it is in the tooltip. Pure; exported for the tests.
-function RO.StripText(row)
-	local parts = {}
-	if row.recommended == "pick" then parts[#parts + 1] = "RECOMMENDED"
-	elseif row.recommended == "tentative" then parts[#parts + 1] = "TENTATIVE PICK" end
-	for _, t in ipairs(row.tags) do parts[#parts + 1] = "[" .. t .. "]" end
-	local s = table.concat(parts, " ")
-	if row.unsure then s = s .. (s ~= "" and " " or "") .. "(usability unclear)" end
-	return s
+--- The glyph ids of a row's icon row, in the advisor's order: one per classification word, a ? added when usability is unclear (unless UNKNOWN is already there). The
+-- recommendation is NOT among them: it is its own star (RO.StarGlyph). Pure; exported for the tests.
+function RO.Glyphs(row)
+	local I = ns.CodexIcons
+	local out, seen = {}, {}
+	for _, t in ipairs(row.tags or {}) do
+		local g = I.GlyphFor(t) or "UNKNOWN"
+		if not seen[g] then seen[g] = true; out[#out + 1] = g end
+	end
+	if row.unsure and not seen.UNKNOWN then out[#out + 1] = "UNKNOWN" end
+	if #out > 4 then for i = #out, 5, -1 do out[i] = nil end end    -- (four fit under a button; the tooltip lists them all)
+	return out
+end
+
+--- The glyph of the recommendation star for a row (nil when the advisor did not name it).
+function RO.StarGlyph(row)
+	if row.recommended == "pick" then return "RECOMMENDED" elseif row.recommended == "tentative" then return "TENTATIVE" end
 end
 
 local function summaryFont()
@@ -137,6 +140,34 @@ function RO.Strip(btn) return cache[btn] end
 --- Hides every annotation (the dialog closed, or there is nothing to say).
 function RO.Hide() clear(); state.settled, state.backoff = false, 0 end
 
+--- Paints one row's icons into its strip: classification badges from the left, the recommendation star at the right end.
+function RO.Draw(s, row)
+	local I = ns.CodexIcons
+	local glyphs = RO.Glyphs(row)
+	local size = I.BadgeSize()
+	for n, g in ipairs(glyphs) do
+		local b = s.badges[n]
+		if not b then b = I.NewBadge(s.frame); s.badges[n] = b end
+		pcall(b.frame.ClearAllPoints, b.frame)
+		pcall(b.frame.SetPoint, b.frame, "LEFT", s.frame, "LEFT", (n - 1) * (size + 2), 0)
+		-- the colour family is the advisor's for the first (main) classification; the rest use their own category family
+		I.Paint(b, g, I.COLORS[(n == 1 and row.family) or I.FAMILY_OF[g] or "grey"] or I.COLORS.grey)
+		pcall(b.frame.Show, b.frame)
+	end
+	for n = #glyphs + 1, #s.badges do pcall(s.badges[n].frame.Hide, s.badges[n].frame) end
+	local star = RO.StarGlyph(row)
+	if star then
+		local b = s.star
+		if not b then b = I.NewBadge(s.frame); s.star = b end
+		pcall(b.frame.ClearAllPoints, b.frame)
+		pcall(b.frame.SetPoint, b.frame, "RIGHT", s.frame, "RIGHT", 0, 0)
+		I.Paint(b, star, I.STAR, true)
+		pcall(b.frame.Show, b.frame)
+	elseif s.star then
+		pcall(s.star.frame.Hide, s.star.frame)
+	end
+end
+
 --- Draws a display table (Advisor.Display's result) on the game's choice buttons. Returns how many choices were annotated.
 function RO.Apply(d)
 	clear()
@@ -157,9 +188,7 @@ function RO.Apply(d)
 			elseif type(top) == "number" and type(topAt) == "number" and math.abs(top - topAt) <= 2 and type(right) == "number" and (type(rightAt) ~= "number" or right > rightAt) then rightmost, rightAt = btn, right end
 			local s = stripFor(btn)
 			place(s, btn)
-			s.text:SetText(RO.StripText(row))
-			local c = row.recommended and PICK or color(COLORS, row.family)
-			s.text:SetTextColor(c[1], c[2], c[3])
+			RO.Draw(s, row)
 			pcall(s.frame.Show, s.frame)
 			for _, t in ipairs(s.edges) do if row.recommended then t:Show() else t:Hide() end end
 			attached[row.index] = { button = name, row = row }
@@ -191,6 +220,7 @@ function RO.Tooltip(btn)
 	local tip = GameTooltip
 	if type(tip.AddLine) ~= "function" then return end
 	pcall(tip.AddLine, tip, " ")
+	if row.recommended then pcall(tip.AddLine, tip, ns.CodexIcons.WORD[RO.StarGlyph(row)], 1, 0.82, 0.2) end
 	pcall(tip.AddLine, tip, "Codex: " .. table.concat(row.tags, " / "), 1, 0.82, 0.2)
 	pcall(tip.AddLine, tip, row.reason, 0.9, 0.9, 0.9, true)
 	if row.short then pcall(tip.AddLine, tip, "Compared with what you wear: " .. row.short, 0.8, 0.8, 0.8, true) end
