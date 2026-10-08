@@ -1,3 +1,5 @@
+> **Superseded.** This guide was written for the 0.2 alpha under the working name Forever Codex. The current guide for testers is `docs/release/TESTER_GUIDE.md`.
+
 # Forever Codex 0.2 alpha: friend test guide
 
 Forever Codex tells you **what to do right now**, what is worth doing **while you are there**, and (sometimes) what

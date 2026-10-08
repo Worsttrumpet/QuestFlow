@@ -32,7 +32,11 @@ Quest Flow reads your character and your quest log and shows you what you could 
 - One short line, such as `QUEST FLOW: UPGRADE`, added to the game's tooltip.
 - Handles main-hand, off-hand, one-handed and two-handed items, with no stat weights or spec guesses.
 
+**Travel that learns from you.** Quest Flow notices the flights you take (and times them), the boats and zeppelins you ride, and your Hearthstone once it knows where you are bound. It suggests a route only when it beats walking and only for ways it has seen work: no guessed boat schedules, no invented flight times.
+
 **Honest about its data.** WoW Forever is new and no complete quest database exists. Quest Flow learns what NPCs really offer you, trusts your game client first, labels every other source as unverified, and says "I don't know" instead of guessing a location or turn-in NPC.
+
+**First run**: a short welcome the first time you log in on a character: theme, tracker, arrow and route style, all changeable later.
 
 **Also included**: spell training reminders, professions status, quest timers, quest-starting items, a journey log, optional party progress cards and a Report a problem button.
 
@@ -43,6 +47,8 @@ Quest Flow reads your character and your quest log and shows you what you could 
 **Privacy**: nothing is uploaded; everything stays in your own saved variables.
 
 **Compatibility**: built for WoW Forever (interface 16001), tested on client 1.60.1 build 70245. Other clients are untested.
+
+**Known limits**: some quests have no known objective place (Quest Flow says so instead of guessing); times for flights, boats and zeppelins you have not taken yet are estimates; so far tested mostly on one Horde druid, so other classes and Alliance characters may show problems. Please report them: use the Feedback button or `/qflow report` and paste it into an issue.
 
 **Not affiliated with Blizzard Entertainment or the WoW Forever project.**
 

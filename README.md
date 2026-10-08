@@ -18,6 +18,8 @@ Quest Flow is an addon for World of Warcraft: Forever. It reads your character a
 - **Reward advice**: icons on the game's own quest reward window (below).
 - **Your choice**: skip anything, add a quest yourself, pick a route zone and style (Efficient, Fast, Questing only, Completionist), or ignore Quest Flow entirely.
 - A compact tracker (it can replace the game's own), a direction arrow, a waypoint that follows NOW, a minimap button and a world-map button.
+- **Travel that learns from you**: flights you take (with the real time they took), boats and zeppelins you ride, and your Hearthstone once Quest Flow has seen where you are bound. A route is only suggested when it beats walking, and only for ways Quest Flow has actually seen work. Nothing is guessed.
+- **First-run welcome**: a short setup the first time you log in on a character (theme, tracker, arrow, route style). You can reopen it later from the settings.
 - Also: spell training reminders, professions status, quest timers, quest-starting items, a journey log and optional party progress cards.
 
 Quest Flow is read-only. It never accepts, completes or turns in quests, never sells or equips anything, and uses no protected game functions. Nothing is uploaded: everything it learns stays in your own saved variables.
@@ -90,6 +92,9 @@ Built for the WoW Forever client (interface 16001) and tested on client 1.60.1, 
 ## Known limitations
 
 - **Quest data is incomplete.** Some quests have no known location and are listed without an arrow. Quests are only called available once an NPC has offered them to you.
+- **Some quests have no known objective place.** The data has no position for them, so Quest Flow says "Place not known: see your quest log" instead of guessing, and it will not make them your NOW until you have started them.
+- **Travel is learned from your own play.** A flight, boat or zeppelin is only used after you have done it (or the flight map showed it), in the direction you did it. Times you have not measured are marked as estimates.
+- **Tested so far on a small group of characters** (mostly one Horde druid). Other classes, Alliance characters and unusual setups may show problems we have not seen: please report them.
 - **Reward advice is conservative.** It handles equipment and vendor value; it does not know your spec, does not weigh different stats against each other (apart from a clear weapon-damage gain between two mixed weapons for Warriors and Rogues), and does not know future needs such as professions. When the client's answers about whether you can use an item disagree, Quest Flow says so and marks its choice tentative.
 - **Reward icons and the tooltip line depend on the game's reward window.** They were checked on the Forever client; a custom interface skin could move them.
 - Using quest items from the tracker, spec-aware advice and custom routes are not part of this release ([docs/FUTURE_IDEAS.md](docs/FUTURE_IDEAS.md)).
