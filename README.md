@@ -6,7 +6,9 @@
 
 Quest Flow is an addon for World of Warcraft: Forever. It reads your character and your quest log and shows you what you could do now: what is nearby, what you can hand in, which dungeon quests you are carrying, and which quest reward looks best. It is **not** a step-by-step leveling guide or an autopilot. You decide what to do; Quest Flow shows the options and keeps up as you play.
 
-> Status: release candidate. Built for the WoW Forever client (interface 16001), tested on client 1.60.1, build 70245. See [Known limitations](#known-limitations).
+> **Version 0.15.1.** Built for the WoW Forever client (interface 16001), tested on client 1.60.1, build 70245. Early public release: please [report problems and ideas](#reporting-bugs). See [Known limitations](#known-limitations) and the [changelog](CHANGELOG.md).
+
+**Download:** the latest `QuestFlow-<version>.zip` is on the [Releases page](https://github.com/Worsttrumpet/questflow/releases) (and on CurseForge once the project page is up). **New here?** Read the [tester guide](docs/release/TESTER_GUIDE.md).
 
 ## What it does
 
@@ -110,13 +112,16 @@ Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 ## Repository layout
 
 ```
-questflow/QuestFlow/   the addon (this folder is what gets installed)
+questflow/QuestFlow/   the addon: this folder is what gets installed
 questflow/tests/       Lua 5.1 stub-client tests
 questflow/generator/   data-pack generator and release packager (with tests)
 questflow/docs/        design notes (written under the working name "Forever Codex"), data sources, release process
+questflow/dist/        the current release ZIP (older builds are kept in the Git history, not here)
+docs/                  release material (docs/release/) and the notes behind the dataset work
 forever-db/            offline dataset tooling used to build and audit the data
-docs/, manifests/, research/, m5-*/, m6-*/   research material behind forever-db
-archive/               early experiments, kept for history only
+research/, manifests/, m5-*/, m6-*/, archive/
+                       research and experiment material behind the dataset work and early prototypes,
+                       kept for history; see docs/README.md. You do not need any of it to use the addon.
 ```
 
 ## License and attribution

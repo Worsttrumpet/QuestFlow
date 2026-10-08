@@ -53,7 +53,11 @@ Quest Flow reads your character and your quest log and shows you what you could 
 **Not affiliated with Blizzard Entertainment or the WoW Forever project.**
 
 ## Release notes (paste into the file's changelog box)
-Use the matching section of `CHANGELOG.md`.
+For the first public upload, use this summary (the full history is in `CHANGELOG.md`):
+
+> **Quest Flow 0.15.1: first public release.** Shows what you can do now, what to hand in and which reward looks best, and learns travel from your own play: flights (with measured times), boats and zeppelins you ride, and your Hearthstone. Unknown stays unknown: no guessed locations or turn-ins. Small first-run welcome. Tested mostly on one Horde druid, so please report problems from other classes and from Alliance characters (Feedback button, or `/qflow report` pasted into an issue).
+
+Later uploads: use the matching section of `CHANGELOG.md`.
 
 ## Third-party and licensing statement (for the project page)
 Quest Flow is MIT licensed. It includes quest, flight-path and zone data derived from AllTheThings (MIT; notice included in the download) and quest facts observed on Forever by this project. It optionally reads the separately installed QuestieDB addon at runtime and copies nothing from it. See `THIRD_PARTY_NOTICES.md` (also inside the download).
