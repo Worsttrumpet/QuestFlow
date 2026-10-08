@@ -209,3 +209,7 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 ## Part Q - feature probe (0.15.2, report only)
 
 - [ ] Run /qflow report and send the "FEATURE PROBE" section: it shows what the client exposes for Legacy achievements, Legacy Points, attunement and keystone names, and talent functions.
+
+## Part R - dungeon entrance (0.15.3)
+
+- [ ] After entering a dungeon from outside once, leave and look at its DUNGEON QUESTS heading: it should say "entrance N yd away". A dungeon you have not entered shows only its name.

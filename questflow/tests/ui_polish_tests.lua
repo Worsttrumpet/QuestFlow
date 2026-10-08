@@ -875,6 +875,15 @@ do
 	check(#g2 == 2 and g2[1].name == "Crypt of Doom" and g2[2].name == "Old Mine", "quests of different dungeons are separate groups, sorted by name  [" .. #g2 .. "]")
 	check(g2[1].quests[1].title ~= nil and #g2[1].quests == 2 and #g2[2].quests == 1, "each group lists its own quests")
 
+	-- (0.15.3) the entrance the character really entered the dungeon from is named on its heading; a dungeon never entered says nothing
+	check(g2[1].entranceText == nil and g2[2].entranceText == nil, "a dungeon the character has never entered says nothing about its entrance")
+	local root = ns2.Prefs.Root()
+	root.world = root.world or {}
+	root.world.entrances = { ["Crypt of Doom"] = { map = ctx2.loc.map, x = ctx2.loc.x + 0.05, y = ctx2.loc.y, id = 1, n = 1 } }
+	g2 = ns2.Dungeons.List(ctx2)
+	check(type(g2[1].entranceText) == "string" and g2[1].entranceText:find("^entrance .* away$") and g2[2].entranceText == nil, "after entering it once, its heading names the entrance and how far it is  [" .. tostring(g2[1].entranceText) .. "]")
+	root.world.entrances = nil
+
 	-- no tag API: nothing is guessed
 	local ns3 = logWorld({ { id = 601, name = "Maybe Elite", zone = "zone-a", objectives = { { text = "x", have = 0, need = 1 } } } })
 	check(ns3.Dungeons.Suffix(ns3.State.ctx, 601) == "" and #ns3.Dungeons.List(ns3.State.ctx) == 0, "when the client does not answer there is no tag and no dungeon card")

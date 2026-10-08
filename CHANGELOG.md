@@ -2,6 +2,10 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.15.3] - the dungeon card names where the entrance is
+
+- Once you have entered a dungeon, its heading on the DUNGEON QUESTS card says where you went in from and how far that is ("Wailing Caverns  -  entrance 800 yd away"). A dungeon you have never entered says nothing about its entrance: it is never guessed.
+
 ## [0.15.2] - report: what the client exposes for Legacy, attunements and talents (probe only)
 
 - Report only. A new FEATURE PROBE section asks the client, read-only, for the game's Legacy achievement categories (and the first achievements in them), any Legacy currency such as Legacy Points, global names that mention Legacy, Attunement or Keystone, and which talent functions exist. Nothing reaches the planner or the window: it only shows what a later feature could be built on.

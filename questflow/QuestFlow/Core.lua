@@ -13,7 +13,7 @@ local addonName, ns = ...
 
 ForeverCodex = ForeverCodex or {}
 local C = ForeverCodex
-C.VERSION = "0.15.2"       -- must equal ## Version in QuestFlow.toc (the packager checks); bump both for every packaged change
+C.VERSION = "0.15.3"       -- must equal ## Version in QuestFlow.toc (the packager checks); bump both for every packaged change
 C.EXPECTED_INTERFACE = 16001
 
 ns.errors = {}

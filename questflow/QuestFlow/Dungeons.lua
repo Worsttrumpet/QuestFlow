@@ -69,6 +69,22 @@ function Dg.PlayerInside(ctx, quest)
 	return not known
 end
 
+--- Where the entrance is, in words, from the places the player has really entered this dungeon from (Services.Entrances: where the character stood
+-- before the instance loaded). nil when that dungeon was never entered: an unknown entrance is not described, never guessed.
+function Dg.EntranceText(ctx, name)
+	if not (ns.Services and ns.Services.Entrances and type(name) == "string" and ctx and ctx.loc and ctx.loc.available) then return nil end
+	local E, Pr = ns.Engine, ns.Presenter
+	for _, e in ipairs(ns.Services.Entrances()) do
+		if type(e.name) == "string" and e.name:lower() == name:lower() and e.map and e.x and e.y then
+			local d = E.Distance(ctx, { map = ctx.loc.map, x = ctx.loc.x, y = ctx.loc.y, world = ctx.loc.world or false }, { map = e.map, x = e.x, y = e.y })
+			if d == nil or d >= E.DIFFERENT_CONTINENT then return "entrance in another area" end
+			if d < 30 then return "you are at the entrance" end
+			return "entrance " .. (Pr and Pr.Dist(d) or "known") .. " away"
+		end
+	end
+	return nil
+end
+
 --- Dungeon quests in the quest log, grouped by dungeon:
 -- { { name = "Dungeon name" or "Dungeon quests", via = "area"|"log"|"none", quests = { { quest, title, complete, objectives } } } }, sorted by name.
 function Dg.List(ctx)
@@ -95,6 +111,7 @@ function Dg.List(ctx)
 	end
 	table.sort(groups, function(a, b) return a.name < b.name end)
 	for _, g in ipairs(groups) do
+		g.entranceText = Dg.EntranceText(ctx, g.name)
 		table.sort(g.quests, function(a, b) if a.title ~= b.title then return a.title < b.title end return a.quest < b.quest end)
 	end
 	return groups

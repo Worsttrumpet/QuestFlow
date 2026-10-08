@@ -667,7 +667,7 @@ local function drawDungeons(c, groups)
 	for gi, g in ipairs(groups) do
 		local head = (several or g.via ~= "none") and c.dgHeads[gi] or nil
 		if head and gi <= #c.dgHeads then
-			head:SetText(g.name)
+			head:SetText(g.name .. (g.entranceText and ("  -  " .. g.entranceText) or ""))      -- (0.15.3) where it was entered from, once the character has been inside
 			st:Add(head, 3, box.insetX, inner)
 		end
 		for _, q in ipairs(g.quests) do
