@@ -2,6 +2,10 @@
 
 Quest Flow follows the version numbers in `questflow/docs/RELEASING.md` (`x.y.z`, patch digit 0-9). Earlier builds were private test builds under the working name Forever Codex and are not listed.
 
+## [0.15.2] - report: what the client exposes for Legacy, attunements and talents (probe only)
+
+- Report only. A new FEATURE PROBE section asks the client, read-only, for the game's Legacy achievement categories (and the first achievements in them), any Legacy currency such as Legacy Points, global names that mention Legacy, Attunement or Keystone, and which talent functions exist. Nothing reaches the planner or the window: it only shows what a later feature could be built on.
+
 ## [0.15.1] - report: does the game's quest map know quests in other zones?
 
 - Read-only probe, report only. For quests Quest Flow cannot place, the report now also asks the game's own quest map about every Kalimdor and Eastern Kingdoms zone map (not only the zone you stand in) and lists where the game puts each quest. Nothing reaches the planner yet: this only shows whether the game can fill the gap.

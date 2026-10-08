@@ -409,6 +409,32 @@ do
 	_G.C_Map.GetBestMapForUnit = saveBM
 end
 
+section("feature probe: read only, reports what the client exposes and never raises")
+do
+	local ns = world()
+	local F = ns.FeatureProbe
+	local lines = table.concat(F.ReportLines(), "\n")
+	check(lines:find("FEATURE PROBE", 1, true) and lines:find("category functions not present", 1, true), "with no achievement functions it says so plainly")
+	local keep = { gc = _G.GetCategoryList, gi = _G.GetCategoryInfo, gn = _G.GetCategoryNumAchievements, ga = _G.GetAchievementInfo, cs = _G.GetCurrencyListSize, ci = _G.C_CurrencyInfo, fix = _G.C_LegacyFixture }
+	_G.GetCategoryList = function() return { 10, 20 } end
+	_G.GetCategoryInfo = function(id) if id == 20 then return "Legacy Exploration" end return "General" end
+	_G.GetCategoryNumAchievements = function(id) return 2 end
+	_G.GetAchievementInfo = function(cat, i) return 900 + i, "Explore Zone " .. i, 10, i == 1, 1, 1, 1, "desc" end
+	_G.GetCurrencyListSize = function() return 2 end
+	_G.C_CurrencyInfo = { GetCurrencyListInfo = function(i) if i == 2 then return { name = "Legacy Points" } end return { name = "Honor" } end }
+	_G.C_LegacyFixture = {}
+	lines = table.concat(F.ReportLines(), "\n")
+	check(lines:find("2 categories listed by the game; 1 with a name that mentions Legacy", 1, true), "it counts the categories and finds the one that mentions Legacy")
+	check(lines:find("Explore Zone 1 | completed", 1, true) and lines:find("Explore Zone 2 | not completed", 1, true), "it lists the first achievements with their completed state")
+	check(lines:find("1 with a name that mentions Legacy | Legacy Points", 1, true), "it finds a currency whose name mentions Legacy")
+	check(lines:find("global names mentioning legacy: 1 | C_LegacyFixture", 1, true), "it lists global names that mention Legacy")
+	_G.GetCategoryInfo = function() error("boom") end
+	check(pcall(F.ReportLines), "a failing client function never raises")
+	_G.GetCategoryList, _G.GetCategoryInfo, _G.GetCategoryNumAchievements, _G.GetAchievementInfo, _G.GetCurrencyListSize, _G.C_CurrencyInfo, _G.C_LegacyFixture = keep.gc, keep.gi, keep.gn, keep.ga, keep.cs, keep.ci, keep.fix
+	local src = H.readFile(H.addonDir .. "/FeatureProbe.lua"):gsub("%-%-[^\n]*", "")
+	check(not src:find("Planner", 1, true) and not src:find("Registry", 1, true) and not src:find("Prefs", 1, true), "the probe touches neither the planner, the registry nor saved settings")
+end
+
 section("rides: a boat or zeppelin is recorded only from a ride the player made")
 do
 	local ns = world()

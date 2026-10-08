@@ -205,3 +205,7 @@ Run `/qflow report` at each step and read the section **PLANNER FUNNEL**.
 ## Part P - game quest map on other zones (0.15.1, probe only)
 
 - [ ] With quests in the log that have no place (the NOT PLACED list), run /qflow report. The "game quest-map scan" line says how many maps answered. Each unplaced quest shows "game map points on other zone maps": a zone and position, or "none on any map tried".
+
+## Part Q - feature probe (0.15.2, report only)
+
+- [ ] Run /qflow report and send the "FEATURE PROBE" section: it shows what the client exposes for Legacy achievements, Legacy Points, attunement and keystone names, and talent functions.

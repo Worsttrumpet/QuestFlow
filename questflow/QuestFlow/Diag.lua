@@ -1021,6 +1021,10 @@ function D.PlaytestLines(snap, lines)
 			end
 		end)
 		if not okW then add("WORLD AND TRAVEL KNOWLEDGE: error: " .. tostring(err)) end
+		if ns.FeatureProbe then
+			local okF, ferr = pcall(function() for _, l in ipairs(ns.FeatureProbe.ReportLines()) do add(l) end end)
+			if not okF then add("FEATURE PROBE: error: " .. tostring(ferr)) end
+		end
 	end
 	if ns.RewardOverlay then
 		local okO, olines = pcall(ns.RewardOverlay.ReportLines)
